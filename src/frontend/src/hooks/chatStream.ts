@@ -1,3 +1,4 @@
+// Modified by foreign-trade-agent contributors, 2026-10-21; see CHANGES_FOREIGN_TRADE.md.
 import { message } from 'antd';
 import { t } from '../i18n';
 import {
@@ -645,7 +646,7 @@ export async function processChatStream(resp: Response, opts: ChatStreamOptions)
       if (directIndex >= 0) return directIndex;
     }
     const eventToolName = getEventToolRawName(obj);
-    if (eventToolName) {
+    if (!eventToolId && eventToolName) {
       const byNameIndex = findLastRunningToolIndex(eventToolName);
       if (byNameIndex >= 0) return byNameIndex;
     }
@@ -1267,7 +1268,7 @@ export async function processChatStream(resp: Response, opts: ChatStreamOptions)
           let index = eventToolId
             ? revision.toolCalls.findIndex((tool) => normalizeToolId(tool.id) === eventToolId)
             : -1;
-          if (index < 0 && toolName) {
+          if (!eventToolId && index < 0 && toolName) {
             index = revision.toolCalls.findIndex((tool) => tool.name === toolName && tool.status === 'running');
           }
           const output = eventObj.output ?? eventObj.result;

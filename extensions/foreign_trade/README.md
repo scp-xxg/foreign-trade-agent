@@ -1,7 +1,9 @@
-# 外贸询盘转报价演示插件
+# 外贸业务助手（演示）插件
 
 基于公开 HugAgentOS Community Edition `desktop-v1.0.2`，本目录代码和模拟数据独立编写。
-**全部产品、价格、规格和生产周期均为虚构演示数据，非真实商业报价。**
+**报价目录中的产品、价格、规格和生产周期均为模拟数据。** 买家核验使用真实公开资料，商品资料示例使用可核验规格和独立许可照片；这三类来源分别标注。
+
+版本 0.2.0，安装标识保留 foreign-trade-demo。聊天为业务主入口，两个工作台继续保留同一用户的记录。[对话使用和升级指南](../../docs/CHAT_PLUGIN.md)
 
 ## 已实现
 
@@ -9,9 +11,12 @@
 - `search_products`、`get_product`、`calculate_quote` 三个 MCP 工具。
 - 数量阶梯价、MOQ、定制包装门槛与费用、生产周期冲突提示。
 - Decimal 确定性计算；金额返回 USD 两位小数字符串。
-- 首页“询盘转报价”技能：先查产品事实，再调用计算工具，输出英语回复草稿。
+- 保留 inquiry-quote 即时报价技能；新增 buyer-inquiry-followup 与 product-content 两个技能。
+- 当前用户绑定的询盘、报价和产品内容原生工具复用已有工作台服务；不把身份参数交给模型。
+- 常见单 SKU 保存、聊天附件导入和候选事实确认使用显式字段工具，复杂编辑保留通用入口；只有成功工具回执才代表操作完成。
 - 运费始终待确认；金额小计明确不含运费及未核定费用。
-- 不连接真实商家数据库，不发邮件，不提交订单，不声称完成平台或目标国合规审查。
+- 通过公开官网/GLEIF核验买家事实；产品内容可导入当前聊天的用户附件，确认后生成。未连接企业私有 ERP。
+- 不发邮件，不提交订单，不发布商品，不声称完成平台或目标国合规审查。
 
 ## 文件
 
@@ -43,12 +48,12 @@ PID 和日志位于 `.runtime/`，生成包位于 `dist/`，均已加入本目�
 2. 当前账号打开 **能力中心 → 插件 → 添加插件 → 导入插件包（zip）**。
 3. 选择 `extensions/foreign_trade/dist/foreign-trade-demo.zip`。
 4. 确认技能与“外贸产品与报价（演示）”连接器已启用。
-5. 回到首页，点击 **询盘转报价**。
+5. 新建聊天，输入 / 选择 **外贸业务助手（演示）**，或直接描述外贸业务请求。
 6. 核对真实工具调用记录：search_products、get_product、calculate_quote。
 7. 结果应标注 DEMO，列出资料版本、运费待确认及英语回复草稿。
 
 MCP 使用本机回环地址，无 API Key。适用于同机 CLI/Web 环境；若改用 Docker，须配置容器到服务的网络，容器 localhost 不是宿主机。
-ZIP 同时包含 runtime/ 下的服务、引擎和目录源码；其他开发者可在相同依赖环境下启动 runtime/mcp_server.py，再导入插件。
+ZIP 同时包含 runtime/ 下的旧报价服务、引擎和目录源码，以及三个技能、宿主依赖说明和对话指南。独立运行 runtime/mcp_server.py 仍只提供原三个模拟报价工具；新增两场景原生业务工具依赖本公开项目的配套后端、认证和前端，ZIP 不能单独给未修改的上游实例安装完整能力。
 部署前确认 9120 端口未被其他服务占用；管理脚本不会停止不属于本项目的进程。
 
 ## 验收案例
@@ -79,14 +84,14 @@ git diff --check
 使用公开版自身的安装服务，只给指定现有账号添加插件，不创建账号、不改变权限：
 
 ~~~bash
-python extensions/foreign_trade/install.py --app-home "$HOME/.hugagent-hackathon-public-1.0.2" --username hks
+python extensions/foreign_trade/install.py --app-home "$HOME/.foreign-trade-agent" --username YOUR_USERNAME
 ~~~
 
 安装或更新后刷新网页并新建对话。该命令会写入所指定公开实例的插件、技能与连接器记录。
 
 CE 原版隐藏插件贡献的首页快捷卡。本地安装脚本会在现有“首页建议问题”最前面追加一条外贸询盘示例，保留其他建议和设置；插件本身的快捷声明也保留，供支持该入口的宿主使用。
 
-运行中的实例通过 CLI 安装后，可在插件页将本插件关闭再开启以刷新进程内缓存，随后新建对话。输入 `/` 选择“询盘转报价（演示）”可显式携带插件；正式验收须看到技能激活和真实 calculate_quote 回执，不能只以最终文本数字判断成功。
+运行中的实例通过 CLI 安装后，可在插件页将本插件关闭再开启以刷新进程内缓存，随后新建对话。输入 `/` 选择“外贸业务助手（演示）”可显式携带插件；正式验收须看到技能激活和真实 calculate_quote 回执，不能只以最终文本数字判断成功。
 
 报价工具额外返回 quotation_markdown，表格中的货品单价与每件定制包装费分别列示；effective_unit_price 仅表示两者之和，不能再次叠加包装费。
 
@@ -95,7 +100,7 @@ CE 原版隐藏插件贡献的首页快捷卡。本地安装脚本会在现有�
 
 ## 外贸首页与默认助手
 
-本公开分支的首页标题为“外贸询盘，从产品查询到报价”，推荐问题覆盖产品检索、规格与 MOQ、基础报价、阶梯价对比、定制包装和询盘澄清。保留 HugAgentOS 产品名称、图标、Powered by 及原开源许可证。
+本公开分支的首页与默认助手以外贸业务为定位，支持产品查询、询盘报价、买家核验与跟进，以及商品资料制作。保留 HugAgentOS 产品名称、图标、Powered by 及原开源许可证。
 
 - 后端默认文案：`src/backend/core/content/content_blocks.py`。
 - 前端兜底文案：`src/frontend/src/utils/pageConfigDefaults.ts`，页面组件兜底保持一致。
@@ -103,12 +108,12 @@ CE 原版隐藏插件贡献的首页快捷卡。本地安装脚本会在现有�
 - 当前公开实例的页面配置存于数据库；仅更新默认源码不会覆盖已有配置。首次部署或明确要恢复外贸首页时，可执行：
 
 ~~~bash
-python extensions/foreign_trade/install.py --app-home "$HOME/.hugagent-hackathon-public-1.0.2" --username hks --apply-homepage-copy
+python extensions/foreign_trade/install.py --app-home "$HOME/.foreign-trade-agent" --username YOUR_USERNAME --apply-homepage-copy
 ~~~
 
 该选项只替换首页介绍、输入提示与推荐问题；不修改账号权限、导航或开源署名。常规插件更新不带此选项，保留已有首页编辑。前端源码改动后须执行 `VITE_EDITION=ce VITE_DEFAULT_LANGUAGE=zh-CN npm --prefix src/frontend run build` 并刷新网页。
 
-已有实例的默认系统提示词还可能由 `prompt_versions` 的活跃版本或提示词片段覆盖；更新时须通过公开版提示词管理服务同步相应版本，并触发提示词缓存失效。可在上述安装命令追加 `--apply-assistant-prompt`：它会保留原活跃版本，复制其其他片段，仅更新身份、业务事实约束与插件加载步骤，激活 `foreign-trade-demo-v1`。运行中可将“询盘转报价（演示）”插件关闭再开启以热刷新提示词缓存，无需重启或重新登录。旧会话可能保留历史助手介绍，使用新建对话验收。
+已有实例的默认系统提示词还可能由 `prompt_versions` 的活跃版本或提示词片段覆盖；更新时须通过公开版提示词管理服务同步相应版本，并触发提示词缓存失效。可在上述安装命令追加 `--apply-assistant-prompt`：它会保留原活跃版本，复制其其他片段，仅更新身份、业务事实约束与插件加载步骤，激活 `foreign-trade-demo-v2`。仅更新插件说明/提示词时可关闭再开启“外贸业务助手（演示）”刷新缓存；新增后端原生工具代码后需重启本公开实例。旧会话可能保留历史助手介绍，使用新建对话验收。
 
 
 ## 中英文报价单下载

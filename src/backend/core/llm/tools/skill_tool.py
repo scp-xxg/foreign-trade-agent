@@ -1,3 +1,4 @@
+# Modified by foreign-trade-agent contributors, 2026-10-21; see CHANGES_FOREIGN_TRADE.md.
 """Skill-loading agent tools.
 
 Tools that let the model discover and load Agent Skills from the sandboxed
@@ -125,6 +126,7 @@ def register_sandboxed_view_text_file(
     allowed_dirs: list[str],
     loader: Any,
     loaded_skill_ids: set[str] | None = None,
+    fully_loaded_skill_ids: set[str] | None = None,
 ) -> None:
     """Register a sandboxed view_text_file tool."""
     import os as _os
@@ -184,6 +186,11 @@ def register_sandboxed_view_text_file(
                                  if _os.path.realpath(loader.get_skill_dir(name)) == skill_dir), None)
             if loaded_skill_ids is not None and skill_id:
                 loaded_skill_ids.add(skill_id)
+            complete_read = not (ranges and isinstance(ranges, list) and len(ranges) >= 2) or (
+                _start == 1 and _end == len(_lines)
+            )
+            if fully_loaded_skill_ids is not None and skill_id and complete_read:
+                fully_loaded_skill_ids.add(skill_id)
             for i, block in enumerate(resp.content):
                 if hasattr(block, "text") and "{baseDir}" in block.text:
                     resp.content[i] = TextBlock(

@@ -855,7 +855,7 @@ class _ActivationStage:
         self._prepared = prepared
         self._staged_clients: List[Any] = []
         self.staged = prepared is not None
-        self.group = SimpleNamespace(mcps=[], skills_or_loaders=[]) if self.staged else live_group
+        self.group = SimpleNamespace(mcps=[], skills_or_loaders=[], tools=[]) if self.staged else live_group
         current = runtime.setdefault("connected_keys", set())
         self.connected: Set[str] = set(current) if self.staged else current
 
@@ -890,6 +890,8 @@ class _ActivationStage:
             return
         self._live.mcps.extend(self.group.mcps)
         self._live.skills_or_loaders.extend(self.group.skills_or_loaders)
+        if self.group.tools:
+            self._live.tools.extend(self.group.tools)
         self._runtime["connected_keys"] = self.connected
         close_list = self._runtime.get("close_list")
         if isinstance(close_list, list):
@@ -1110,6 +1112,21 @@ def register_load_plugin(
                     except Exception:  # noqa: BLE001
                         pass
 
+            # Fork-owned business tools share plugin activation but capture the
+            # authenticated actor inside this process, not in MCP request headers.
+            from core.llm.foreign_trade_plugin import register_trade_plugin_target
+            from core.llm.tool_collector import ToolCollector
+
+            native = ToolCollector()
+            native_names = register_trade_plugin_target(
+                native, target, user_id=str(runtime.get("user_id") or ""),
+                chat_id=runtime.get("chat_id"),
+                loaded_skill_ids=runtime.get("loaded_skill_ids"),
+            ) if runtime.get("trade_tools_allowed", True) else []
+            if native_names:
+                existing = {tool.name for tool in tk.tool_groups[0].tools}
+                stage.group.tools.extend(tool for tool in native.function_tools if tool.name not in existing)
+                new_tool_names.extend(native_names)
             await stage.checkpoint()
 
         # ── Permissions: newly activated MCP tools must be pre-allowed ──

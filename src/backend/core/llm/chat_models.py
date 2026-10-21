@@ -744,13 +744,27 @@ class OpenAICompatChatModel(StructuredFallbackMixin, OpenAIChatModel):
         kwargs.update(generate_kwargs)
 
         fmt_tools, fmt_tool_choice = self._format_tools(tools, tool_choice)
+        # Some OpenAI-compatible gateways split this workflow's nested JSON
+        # across invalid streamed tool indexes (observed index 0 and -1). A
+        # completion response from the same request preserves one full call.
+        # Scope the transport choice to this call's exact trade tool surface;
+        # never mutate the shared model's stream flag or provider configuration.
+        from core.llm.foreign_trade_plugin import TRADE_TOOL_NAMES
+
+        request_stream = self.stream
+        if any(isinstance(tool, dict) and isinstance(tool.get("function"), dict)
+               and tool["function"].get("name") in TRADE_TOOL_NAMES
+               for tool in (fmt_tools or [])):
+            request_stream = False
+            kwargs["stream"] = False
+            kwargs.pop("stream_options", None)
         if fmt_tools:
             kwargs["tools"] = _slim_tool_schemas(fmt_tools)
             if not self.parameters.parallel_tool_calls:
                 kwargs["parallel_tool_calls"] = False
         if fmt_tool_choice is not None:
             kwargs["tool_choice"] = fmt_tool_choice
-        if self.stream:
+        if request_stream:
             kwargs["stream_options"] = {"include_usage": True}
 
         start_datetime = datetime.now()
@@ -846,7 +860,7 @@ class OpenAICompatChatModel(StructuredFallbackMixin, OpenAIChatModel):
         audio_fmt = (
             audio_cfg.get("format", "wav") if isinstance(audio_cfg, dict) else "wav"
         )
-        if self.stream:
+        if request_stream:
             return _stream_with_bounded_retry(
                 self,
                 client=client,

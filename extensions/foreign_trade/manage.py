@@ -81,9 +81,13 @@ def build() -> dict:
     required = [
         plugin / "plugin.json", plugin / "mcp.json",
         plugin / "skills/inquiry-quote/SKILL.md",
+        plugin / "skills/buyer-inquiry-followup/SKILL.md",
+        plugin / "skills/product-content/SKILL.md",
+        plugin / "HOST_REQUIREMENTS.md",
+        HERE.parents[1] / "docs/CHAT_PLUGIN.md",
         HERE / "engine.py", HERE / "catalog.json", SERVER,
     ]
-    missing = [str(path.relative_to(HERE)) for path in required if not path.is_file()]
+    missing = [str(path) for path in required if not path.is_file()]
     if missing:
         raise RuntimeError("Missing package files: " + ", ".join(missing))
     out = HERE / "dist/foreign-trade-demo.zip"
@@ -96,6 +100,7 @@ def build() -> dict:
             archive.write(HERE / name, "runtime/" + name)
         if (HERE / "README.md").is_file():
             archive.write(HERE / "README.md", "README.md")
+        archive.write(HERE.parents[1] / "docs/CHAT_PLUGIN.md", "CHAT_PLUGIN.md")
     return {"status": "built", "path": str(out), "bytes": out.stat().st_size}
 
 

@@ -1,3 +1,4 @@
+# Modified by foreign-trade-agent contributors, 2026-10-21; see CHANGES_FOREIGN_TRADE.md.
 """Tool-call log helpers for streaming SSE event processing.
 
 Pure list/dict utilities that assemble the ``tool_calls_log`` consumed by both
@@ -303,11 +304,18 @@ def attach_tool_result(
     Returns the call's duration in ms when the opening entry carried a start
     stamp, so the caller can put the same number on the wire.
     """
-    for tc in tool_calls_log:
-        if tid and tc.get("tool_id") == tid:
-            return _settle_tool_call(tc, res, status)
-        if tn and tc.get("tool_name") == tn and "result" not in tc:
-            return _settle_tool_call(tc, res, status)
+    # A stable call ID is authoritative. Checking a name fallback inside the
+    # same loop lets an earlier pending sibling steal a later call's result.
+    # Missing IDs retain the legacy name match; a present but unknown ID must
+    # instead create its own orphan entry for any later argument backfill.
+    if tid:
+        for tc in tool_calls_log:
+            if tc.get("tool_id") == tid:
+                return _settle_tool_call(tc, res, status)
+    elif tn:
+        for tc in tool_calls_log:
+            if tc.get("tool_name") == tn and "result" not in tc:
+                return _settle_tool_call(tc, res, status)
     if tid or tn:
         # No opening entry to close (a result that arrived without its call):
         # record it, but leave duration unknown rather than inventing one.

@@ -51,9 +51,9 @@ def apply_assistant_prompt(db):
         if len(matches) != 1:
             raise RuntimeError("Expected exactly one system prompt part: " + name)
         matches[0]["content"] = (directory / (name + ".system.md")).read_text(encoding="utf-8")
-    version_id = "foreign-trade-demo-v1"
+    version_id = "foreign-trade-demo-v2"
     prompts.upsert_version(
-        "system", version_id, name="外贸助手 · 产品查询与询盘报价",
+        "system", version_id, name="外贸助手 · 询盘与商品资料",
         description="公开项目外贸演示；保留其他系统片段，仅更新身份、业务事实约束与插件加载步骤。",
         parts=parts, db=db, updated_by="foreign-trade-home-copy",
     )
@@ -95,7 +95,7 @@ def main():
         )
         meta = plugin_service.set_installed_plugin_meta(
             db, result["install_id"], owner_user_id=user_id,
-            display_name="询盘转报价（演示）", category="办公效率",
+            display_name="外贸业务助手（演示）", category="办公效率",
         )
         # CE hides plugin-contributed shortcut cards. Use its existing homepage
         # suggestions instead. Replacing the full scene copy is an explicit opt-in.
@@ -125,7 +125,7 @@ def main():
             "account_permissions_changed": False,
             "homepage_copy_applied": args.apply_homepage_copy,
             "assistant_prompt_applied": args.apply_assistant_prompt,
-            "next_step": "Refresh the page; if the backend is already running, toggle the trade plugin off and on, then start a new chat.",
+            "next_step": "After a source upgrade, restart this public backend, refresh the page and start a new chat. For a package-content-only update, toggle the trade plugin off and on to refresh the running cache.",
         }, ensure_ascii=False, indent=2))
 
 

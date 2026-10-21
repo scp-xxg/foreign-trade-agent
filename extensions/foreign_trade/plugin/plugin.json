@@ -1,8 +1,8 @@
 {
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "foreign-trade-demo",
-  "version": "0.1.0",
-  "description": "外贸询盘转报价演示：查询模拟办公收纳产品，校验 MOQ、包装和交期条件，调用报价工具生成有来源的报价草案与英语客户回复。所有产品和价格均为 DEMO 数据。",
+  "version": "0.2.0",
+  "description": "外贸业务助手：在对话中核验买家公开资料、保存询盘与跟进待办、复用模拟产品报价及双语导出，并用用户上传资料制作英文商品文案、FAQ 与图片素材。真实公开资料和模拟报价分别标注，所有对外内容均为待审草稿。",
   "author": {
     "name": "Foreign Trade Demo"
   },
@@ -36,9 +36,49 @@
               "id": "inquiry-quote",
               "label": "询盘转报价",
               "prompt": "请用外贸演示数据处理这条客户询盘：DESK-001，500 件，标准包装，目的国西班牙。先查询并核对产品及 MOQ，再调用报价工具，输出报价草案、数据来源、待确认条件，以及可复制的英语客户回复。交期未指定；运费待确认，不要写成到岸总价。"
+            },
+            {
+              "id": "buyer-inquiry-followup",
+              "label": "买家核验与询盘跟进",
+              "prompt": "请用 LYRECO（注册国 FR，官网 https://www.lyreco.com/group/）的公开资料核验买家，并在我的账号保存这条演示询盘：DESK-001，500 件，标准包装，交付目的国 Spain，生产天数未指定。询盘由团队构造，不是 LYRECO 的真实订单。请查产品并计算模拟报价、生成待审回复草稿，展示来源和仍未核实的事项；不要发送邮件。"
+            },
+            {
+              "id": "product-content",
+              "label": "制作商品资料包",
+              "prompt": "请载入 Raspberry Pi 5 的公开规格和授权照片，准备商品资料包。先展示待确认的产品事实、来源、图片署名和缺失商务条件，等我确认后再生成英文商品介绍、FAQ 和三种图片素材。不要推断 RAM 容量、售价、MOQ、库存或销售授权，也不要发布商品。"
             }
           ]
         }
+      },
+      "x_foreign_trade": {
+        "host_requirement": "foreign-trade-agent public fork with current-user native trade tools",
+        "execution": "Native tools are bound to the active authenticated conversation; they are not served by the loopback quotation MCP.",
+        "native_tools": [
+          {
+            "name": "trade_save_inquiry",
+            "description": "常见单 SKU 询盘新建/改单优先入口，使用显式扁平字段保存，保留已有买家其他字段；现有记录必须使用最新修订号。多 SKU 仍使用通用询盘工具。"
+          },
+          {
+            "name": "trade_import_product",
+            "description": "按显式元数据和当前聊天附件 file_ids 创建或导入商品资料包，只形成候选事实，不自动确认或生成。"
+          },
+          {
+            "name": "trade_confirm_product_facts",
+            "description": "用户看到候选事实并明确确认后，按原候选索引由程序精确采用事实，不由模型重写长 facts JSON；生成仍需单独调用。"
+          },
+          {
+            "name": "trade_inquiry",
+            "description": "当前用户的询盘记录、买家公开信息核验、需求建议、回复草稿和站内跟进待办；写入使用当前修订号。"
+          },
+          {
+            "name": "trade_calculate_quote",
+            "description": "对当前用户已经确认的询盘条件重新计算模拟报价，保存版本并返回现有中英 PDF/Excel 下载卡契约。"
+          },
+          {
+            "name": "trade_product_content",
+            "description": "当前用户的产品资料包：导入本会话附件、准备真实公开示例、确认事实、生成商品文案/FAQ/原图排版与下载卡。"
+          }
+        ]
       }
     }
   }
