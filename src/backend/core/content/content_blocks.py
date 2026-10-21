@@ -84,6 +84,7 @@ DEFAULT_PAGE_CONFIG: dict[str, Any] = {
         "panel_titles": {
             "ability_center": "能力中心",
             "trade_inquiries": "询盘工作台",
+            "trade_content": "产品内容工作台",
             "skills": "技能",
             "agents": "智能体",
             "mcp": "连接器",
@@ -100,6 +101,7 @@ DEFAULT_PAGE_CONFIG: dict[str, Any] = {
         "panel_subtitles": {
             "ability_center": "智能体基础能力管理，包含智能体、技能、连接器与插件",
             "trade_inquiries": "核验买家公开资料、处理询盘报价并管理跟进待办。",
+            "trade_content": "上传产品资料与原图，核对事实，生成英文上品资料、商品素材和客服 FAQ。",
             "skills": "启用/停用技能，并查看详细介绍、输入输出与示例。",
             "agents": "选择与启用智能体，并查看其职责边界与路由提示。",
             "mcp": "管理连接器服务，并查看其作用范围与可靠性影响。",
@@ -130,7 +132,7 @@ DEFAULT_PAGE_CONFIG: dict[str, Any] = {
         # 与前端 utils/pageConfigDefaults.ts 的 DEFAULT_SIDEBAR_ITEMS / DEFAULT_MENU_ITEMS 保持一致。
         # 这只是新装环境的出厂值——已存在的部署以 DB 现有取值为准，由 backfill_navigation_entries
         # 补齐新增条目，管理员随后可在 /config「页面配置」里自由编排。
-        "sidebar_items": ["ability_center", "trade_inquiries", "automation", "sites", "my_space"],
+        "sidebar_items": ["ability_center", "trade_inquiries", "trade_content", "automation", "sites", "my_space"],
         "menu_items": ["settings", "app_center", "projects", "lab"],
     },
     "texts": {
@@ -329,6 +331,7 @@ def enforce_ce_branding(db: Session) -> bool:
 #   backfilled one.
 # - On failure, quietly return False; never block startup.
 _NAV_BACKFILL_ENTRIES: list[dict[str, Any]] = [
+    {"key": "trade_content", "bucket": "sidebar", "insert_after": "trade_inquiries"},
     {"key": "trade_inquiries", "bucket": "sidebar", "insert_after": "ability_center"},
     {"key": "projects", "bucket": "menu", "insert_after": "app_center"},
     {"key": "automation", "bucket": "sidebar", "insert_after": "ability_center"},

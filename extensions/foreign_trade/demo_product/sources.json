@@ -1,0 +1,140 @@
+{
+  "schema_version": 1,
+  "sample_id": "raspberry-pi-5-public-product-demo",
+  "product_name": "Raspberry Pi 5",
+  "record_type": "public_product_facts_and_licensed_photo",
+  "verified_at": "2026-10-21T07:18:51.442295+00:00",
+  "facts_source": {
+    "url": "https://www.raspberrypi.com/products/raspberry-pi-5/",
+    "publisher": "Raspberry Pi Ltd",
+    "type": "manufacturer_product_page",
+    "retrieved_at": "2026-10-21T07:18:51.442295+00:00",
+    "evidence_policy": "Short factual excerpts only; no page HTML or marketing copy redistributed."
+  },
+  "facts": [
+    {
+      "key": "model",
+      "label_zh": "产品型号",
+      "label_en": "Product model",
+      "value_zh": "Raspberry Pi 5",
+      "value_en": "Raspberry Pi 5",
+      "source_url": "https://www.raspberrypi.com/products/raspberry-pi-5/",
+      "verified_at": "2026-10-21",
+      "evidence": "Raspberry Pi 5"
+    },
+    {
+      "key": "processor",
+      "label_zh": "处理器",
+      "label_en": "Processor",
+      "value_zh": "Broadcom BCM2712，2.4GHz，四核 64 位 Arm Cortex-A76",
+      "value_en": "Broadcom BCM2712; 2.4GHz; quad-core 64-bit Arm Cortex-A76",
+      "source_url": "https://www.raspberrypi.com/products/raspberry-pi-5/",
+      "verified_at": "2026-10-21",
+      "evidence": "Broadcom BCM2712 2.4GHz"
+    },
+    {
+      "key": "display",
+      "label_zh": "显示输出",
+      "label_en": "Display output",
+      "value_zh": "支持双路 4K 60 帧 HDMI 输出和 HDR",
+      "value_en": "Two HDMI outputs supporting 4K at 60fps and HDR",
+      "source_url": "https://www.raspberrypi.com/products/raspberry-pi-5/",
+      "verified_at": "2026-10-21",
+      "evidence": "Dual 4Kp60"
+    },
+    {
+      "key": "usb",
+      "label_zh": "USB 接口",
+      "label_en": "USB ports",
+      "value_zh": "2 个 USB 3.0 和 2 个 USB 2.0 接口",
+      "value_en": "Two USB 3.0 and two USB 2.0 ports",
+      "source_url": "https://www.raspberrypi.com/products/raspberry-pi-5/",
+      "verified_at": "2026-10-21",
+      "evidence": "USB 3.0; USB 2.0"
+    },
+    {
+      "key": "ethernet",
+      "label_zh": "有线网络",
+      "label_en": "Wired networking",
+      "value_zh": "千兆以太网",
+      "value_en": "Gigabit Ethernet",
+      "source_url": "https://www.raspberrypi.com/products/raspberry-pi-5/",
+      "verified_at": "2026-10-21",
+      "evidence": "Gigabit Ethernet"
+    },
+    {
+      "key": "wifi",
+      "label_zh": "无线网络",
+      "label_en": "Wireless networking",
+      "value_zh": "双频 802.11ac Wi-Fi",
+      "value_en": "Dual-band 802.11ac Wi-Fi",
+      "source_url": "https://www.raspberrypi.com/products/raspberry-pi-5/",
+      "verified_at": "2026-10-21",
+      "evidence": "802.11ac"
+    },
+    {
+      "key": "bluetooth",
+      "label_zh": "蓝牙",
+      "label_en": "Bluetooth",
+      "value_zh": "Bluetooth 5.0，支持 BLE",
+      "value_en": "Bluetooth 5.0 with BLE",
+      "source_url": "https://www.raspberrypi.com/products/raspberry-pi-5/",
+      "verified_at": "2026-10-21",
+      "evidence": "Bluetooth 5.0"
+    },
+    {
+      "key": "power",
+      "label_zh": "电源输入",
+      "label_en": "Power input",
+      "value_zh": "通过 USB-C 输入 5V/5A 直流电，支持 Power Delivery",
+      "value_en": "5V/5A DC via USB-C with Power Delivery support",
+      "source_url": "https://www.raspberrypi.com/products/raspberry-pi-5/",
+      "verified_at": "2026-10-21",
+      "evidence": "5V/5A"
+    }
+  ],
+  "assets": [
+    {
+      "asset_id": "raspberry-pi-5-photo",
+      "filename": "raspberry-pi-5-original.jpg",
+      "title": "Raspberry Pi 5.jpg",
+      "author": "SimonWaldherr",
+      "author_url": "https://commons.wikimedia.org/wiki/User:SimonWaldherr",
+      "license": "CC-BY-4.0",
+      "license_name": "Creative Commons Attribution 4.0 International",
+      "license_url": "https://creativecommons.org/licenses/by/4.0/",
+      "license_legalcode_url": "https://creativecommons.org/licenses/by/4.0/legalcode.en",
+      "source_url": "https://commons.wikimedia.org/wiki/File:Raspberry_Pi_5.jpg",
+      "source_revision_url": "https://commons.wikimedia.org/w/index.php?title=File:Raspberry_Pi_5.jpg&oldid=1010202564",
+      "original_url": "https://upload.wikimedia.org/wikipedia/commons/e/e7/Raspberry_Pi_5.jpg",
+      "sha256": "77a724485f6b48408aacf2e42806783e1c9448997a9e9627905fe2d3f2ada264",
+      "bytes": 3903561,
+      "width": 4600,
+      "height": 3400,
+      "mime_type": "image/jpeg",
+      "retrieved_at": "2026-10-21T07:18:51.442295+00:00",
+      "source_photo_date": "2024-01-14",
+      "changes": "None. Original JPEG bytes downloaded unchanged.",
+      "attribution": "Photo: SimonWaldherr, Raspberry Pi 5.jpg (CC BY 4.0). Original image unchanged. Source: https://commons.wikimedia.org/wiki/File:Raspberry_Pi_5.jpg License: https://creativecommons.org/licenses/by/4.0/",
+      "derivative_attribution": "Photo: SimonWaldherr, Raspberry Pi 5.jpg (CC BY 4.0). Layout and text added; original photo retained. Source: https://commons.wikimedia.org/wiki/File:Raspberry_Pi_5.jpg License: https://creativecommons.org/licenses/by/4.0/",
+      "depicts": "Raspberry Pi 5 board, visible model marking inspected.",
+      "scope_note": "The photo does not establish a RAM variant, package contents, stock, seller authorization or certification."
+    }
+  ],
+  "image_credit": "Photo: SimonWaldherr, Raspberry Pi 5.jpg (CC BY 4.0). Original image unchanged. Source: https://commons.wikimedia.org/wiki/File:Raspberry_Pi_5.jpg License: https://creativecommons.org/licenses/by/4.0/",
+  "derivative_image_credit": "Photo: SimonWaldherr, Raspberry Pi 5.jpg (CC BY 4.0). Layout and text added; original photo retained. Source: https://commons.wikimedia.org/wiki/File:Raspberry_Pi_5.jpg License: https://creativecommons.org/licenses/by/4.0/",
+  "unconfirmed_fields": [
+    "本示例的具体 RAM 容量 / Specific RAM capacity of this sample",
+    "供应商销售授权 / Seller authorization",
+    "批发价格、币种和起订量 / Wholesale price, currency and MOQ",
+    "库存、生产周期和运输时效 / Stock, production and shipping lead times",
+    "包装清单、配件及保修条件 / Package contents, accessories and warranty terms",
+    "目标市场适用的证书与合规结论 / Applicable market certificates and compliance conclusions"
+  ],
+  "usage_notes": [
+    "真实产品规格和授权照片仅用于验证商品资料制作流程；本项目不是 Raspberry Pi 经销商，也不代表官方背书。",
+    "Raspberry Pi 名称及图中商标用于识别真实产品；图片的 CC BY 4.0 许可不授予商标权。",
+    "网页展示、下载素材包和派生排版图均应保留摄影者署名、图片来源、许可链接，并说明改动。",
+    "不可将照片描述为无版权或本团队原创；不可把未提供的价格、MOQ、库存、认证和交期补成事实。"
+  ]
+}

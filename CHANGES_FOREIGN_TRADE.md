@@ -13,6 +13,7 @@ The original LICENSE, NOTICE and Git history are retained.
 - Stable quotation identifiers and read-back/export regression checks.
 - Team setup, isolated data directories, deployment documentation and CI.
 - Scenario-one inquiry workspace: owner-scoped persistence, bounded public website/GLEIF evidence, grounded AI extraction, bilingual draft replies and follow-up tasks.
+- Scenario-two product content workspace: bounded document/photo uploads, confirmed source facts, AI English fact translations, listing/FAQ drafts, original-photo layouts, provenance-preserving downloads and an attributed Raspberry Pi 5 public example.
 
 ## Public framework fixes
 

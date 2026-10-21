@@ -67,7 +67,7 @@ export interface PageConfig {
 // 当前默认的取舍：能力中心从底部菜单提到一级导航（其四类能力做成二级导航）；定时任务从应用中心、
 // 站点从实验室各自拆出来成一级导航；知识库并入我的空间的 Tab、智能体并入能力中心的二级导航，
 // 因此都不再单列；应用中心与项目反向下沉到用户下拉菜单，主导航只留高频入口。
-export const DEFAULT_SIDEBAR_ITEMS = ['ability_center', 'trade_inquiries', 'automation', 'sites', 'my_space'];
+export const DEFAULT_SIDEBAR_ITEMS = ['ability_center', 'trade_inquiries', 'trade_content', 'automation', 'sites', 'my_space'];
 export const DEFAULT_MENU_ITEMS = ['settings', 'app_center', 'projects', 'lab'];
 
 export const DEFAULT_PAGE_CONFIG: PageConfig = {
@@ -98,6 +98,7 @@ export const DEFAULT_PAGE_CONFIG: PageConfig = {
     panel_titles: {
       ability_center: '能力中心',
       trade_inquiries: '询盘工作台',
+      trade_content: '产品内容工作台',
       skills: '技能',
       agents: '智能体',
       mcp: '连接器',
@@ -115,6 +116,7 @@ export const DEFAULT_PAGE_CONFIG: PageConfig = {
     panel_subtitles: {
       ability_center: '智能体基础能力管理，包含智能体、技能、连接器与插件',
       trade_inquiries: '核验买家公开资料、处理询盘报价并管理跟进待办。',
+      trade_content: '上传产品资料与原图，核对事实，生成英文上品资料、商品素材和客服 FAQ。',
       skills: '启用/停用技能，并查看详细介绍、输入输出与示例。',
       agents: '选择与启用智能体，并查看其职责边界与路由提示。',
       mcp: '管理 MCP连接器服务，并查看其作用范围与可靠性影响。',

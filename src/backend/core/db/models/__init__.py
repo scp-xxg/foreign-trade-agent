@@ -108,6 +108,8 @@ from core.db.models.capability import (
 
 from core.db.models.foreign_trade import ForeignTradeInquiry
 
+from core.db.models.foreign_trade_content import ForeignTradeContentPack
+
 __all__ = [name for name in globals() if not name.startswith("_")]
 
 from core.db.models.observability import DesktopOutbox, DesktopRecord, DesktopSyncDevice
