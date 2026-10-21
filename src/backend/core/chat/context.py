@@ -1,3 +1,4 @@
+# Modified by foreign-trade-agent contributors, 2026-10-21; see CHANGES_FOREIGN_TRADE.md.
 """Runtime context assembly for chat workflow.
 
 Extracted from ``api/routes/chat.py`` — centralises the logic for
@@ -112,6 +113,11 @@ def build_effective_user_message(
 def resolve_user_facing_error(exc: Exception) -> str:
     """Map exceptions to user-friendly Chinese error strings."""
     from core.capabilities.errors import CapabilityError
+    from core.llm.compaction_errors import find_context_compaction_error
+
+    compaction_error = find_context_compaction_error(exc)
+    if compaction_error is not None:
+        return str(compaction_error)
 
     if isinstance(exc, CapabilityError):
         # Use fixed messages: dependency metadata and upstream exception text

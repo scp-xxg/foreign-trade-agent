@@ -85,6 +85,7 @@ def build() -> dict:
         plugin / "skills/product-content/SKILL.md",
         plugin / "HOST_REQUIREMENTS.md",
         HERE.parents[1] / "docs/CHAT_PLUGIN.md",
+        HERE.parents[1] / "docs/CHAT_PLUGIN_ACCEPTANCE.md",
         HERE / "engine.py", HERE / "catalog.json", SERVER,
     ]
     missing = [str(path) for path in required if not path.is_file()]
@@ -101,6 +102,7 @@ def build() -> dict:
         if (HERE / "README.md").is_file():
             archive.write(HERE / "README.md", "README.md")
         archive.write(HERE.parents[1] / "docs/CHAT_PLUGIN.md", "CHAT_PLUGIN.md")
+        archive.write(HERE.parents[1] / "docs/CHAT_PLUGIN_ACCEPTANCE.md", "CHAT_PLUGIN_ACCEPTANCE.md")
     return {"status": "built", "path": str(out), "bytes": out.stat().st_size}
 
 

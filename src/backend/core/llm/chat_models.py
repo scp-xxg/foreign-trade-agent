@@ -19,8 +19,8 @@ Two hard requirements for subclassing ``OpenAIChatModel`` (OpenAI-compatible pat
      ``extra_body.chat_template_kwargs`` rather than OpenAI-native reasoning_effort. Done by
      injecting extra_body into every call.
 
-The L3 placeholder-summary fallback for failed compaction calls is provided uniformly by
-``providers._fallback.StructuredFallbackMixin``.
+Structured-output failures propagate to the caller; context preservation and
+compression failure reporting belong to the agent.
 """
 
 from __future__ import annotations
@@ -51,7 +51,6 @@ from agentscope.model import ChatModelBase, ChatResponse, OpenAIChatModel
 from agentscope.tool._types import ToolChoice
 from core.llm.context_adapter import AgentScopeContextAdapter, PROVIDER_CONTEXT_META_KEY
 from core.llm.providers._fallback import (  # noqa: F401
-    L3_SYNTHETIC_METADATA,
     StructuredFallbackMixin,
 )
 from core.llm.providers.registry import get_spec, split_provider_extra
@@ -575,7 +574,7 @@ class OpenAICompatChatModel(StructuredFallbackMixin, OpenAIChatModel):
     """OpenAIChatModel subclass: injects a custom http_client + extra_body; optional Azure OpenAI client.
 
     Pinned to agentscope==2.0.0: the ``_call_api`` body is copied from the parent class (2.0.0);
-    sync it when upgrading upstream. The L3 compaction fallback is provided by StructuredFallbackMixin.
+    sync it when upgrading upstream. Structured-output failures remain errors.
     """
 
     # Recorded on every model step so replay knows which wire format produced it.

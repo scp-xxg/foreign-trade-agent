@@ -26,6 +26,7 @@ The original LICENSE, NOTICE and Git history are retained.
 - Extend progressive plugin activation to stage authenticated native tools together with skills/connectors; retain the execution-surface refresh and plugin gates. The activation checkpoint regression fixture explicitly summarizes its short history instead of retaining all of it.
 - Reject malformed JSON before trade business writes and require full skill loading with current user enablement. Use non-streaming completion only for requests containing these stateful trade tools to avoid a verified compatible-gateway streamed-argument defect; ordinary requests keep their configured transport.
 - Match persisted and live tool results by call ID before legacy name fallback, preventing concurrent same-name operations from exchanging receipts.
+- Stop with an explicit incomplete-run error when context summarization fails, preserving the original context and committed tool results instead of manufacturing a successful placeholder summary.
 - Correct package license metadata to reference the full existing LICENSE.
 
 Source files changed from the upstream baseline carry a modification notice.
