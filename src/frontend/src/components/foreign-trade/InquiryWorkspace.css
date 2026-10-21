@@ -1,0 +1,79 @@
+/* Modified by foreign-trade-agent contributors, 2026-10-21; see CHANGES_FOREIGN_TRADE.md. */
+.jx-inquiryWorkspace { height: 100%; overflow-y: auto; padding: 28px 32px 40px; background: var(--color-bg-layout); color: var(--color-text); }
+.jx-inquiryHeader { display: flex; justify-content: space-between; align-items: center; gap: 20px; max-width: 1380px; margin: 0 auto 28px; }
+.jx-inquiryEyebrow { color: var(--color-primary); font-size: 11px; letter-spacing: .12em; font-weight: 700; margin-bottom: 9px; }
+.jx-inquiryHeader h1 { margin: 0 0 8px; font-size: 27px; line-height: 1.3; }
+.jx-inquiryHeader p { margin: 0; color: var(--color-text-secondary); }
+.jx-inquiryLayout { display: grid; grid-template-columns: 240px minmax(0, 1fr); gap: 24px; max-width: 1380px; margin: 0 auto; align-items: start; }
+.jx-inquirySidebar { border: 1px solid var(--color-border); background: var(--color-bg-container); border-radius: 16px; padding: 18px 14px; position: sticky; top: 0; max-height: calc(100vh - 100px); overflow-y: auto; }
+.jx-inquirySidebarTop { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+.jx-inquiryListTools { display: flex; justify-content: space-between; align-items: center; margin-top: 16px; }
+.jx-inquiryList { display: grid; gap: 8px; }
+.jx-inquiryListItem { background: var(--color-bg-container); color: var(--color-text); border: 1px solid var(--color-border); border-radius: 10px; padding: 12px; text-align: left; display: grid; gap: 6px; cursor: pointer; font: inherit; width: 100%; overflow-wrap: anywhere; }
+.jx-inquiryListItem.is-active { border-color: var(--color-primary); background: var(--color-primary-light); }
+.jx-inquiryListItem:disabled { cursor: default; opacity: .65; }
+.jx-inquiryListItem span, .jx-inquiryListItem small { color: var(--color-text-secondary); font-size: 12px; }
+.jx-inquiryMain { min-width: 0; display: grid; gap: 18px; }
+.jx-inquiryRecordHeader { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.jx-inquiryRecordHeader h2 { margin: 0 0 6px; font-size: 18px; }
+.jx-inquirySection { background: var(--color-bg-container); border: 1px solid var(--color-border); border-radius: 16px; padding: 24px; min-width: 0; }
+.jx-inquirySectionHeading { display: flex; gap: 13px; align-items: flex-start; margin-bottom: 20px; }
+.jx-inquiryStep { color: var(--color-primary); background: var(--color-primary-light); border-radius: 10px; width: 38px; height: 38px; display: grid; place-items: center; flex-shrink: 0; font-size: 13px; font-weight: 700; }
+.jx-inquirySection h3 { margin: 0 0 5px; font-size: 18px; }
+.jx-inquirySectionHeading p { color: var(--color-text-secondary); margin: 0; font-size: 13px; line-height: 1.7; }
+.jx-inquiryGrid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin: 20px 0; }
+.jx-inquiryGrid label, .jx-inquiryField, .jx-inquiryItem label { display: grid; gap: 8px; font-size: 13px; color: var(--color-text-secondary); min-width: 0; }
+.jx-inquiryGrid .ant-input-number, .jx-inquiryItem .ant-input-number, .jx-inquiryItem .ant-select { width: 100%; }
+.jx-inquiryDemoControl { display: flex; align-items: center; padding-top: 20px; }
+.jx-inquiryField { margin: 16px 0; }
+.jx-inquiryActions { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }
+.jx-inquiryMuted { color: var(--color-text-secondary); font-size: 12px; line-height: 1.7; }
+.jx-inquiryBuyerCard { margin-top: 24px; border-top: 1px solid var(--color-border); padding-top: 20px; }
+.jx-inquiryCardHeading { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 16px; }
+.jx-inquiryCardHeading h4 { margin: 0; font-size: 16px; }
+.jx-inquiryCardHeading > span { font-size: 12px; color: var(--color-text-secondary); }
+.jx-inquiryFacts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.jx-inquiryFacts article { border: 1px solid var(--color-border); background: var(--color-bg-layout); border-radius: 10px; padding: 14px; overflow-wrap: anywhere; }
+.jx-inquiryFacts article > div { display: flex; justify-content: space-between; align-items: start; gap: 10px; font-size: 13px; }
+.jx-inquiryFacts p { margin: 8px 0; line-height: 1.6; }
+.jx-inquiryFacts small { display: block; color: var(--color-text-secondary); line-height: 1.6; margin-bottom: 8px; }
+.jx-inquiryWorkspace a { color: var(--color-primary); font-size: 12px; overflow-wrap: anywhere; }
+.jx-inquiryWarning, .jx-inquiryWarnings { color: var(--color-warning); font-size: 12px; line-height: 1.8; }
+.jx-inquiryWarnings { padding-left: 20px; }
+.jx-inquirySourceList { padding-left: 20px; }
+.jx-inquirySourceList li { margin: 10px 0; }
+.jx-inquirySourceList small { display: block; color: var(--color-text-secondary); margin-top: 3px; }
+.jx-inquiryWorkspace details summary { cursor: pointer; font-size: 12px; color: var(--color-text-secondary); padding: 8px 0; }
+.jx-inquirySearch { display: flex; align-items: center; gap: 10px; }
+.jx-inquiryProducts { display: grid; gap: 12px; margin-top: 14px; }
+.jx-inquiryProduct { border: 1px solid var(--color-border); background: var(--color-bg-layout); padding: 16px; border-radius: 12px; }
+.jx-inquiryProduct > div:first-child { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; }
+.jx-inquiryProduct p { font-size: 12px; line-height: 1.7; margin: 8px 0; }
+.jx-inquiryPriceTiers { display: flex; flex-wrap: wrap; gap: 8px; }
+.jx-inquiryPriceTiers span { font-size: 12px; background: var(--color-bg-container); border: 1px solid var(--color-border); border-radius: 6px; padding: 5px 8px; }
+.jx-inquiryItems { display: grid; gap: 14px; margin-top: 20px; }
+.jx-inquiryItems > .ant-btn { justify-self: start; }
+.jx-inquiryItem { display: grid; grid-template-columns: 1.2fr .8fr 1fr auto; gap: 12px; align-items: end; }
+.jx-inquiryTableWrap { overflow-x: auto; margin-top: 20px; }
+.jx-inquiryQuoteTable { border-collapse: collapse; font-size: 12px; width: 100%; text-align: left; }
+.jx-inquiryQuoteTable th, .jx-inquiryQuoteTable td { padding: 12px 10px; border-bottom: 1px solid var(--color-border); white-space: nowrap; }
+.jx-inquiryQuoteTable th { background: var(--color-bg-layout); color: var(--color-text-secondary); font-weight: 500; }
+.jx-inquiryQuoteTable small { display: block; margin-top: 4px; color: var(--color-text-secondary); }
+.jx-inquiryDraft { margin-top: 18px; padding: 16px; border: 1px solid var(--color-border); border-radius: 12px; background: var(--color-bg-layout); }
+.jx-inquiryDraft > .ant-alert { margin-bottom: 16px; }
+.jx-inquiryDraft pre { font-family: inherit; font-size: 13px; line-height: 1.85; white-space: pre-wrap; overflow-wrap: anywhere; margin: 14px 0 0; }
+.jx-inquiryFollowups { margin-top: 24px; padding-top: 22px; border-top: 1px solid var(--color-border); }
+.jx-inquiryTask { display: flex; gap: 12px; align-items: center; padding: 14px 0; border-bottom: 1px solid var(--color-border); }
+.jx-inquiryTask > div:first-child { flex: 1; display: grid; gap: 6px; min-width: 0; }
+.jx-inquiryTask strong { font-size: 13px; overflow-wrap: anywhere; }
+.jx-inquiryTask span { font-size: 12px; color: var(--color-text-secondary); }
+.jx-inquiryTask.is-overdue strong { color: var(--color-warning); }
+.jx-inquiryDate { width: 100%; min-width: 0; height: 32px; padding: 4px 11px; border: 1px solid var(--color-border); border-radius: 6px; background: var(--color-bg-container); color: var(--color-text); font: inherit; }
+.jx-inquiryHistory { margin-top: 20px; }
+.jx-inquiryHistory ol { font-size: 12px; color: var(--color-text-secondary); padding-left: 20px; line-height: 2; }
+.jx-inquiryFooter { text-align: center; font-size: 11px; color: var(--color-text-secondary); padding: 10px 0; }
+.jx-inquiryInterpretation { margin-top: 16px; padding: 16px; border: 1px solid var(--color-border); border-radius: 12px; background: var(--color-bg-layout); }
+.jx-inquiryInterpretation ul { padding-left: 20px; font-size: 13px; line-height: 1.8; }
+@media (max-width: 1100px) { .jx-inquiryWorkspace { padding: 22px 20px; } .jx-inquiryLayout { grid-template-columns: 205px minmax(0, 1fr); gap: 16px; } .jx-inquirySection { padding: 20px; } .jx-inquiryHeader { align-items: flex-start; } }
+@media (max-width: 850px) { .jx-inquiryLayout { grid-template-columns: minmax(0, 1fr); } .jx-inquirySidebar { position: static; max-height: 280px; } .jx-inquiryHeader, .jx-inquiryRecordHeader { flex-direction: column; align-items: stretch; } .jx-inquiryHeader > .ant-btn { align-self: flex-start; } }
+@media (max-width: 560px) { .jx-inquiryWorkspace { padding: 16px 12px; } .jx-inquirySection { padding: 16px; } .jx-inquiryGrid, .jx-inquiryFacts { grid-template-columns: minmax(0, 1fr); } .jx-inquiryItem { grid-template-columns: 1fr 1fr; } .jx-inquiryTask { flex-wrap: wrap; } .jx-inquiryCardHeading { flex-wrap: wrap; } }

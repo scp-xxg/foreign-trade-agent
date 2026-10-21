@@ -1,3 +1,4 @@
+// Modified by foreign-trade-agent contributors, 2026-10-21; see CHANGES_FOREIGN_TRADE.md.
 import { create } from 'zustand';
 import type { AbilityTabKey, Catalog, KbTabKey, PanelKey } from '../types';
 import { getCatalog, updateCatalogItem } from '../api';
@@ -14,7 +15,7 @@ const VALID_PANELS: readonly PanelKey[] = [
   'chat', 'kb', 'docs',
   'app_center', 'settings', 'share_records', 'my_space',
   'ability_center', 'lab', 'projects', 'project_detail',
-  'automation', 'sites',
+  'automation', 'sites', 'trade_inquiries',
 ] as const;
 
 /**

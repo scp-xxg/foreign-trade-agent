@@ -1,3 +1,4 @@
+# Modified by foreign-trade-agent contributors, 2026-10-21; see CHANGES_FOREIGN_TRADE.md.
 """Community-edition route registry."""
 
 from importlib import import_module
@@ -6,6 +7,7 @@ from .mock_sso import login_router
 from .mock_sso import router as mock_sso_router
 
 CE_ROUTERS: tuple[tuple[str, str], ...] = (
+    ("foreign_trade", "router"),
     ("chats", "router"),
     ("auth", "router"),
     ("users", "router"),

@@ -16,6 +16,7 @@ import { AGENT_MARKET_DICT } from './agentMarket';
 import { ONBOARDING_DICT } from './onboarding';
 import { CE_SHARED_DICT } from './ceShared';
 import { FOREIGN_TRADE_DICT } from './foreignTrade';
+import { FOREIGN_TRADE_INQUIRY_DICT } from './foreignTradeInquiry';
 
 export const EN_DICT: Record<string, string> = {
   ...CORE_DICT,
@@ -34,4 +35,5 @@ export const EN_DICT: Record<string, string> = {
   ...ONBOARDING_DICT,
   ...CE_SHARED_DICT,
   ...FOREIGN_TRADE_DICT,
+  ...FOREIGN_TRADE_INQUIRY_DICT,
 };

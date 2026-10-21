@@ -38,20 +38,24 @@ hugagent = "cli:main"
 # `core`, `orchestration`, … packages). Declare that so an editable/source
 # install exposes them and the `hugagent` console script resolves `cli:main`.
 [tool.setuptools]
-package-dir = {"" = "src/backend"}
+package-dir = {"" = "src/backend", "foreign_trade" = "extensions/foreign_trade"}
 py-modules = ["cli"]
 
 [tool.setuptools.dynamic]
 dependencies = {file = ["requirements.txt"]}
 
 [tool.setuptools.packages.find]
-where = ["src/backend"]
+where = ["src/backend", "extensions"]
 include = [
     "api*", "core*", "orchestration*", "prompts*", "mcp_servers*",
     "services*", "agent_bundles*", "plugin_bundles*", "skill_bundles*",
+    "foreign_trade",
 ]
 # alembic migrations / tests / uploads / scripts are not import-time runtime deps.
 exclude = ["tests*", "alembic*", "uploads*", "scripts*"]
+
+[tool.setuptools.package-data]
+foreign_trade = ["catalog.json", "plugin/*.json", "plugin/skills/*/*.md"]
 
 [tool.black]
 line-length = 100
