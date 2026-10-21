@@ -1,3 +1,4 @@
+# Modified by foreign-trade-agent contributors, 2026-10-21; see CHANGES_FOREIGN_TRADE.md.
 """Community-edition ORM model exports."""
 
 from core.db.engine import Base
@@ -104,6 +105,8 @@ from core.db.models.capability import (
     DeviceCapabilityNamePreference,
     DeviceCapabilityTransaction,
 )
+
+from core.db.models.foreign_trade import ForeignTradeInquiry
 
 __all__ = [name for name in globals() if not name.startswith("_")]
 

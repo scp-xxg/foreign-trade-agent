@@ -12,6 +12,7 @@ The original LICENSE, NOTICE and Git history are retained.
 - Bilingual PDF / Excel exports from validated calculation snapshots.
 - Stable quotation identifiers and read-back/export regression checks.
 - Team setup, isolated data directories, deployment documentation and CI.
+- Scenario-one inquiry workspace: owner-scoped persistence, bounded public website/GLEIF evidence, grounded AI extraction, bilingual draft replies and follow-up tasks.
 
 ## Public framework fixes
 

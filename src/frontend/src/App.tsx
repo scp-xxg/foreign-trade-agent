@@ -39,6 +39,7 @@ import { DocsPanel, AppCenterPanel } from './components/docs';
 import LabPanel from './components/lab/LabPanel';
 import { AutomationPanel } from './components/lab/AutomationPanel';
 import { SitesPanel } from './components/sites';
+import { InquiryWorkspace } from './components/foreign-trade/InquiryWorkspace';
 import { MySpacePanel, MySpaceRail } from './components/myspace';
 import { ProjectsPanel, ProjectDetailPanel } from './components/projects';
 import { useProjectStore } from './stores/projectStore';
@@ -961,6 +962,7 @@ export default function App() {
               {panel === 'app_center' && <AppCenterPanel />}
               {panel === 'automation' && <AutomationPanel />}
               {panel === 'sites' && <SitesPanel />}
+              {panel === 'trade_inquiries' && <InquiryWorkspace />}
               {panel === 'lab' && <LabPanel />}
               {panel === 'settings' && <SettingsPage />}
               {panel === 'my_space' && <MySpacePanel />}
