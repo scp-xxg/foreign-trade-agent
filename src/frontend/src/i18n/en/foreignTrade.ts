@@ -1,5 +1,16 @@
 /** English copy for the public foreign-trade quotation export. */
 export const FOREIGN_TRADE_DICT: Record<string, string> = {
+  '外贸业务，对话即入口': 'Foreign trade, through conversation',
+  '用对话完成询盘处理与产品上品': 'Handle inquiries and product content in chat',
+  '核验买家、处理询盘与跟进；上传资料，制作英文文案、商品素材和 FAQ。': 'Review buyer sources, handle inquiries and follow-ups; turn uploaded materials into English listings, images and FAQ.',
+  '真实公开资料保留来源；报价目录为模拟数据。所有回复与上品结果均是待审核草稿，不自动发送或发布。': 'Public facts retain their sources; quotation catalog prices are simulated. Replies and listing content are drafts, never automatically sent or published.',
+  '核验 LYRECO 法国公司的官网 https://www.lyreco.com/group/ 和公开登记资料，说明已知事实与未核实事项。': 'Review the LYRECO France website https://www.lyreco.com/group/ and public registry sources; distinguish known facts from unverified items.',
+  '创建演示询盘：DESK-001，500 件，标准包装，发往西班牙，计算报价并生成中英文回复草稿。': 'Create a demo inquiry for 500 DESK-001 units with standard packaging, shipping to Spain. Calculate a quote and prepare Chinese and English draft replies.',
+  '列出我的询盘和待跟进事项，不修改已有记录。': 'List my inquiries and pending follow-ups without changing existing records.',
+  '用 Raspberry Pi 5 的公开示例资料和授权照片制作英文上品资料、图片和 FAQ，先列出事实供我确认。': 'Use the Raspberry Pi 5 public example and licensed photo to prepare English listing content, images and FAQ. Show the facts for my confirmation first.',
+  '根据我上传的产品资料和图片整理事实、来源与缺失项，我确认后再生成英文资料包。': 'Extract facts, sources and missing details from my uploaded product materials and images. Generate the English pack after I confirm.',
+  '粘贴询盘，或上传产品资料和图片，告诉我需要完成什么…': 'Paste an inquiry or upload product documents and images, then tell me what you need…',
+  '通过外贸插件在对话中处理业务；工作台用于辅助查看、核对与编辑。': 'Use the trade plugin in chat; workspaces remain available for review and editing.',
   '中英文报价单': "Bilingual quotation",
   '报价单导出失败，请重试。': "Could not export the quotation. Please try again.",
   '报价编号：{id}': "Quote ID: {id}",

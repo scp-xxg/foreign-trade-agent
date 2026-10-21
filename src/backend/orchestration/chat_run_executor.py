@@ -1,3 +1,4 @@
+# Modified by foreign-trade-agent contributors, 2026-10-21; see CHANGES_FOREIGN_TRADE.md.
 """Chat Run Executor — decouples the AI workflow from the HTTP connection lifecycle.
 
 Each sent message creates a ChatRun row + starts a background asyncio.Task. The
@@ -2096,7 +2097,17 @@ async def _run_workflow(
         if nested_unknown is not None:
             await _pause_for_tool_outcome(nested_unknown)
             return
-        logger.error("chat_run_failed", run_id=run_id, error=str(exc), exc_info=True)
+        from core.llm.compaction_errors import find_context_compaction_error
+
+        # Wrappers can carry provider payloads in their text. Persist and emit
+        # only the fixed failure contract while retaining prior tool results.
+        compaction_error = find_context_compaction_error(exc)
+        if compaction_error is not None:
+            exc = compaction_error
+        logger.error(
+            "chat_run_failed", run_id=run_id, error=str(exc),
+            exc_info=compaction_error is None,
+        )
         try:
             user_facing = resolve_user_facing_error(exc)
         except Exception:

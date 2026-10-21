@@ -121,7 +121,7 @@ def setup(args, env: dict[str, str]) -> None:
     if "--max-old-space-size=" not in build_env.get("NODE_OPTIONS", ""):
         build_env["NODE_OPTIONS"] = (build_env.get("NODE_OPTIONS", "") + " --max-old-space-size=6144").strip()
     run(["npm", "--prefix", FRONTEND, "run", "build"], env=build_env, dry_run=args.dry_run)
-    print("依赖和前端准备完成。下一步：.venv/bin/python extensions/foreign_trade/team.py init")
+    print("依赖和前端准备完成。首次部署执行 team.py init；已有账号执行 team.py install --username YOUR_USERNAME 更新外贸业务助手。")
 
 
 def initialize(home: Path, username: str | None) -> str:
@@ -192,6 +192,7 @@ def start(args, home: Path, env: dict[str, str]) -> None:
                 raise RuntimeError("端口 9120 已被其他实例占用；不会接管它。")
     run([PYTHON, HERE / "manage.py", "start"], env=env, dry_run=args.dry_run)
     print("打开 http://127.0.0.1:3001，用自己的账号登录。首次在 设置→模型服务 添加支持工具调用的模型并指派 main_agent。")
+    print("对话中可选择“外贸业务助手（演示）”处理询盘和商品资料；两处工作台保留，用于查看和继续编辑同一记录。")
     print("保持此终端运行，Ctrl-C 停止网页后端；MCP 单独停止：.venv/bin/python extensions/foreign_trade/manage.py stop")
     command = [str(VENV / "bin/hugagent"), "serve", "--host", "127.0.0.1", "--port", "3001", "--no-browser"]
     if args.dry_run:

@@ -1,3 +1,4 @@
+# Modified by foreign-trade-agent contributors, 2026-10-21; see CHANGES_FOREIGN_TRADE.md.
 """Minimal multi-agent workflow orchestration (AgentScope backend)."""
 
 from __future__ import annotations
@@ -28,6 +29,7 @@ from core.llm.context_ir import (
 from core.llm.context_manager import resolve_model_context_window
 from core.llm.mcp_manager import close_clients
 from core.llm.message_compat import session_to_msgs
+from core.llm.compaction_errors import find_context_compaction_error
 from core.ontology.revision import is_substantive_revision, normalize_revision_candidate
 from core.ontology.validator import (
     activate_runtime_for_asset,
@@ -1462,6 +1464,9 @@ def run_chat_workflow(
 
                 if isinstance(_pt_exc, HookPaused):
                     raise
+                compaction_error = find_context_compaction_error(_pt_exc)
+                if compaction_error is not None:
+                    raise compaction_error from None
                 logger.warning("[workflow] pre-turn compaction failed: %s", _pt_exc)
 
             # Load history EXCLUDING the last user message — reply() adds it.
@@ -1586,6 +1591,9 @@ def run_chat_workflow(
 
         response = _asyncio.run(_run())
     except Exception as e:
+        compaction_error = find_context_compaction_error(e)
+        if compaction_error is not None:
+            raise compaction_error from None
         warnings.append(f"Agent execution error: {str(e)[:200]}")
         response = ""
 
@@ -2135,6 +2143,14 @@ async def _astream_subagent_direct(
 
     except Exception as e:
         import traceback
+
+        compaction_error = find_context_compaction_error(e)
+        if compaction_error is not None:
+            if "streaming_agent" in locals():
+                await streaming_agent.shutdown()
+                _persistent_clients.append((streaming_agent, list(mcp_clients)))
+            await _finish_direct_log("failed", error=str(compaction_error))
+            raise compaction_error from None
 
         logger.error("subagent_stream_error: %s\n%s", e, traceback.format_exc())
         warnings.append(f"Streaming error: {str(e)[:200]}")
@@ -2867,6 +2883,9 @@ async def astream_chat_workflow(
 
             if isinstance(_pt_exc, HookPaused):
                 raise
+            compaction_error = find_context_compaction_error(_pt_exc)
+            if compaction_error is not None:
+                raise compaction_error from None
             logger.warning("[workflow] pre-turn compaction failed: %s", _pt_exc)
 
         # ── Frozen-block injection: user identity (always injected) + memory snapshot (loaded only when persistent memory is on) ──
@@ -3319,6 +3338,13 @@ async def astream_chat_workflow(
 
     except Exception as e:
         import traceback
+
+        compaction_error = find_context_compaction_error(e)
+        if compaction_error is not None:
+            if "streaming_agent" in locals():
+                await streaming_agent.shutdown()
+                _persistent_clients.append((streaming_agent, list(mcp_clients)))
+            raise compaction_error from None
 
         logger.error("stream_workflow_error: %s\n%s", e, traceback.format_exc())
         warnings.append(f"Streaming error: {str(e)[:200]}")

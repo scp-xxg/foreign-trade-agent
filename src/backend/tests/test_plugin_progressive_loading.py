@@ -1,3 +1,4 @@
+# Modified by foreign-trade-agent contributors, 2026-10-21; see CHANGES_FOREIGN_TRADE.md.
 """Progressive plugin loading（渐进式插件加载）单元测试。
 
 覆盖三块：装配期延迟解析（可见性 / enabled 交集 / stdio 排除 / 激活与显式呼唤
@@ -302,6 +303,12 @@ async def test_load_plugin_tool_activates_in_place(ppl_env, tmp_path, monkeypatc
         return "plugin-aware summary"
 
     monkeypatch.setattr(compaction, "_summarize", fake_summary)
+    # This assertion verifies the post-activation tool surface in a checkpoint.
+    # With one short message the normal retained tail has nothing to summarize.
+    from dataclasses import replace
+    monkeypatch.setattr(compaction, "settings", SimpleNamespace(
+        compaction=replace(compaction.settings.compaction, keep_recent_tokens=0),
+    ))
     with ppl_env.Session() as db:
         ChatService(db).add_message(CHAT, "user", "compact after plugin load")
     inputs = _compaction_budget_inputs(budget_agent, 4096)

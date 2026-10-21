@@ -1,3 +1,4 @@
+# Modified by foreign-trade-agent contributors, 2026-10-21; see CHANGES_FOREIGN_TRADE.md.
 """Agent factory - creates AgentScope agents with pluggable configuration.
 
 This module is separated from core.chat.agent to avoid circular dependencies:
@@ -2034,6 +2035,7 @@ async def create_agent_executor(
     _log.info("[factory] +%s skills registered", _elapsed())
 
     loaded_skill_ids: set[str] = set()
+    fully_loaded_skill_ids: set[str] = set()
     # Effective sandbox session: callers may pass an explicit id to layer sessions
     # (main/plan execution → chat_id persistent kernel; batch/subagent → "" ephemeral).
     # ``None`` means "not specified" → fall back to chat_id (legacy behavior).
@@ -2113,6 +2115,7 @@ async def create_agent_executor(
                 allowed_skill_dirs,
                 loader,
                 loaded_skill_ids=loaded_skill_ids,
+                fully_loaded_skill_ids=fully_loaded_skill_ids,
             )
     # 收窄模式开了代码执行位（_turbo_code_exec）就走完整原生工具注册：MCP/技能面
     # 仍按模式收窄（上面已经归一），但沙箱/文件/产物工具与标准模式同一套。
@@ -2122,6 +2125,7 @@ async def create_agent_executor(
             allowed_skill_dirs,
             loader,
             loaded_skill_ids=loaded_skill_ids,
+            fully_loaded_skill_ids=fully_loaded_skill_ids,
         )
 
         from core.services.project_scope import project_scope_from_context
@@ -2360,6 +2364,19 @@ async def create_agent_executor(
     # ── Phase 4: Build system prompt (DB parts pre-fetched) ──
     _log.info("[factory] +%s tools registered", _elapsed())
     _agent_ref: Optional[Dict] = None
+    # Modified by foreign-trade-agent contributors, 2026-10-21.
+    # User-owned trade operations are native closures, gated by the same plugin
+    # activation as its skills; never send a model-selected user id to loopback MCP.
+    if not disable_tools and not turbo_mode and not read_only and not plan_mode and current_user_id:
+        from core.llm.foreign_trade_plugin import register_initial_trade_tools
+
+        register_initial_trade_tools(
+            toolkit, user_id=str(current_user_id), chat_id=chat_id,
+            progressive=(_subagent_progressive if user_agent is not None else _progressive),
+            enabled_skill_ids=enabled_skill_ids or (),
+            loaded_skill_ids=fully_loaded_skill_ids,
+        )
+
     # Progressive plugin runtime holder — filled in stages: registered with the
     # collector below, then completed after the real Toolkit / AgentRuntimeState
     # exist (the load_plugin closure mutates both at activation time).
@@ -2408,7 +2425,8 @@ async def create_agent_executor(
         # observability). A model that called Skill instead would bypass all of
         # that and receive backend-path content unusable in the sandbox — so the
         # schema is pure per-round prefill waste plus a wrong door.
-        return OntologyFilteredToolkit(
+        from core.llm.strict_trade_function import StrictTradeToolkit
+        return StrictTradeToolkit(
             tools=toolkit.function_tools,
             mcps=[*mcp_clients, *http_clients],
             skills_or_loaders=(toolkit.skill_loaders or None) if include_skills else None,
@@ -2554,6 +2572,8 @@ async def create_agent_executor(
                 )
             _plugin_runtime = {
                 "activated_slugs": set(),
+                "loaded_skill_ids": fully_loaded_skill_ids,
+                "trade_tools_allowed": not (read_only or plan_mode or disable_tools or turbo_mode),
                 "connected_keys": set(enabled_mcp_keys),
                 "toolkit": None,
                 "permission_context": None,
@@ -2747,6 +2767,8 @@ async def create_agent_executor(
                 )
             _plugin_runtime = {
                 "activated_slugs": set(_progressive.activated_slugs),
+                "loaded_skill_ids": fully_loaded_skill_ids,
+                "trade_tools_allowed": not (read_only or plan_mode or disable_tools or turbo_mode),
                 "connected_keys": set(enabled_mcp_keys),
                 "toolkit": None,  # the real Toolkit, filled after construction
                 "permission_context": None,  # filled after AgentRuntimeState exists

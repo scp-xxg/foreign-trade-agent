@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+# Modified by foreign-trade-agent contributors, 2026-10-21; see CHANGES_FOREIGN_TRADE.md.
 """AgentScope step-boundary compaction backed by the shared checkpoint pipeline.
 
 Only agents with ``state.chat_id`` publish checkpoints. Agents without a chat
@@ -8,12 +9,14 @@ ID still compact their live context but do not modify a parent conversation.
 from __future__ import annotations
 
 import logging
+from copy import deepcopy
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Sequence
 
 from agentscope.agent import Agent, ContextConfig
 from agentscope.model import ChatUsage
 from core.llm.execution_manifest import stable_hash
+from core.llm.compaction_errors import ContextCompactionError
 from core.llm.manifest_agent import ManifestBoundAgent
 
 logger = logging.getLogger(__name__)
@@ -134,6 +137,23 @@ class CompactingAgent(ManifestBoundAgent):
 
     # ── MidTurn compaction ───────────────────────────────────────────────────
 
+    async def _compress_framework_transactionally(self, cfg: ContextConfig) -> None:
+        """Keep the task and committed tool receipts if framework compression fails.
+
+        A failed summary cannot justify deleting history or asking the model
+        for a normal final answer. Stop this turn before its next reasoning
+        step; the run executor retains the already committed results.
+        """
+        summary = self.state.summary
+        context = deepcopy(self.state.context)
+        try:
+            await Agent.compress_context(self, cfg)
+        except Exception as exc:  # noqa: BLE001
+            self.state.summary = summary
+            self.state.context = context
+            logger.warning("[compaction] framework compression stopped: %s", type(exc).__name__)
+            raise ContextCompactionError() from None
+
     async def compress_context(self, context_config: ContextConfig | None = None) -> None:
         """Compact at a ReAct step boundary, falling back to AgentScope on failure."""
         cfg: ContextConfig = context_config or self.context_config
@@ -142,10 +162,7 @@ class CompactingAgent(ManifestBoundAgent):
 
         if not settings.compaction.enabled:
             # Disabling checkpoints must not disable live overflow protection.
-            try:
-                await Agent.compress_context(self, cfg)
-            except Exception as exc:  # noqa: BLE001
-                logger.warning("[compaction] framework compression failed: %r", exc)
+            await self._compress_framework_transactionally(cfg)
             return
 
         try:
@@ -193,11 +210,7 @@ class CompactingAgent(ManifestBoundAgent):
 
         if not replacement:
             logger.warning("[compaction] mid-turn falling back to framework compression")
-            try:
-                await Agent.compress_context(self, cfg)
-            except Exception as exc:  # noqa: BLE001
-                logger.warning("[compaction] framework compression failed too: %r", exc)
-                return
+            await self._compress_framework_transactionally(cfg)
             self._jx_observation = None
             self._jx_compacted_cursor = _history_cursor(self._history_for_summary())
             return

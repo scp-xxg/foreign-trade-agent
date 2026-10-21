@@ -1,14 +1,14 @@
 <!-- Modified by foreign-trade-agent contributors, 2026-10-21: public team distribution. -->
 # foreign-trade-agent
 
-面向外贸产品查询与询盘报价的黑客松演示 Agent，基于公开 **HugAgentOS Community Edition desktop-v1.0.2**。仓库名称暂用 `foreign-trade-agent`，页面名称和 Logo 暂保留 HugAgentOS。
+面向外贸询盘处理与商品资料制作的黑客松演示 Agent，基于公开 **HugAgentOS Community Edition desktop-v1.0.2**。仓库名称暂用 `foreign-trade-agent`，页面名称和 Logo 暂保留 HugAgentOS。
 
 **报价目录中的产品、价格和参考生产周期均为虚构演示数据，非真实商业报价。** 场景二另附可核验的真实产品资料和有署名的公开授权照片，两者独立，不混用价格。
 
 ## 已实现
 
 - 8 个办公收纳 SKU：中英文检索、产品规格、MOQ 和数量阶梯价。
-- “询盘转报价（演示）”插件：产品检索、产品详情、Decimal 报价计算三个 MCP 工具及对应技能。
+- “外贸业务助手（演示）”插件 0.2.0：保留即时查询/报价技能，新增买家询盘跟进和产品内容技能；以对话为主入口，复用原工作台。[对话使用与升级](docs/CHAT_PLUGIN.md)
 - 定制包装门槛与费用、交期冲突说明；改量或改包装后重新计算。
 - 中英对照 PDF、中文/英文双工作表 Excel 下载；直接使用工具回执，保留来源和稳定报价编号。
 - 外贸首页、6 条推荐问题、默认助手提示词、团队部署脚本和自动检查。
@@ -46,7 +46,7 @@ python3.11 extensions/foreign_trade/team.py setup
 | 首页、外贸文案、6 条推荐问题、当前 Logo | 同一版本及初始化配置，保持一致 |
 | 模拟目录、报价规则、PDF / Excel 下载卡 | 同一版本保持一致 |
 | 询盘工作台、产品内容工作台、公开演示素材 | 同一版本保持一致；每人自行上传和创建演示记录 |
-| 询盘转报价（演示）插件 | init 自动安装到你的账号，技能和代码随仓库保留 |
+| 外贸业务助手（演示）插件 | init 自动安装三个技能到你的账号，原报价工具保留 |
 | 账号密码、模型 Key、聊天历史、上传文件 | 每台机器独立，不通过 Git 同步 |
 | 模型措辞、速度与推理质量 | 取决于所配模型，金额以计算工具为准 |
 

@@ -1,0 +1,14 @@
+/* Modified by foreign-trade-agent contributors, 2026-10-21; see CHANGES_FOREIGN_TRADE.md. */
+.jx-contentDownloadCards { display: grid; gap: 12px; margin: 14px 0; }
+.jx-contentDownloadCard { min-width: 0; padding: 18px; border: 1px solid var(--color-border); border-radius: 14px; background: var(--color-bg-container); color: var(--color-text); }
+.jx-contentDownloadHeading { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.jx-contentDownloadHeading > div { display: flex; align-items: center; gap: 8px; font-size: 14px; }
+.jx-contentDownloadHeading .anticon { color: var(--color-primary); }
+.jx-contentDownloadHeading > span { font-size: 11px; color: var(--color-primary); background: var(--color-primary-light); padding: 3px 8px; border-radius: 6px; }
+.jx-contentDownloadCard h4 { margin: 15px 0 8px; font-size: 18px; line-height: 1.5; overflow-wrap: anywhere; }
+.jx-contentDownloadMeta { display: grid; gap: 4px; font-size: 12px; color: var(--color-text-secondary); overflow-wrap: anywhere; }
+.jx-contentDownloadCard > p { font-size: 12px; line-height: 1.8; color: var(--color-text-secondary); margin: 12px 0; }
+.jx-contentDownloadButtons { display: flex; gap: 10px; flex-wrap: wrap; }
+.jx-contentDownloadCard > small { display: block; margin-top: 12px; line-height: 1.7; color: var(--color-text-secondary); font-size: 11px; }
+.jx-contentDownloadCard > .jx-contentDownloadError { color: var(--color-error); margin: 12px 0 0; }
+@media (max-width: 560px) { .jx-contentDownloadCard { padding: 14px; } .jx-contentDownloadButtons .ant-btn { width: 100%; } }

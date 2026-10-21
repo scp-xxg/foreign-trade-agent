@@ -19,8 +19,8 @@ Two hard requirements for subclassing ``OpenAIChatModel`` (OpenAI-compatible pat
      ``extra_body.chat_template_kwargs`` rather than OpenAI-native reasoning_effort. Done by
      injecting extra_body into every call.
 
-The L3 placeholder-summary fallback for failed compaction calls is provided uniformly by
-``providers._fallback.StructuredFallbackMixin``.
+Structured-output failures propagate to the caller; context preservation and
+compression failure reporting belong to the agent.
 """
 
 from __future__ import annotations
@@ -51,7 +51,6 @@ from agentscope.model import ChatModelBase, ChatResponse, OpenAIChatModel
 from agentscope.tool._types import ToolChoice
 from core.llm.context_adapter import AgentScopeContextAdapter, PROVIDER_CONTEXT_META_KEY
 from core.llm.providers._fallback import (  # noqa: F401
-    L3_SYNTHETIC_METADATA,
     StructuredFallbackMixin,
 )
 from core.llm.providers.registry import get_spec, split_provider_extra
@@ -575,7 +574,7 @@ class OpenAICompatChatModel(StructuredFallbackMixin, OpenAIChatModel):
     """OpenAIChatModel subclass: injects a custom http_client + extra_body; optional Azure OpenAI client.
 
     Pinned to agentscope==2.0.0: the ``_call_api`` body is copied from the parent class (2.0.0);
-    sync it when upgrading upstream. The L3 compaction fallback is provided by StructuredFallbackMixin.
+    sync it when upgrading upstream. Structured-output failures remain errors.
     """
 
     # Recorded on every model step so replay knows which wire format produced it.
@@ -744,13 +743,27 @@ class OpenAICompatChatModel(StructuredFallbackMixin, OpenAIChatModel):
         kwargs.update(generate_kwargs)
 
         fmt_tools, fmt_tool_choice = self._format_tools(tools, tool_choice)
+        # Some OpenAI-compatible gateways split this workflow's nested JSON
+        # across invalid streamed tool indexes (observed index 0 and -1). A
+        # completion response from the same request preserves one full call.
+        # Scope the transport choice to this call's exact trade tool surface;
+        # never mutate the shared model's stream flag or provider configuration.
+        from core.llm.foreign_trade_plugin import TRADE_TOOL_NAMES
+
+        request_stream = self.stream
+        if any(isinstance(tool, dict) and isinstance(tool.get("function"), dict)
+               and tool["function"].get("name") in TRADE_TOOL_NAMES
+               for tool in (fmt_tools or [])):
+            request_stream = False
+            kwargs["stream"] = False
+            kwargs.pop("stream_options", None)
         if fmt_tools:
             kwargs["tools"] = _slim_tool_schemas(fmt_tools)
             if not self.parameters.parallel_tool_calls:
                 kwargs["parallel_tool_calls"] = False
         if fmt_tool_choice is not None:
             kwargs["tool_choice"] = fmt_tool_choice
-        if self.stream:
+        if request_stream:
             kwargs["stream_options"] = {"include_usage": True}
 
         start_datetime = datetime.now()
@@ -846,7 +859,7 @@ class OpenAICompatChatModel(StructuredFallbackMixin, OpenAIChatModel):
         audio_fmt = (
             audio_cfg.get("format", "wav") if isinstance(audio_cfg, dict) else "wav"
         )
-        if self.stream:
+        if request_stream:
             return _stream_with_bounded_retry(
                 self,
                 client=client,

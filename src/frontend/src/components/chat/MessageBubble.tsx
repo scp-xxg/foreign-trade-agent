@@ -36,6 +36,8 @@ import { useStallDetector } from '../../hooks';
 import { PlanCard } from './PlanCard';
 import { ArtifactCardList } from './ArtifactCardList';
 import { TradeQuoteCards } from './TradeQuoteCard';
+import { ProductContentCards } from './ProductContentCard';
+import { TradeInquiryCards } from './TradeInquiryCard';
 import { CitationMarkdownBlock } from '../citation';
 import { ToolMessageContext } from '../tool/ToolMessageContext';
 import { useShallow } from 'zustand/react/shallow';
@@ -1075,7 +1077,11 @@ export const MessageBubble = memo(function MessageBubble({ m, messageIndex, curr
 
         {/* Exports use this message's successful calculation result, never model prose. */}
         {m.role === 'assistant' && !m.isStreaming && m.toolCalls && (
-          <TradeQuoteCards tools={m.toolCalls} chatId={currentChatId} messageId={m.messageId} />
+          <>
+            <TradeQuoteCards tools={m.toolCalls} chatId={currentChatId} messageId={m.messageId} />
+            <ProductContentCards tools={m.toolCalls} chatId={currentChatId} messageId={m.messageId} />
+            <TradeInquiryCards tools={m.toolCalls} />
+          </>
         )}
 
         {/* Artifact cards */}

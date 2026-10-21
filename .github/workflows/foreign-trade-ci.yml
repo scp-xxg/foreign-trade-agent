@@ -14,6 +14,9 @@ on:
       - "tests/test_inquiry*.py"
       - "tests/test_buyer_public_data.py"
       - "tests/test_product_content*.py"
+      - "tests/test_trade*.py"
+      - "tests/test_tool_result_identity.py"
+      - "tests/test_compaction_failure*.py"
       - "pyproject.toml"
       - "requirements.txt"
       - ".github/workflows/foreign-trade-ci.yml"
@@ -27,6 +30,9 @@ on:
       - "tests/test_inquiry*.py"
       - "tests/test_buyer_public_data.py"
       - "tests/test_product_content*.py"
+      - "tests/test_trade*.py"
+      - "tests/test_tool_result_identity.py"
+      - "tests/test_compaction_failure*.py"
       - "pyproject.toml"
       - "requirements.txt"
       - ".github/workflows/foreign-trade-ci.yml"
@@ -59,7 +65,17 @@ jobs:
           python -m pip install -r requirements.txt pytest pytest-asyncio
           python -m pip install --no-deps -e .
       - name: Test owned inquiries and bounded public sources without live network
-        run: python -m pytest tests/test_inquiry_workflow.py tests/test_inquiry_ai.py tests/test_buyer_public_data.py tests/test_product_content.py tests/test_product_content_generation.py -q
+        run: |
+          python -m pytest tests/test_inquiry_workflow.py tests/test_inquiry_ai.py tests/test_buyer_public_data.py \
+            tests/test_product_content.py tests/test_product_content_generation.py \
+            tests/test_trade_plugin_tools.py tests/test_trade_plugin_loading.py tests/test_trade_plugin_end_to_end.py tests/test_trade_tool_json.py \
+            tests/test_trade_skill_read.py tests/test_trade_model_transport.py tests/test_tool_result_identity.py \
+            tests/test_compaction_failure.py tests/test_compaction_failure_workflow.py \
+            src/backend/tests/llm/test_compaction_mid_turn.py src/backend/tests/llm/test_compaction_watermark.py \
+            src/backend/tests/llm/test_compaction_e2e.py src/backend/tests/orchestration/test_model_steps_pipeline.py \
+            src/backend/tests/orchestration/test_user_question_passthrough.py src/backend/tests/orchestration/test_chat_run_cancel_persistence.py \
+            src/backend/tests/test_plugin_progressive_loading.py src/backend/tests/llm/test_local_plugin_sticky_ids.py \
+            src/backend/tests/llm/test_tool_call_response_ids.py src/backend/tests/llm/test_chat_model_text_content.py -q
 
   quote-and-web:
     name: Quote engine, bilingual exports, and CE web build
@@ -100,6 +116,10 @@ jobs:
       - name: Test quote cards and bilingual document exports
         working-directory: src/frontend
         run: npm run test:foreign-trade-quote
+
+      - name: Test structured content receipts and revision-bound downloads
+        working-directory: src/frontend
+        run: npm run test:foreign-trade-content-card
 
       - name: Build the public CE web app
         working-directory: src/frontend
