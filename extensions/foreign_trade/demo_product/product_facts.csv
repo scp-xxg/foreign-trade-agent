@@ -1,0 +1,9 @@
+﻿key,label_zh,label_en,value_zh,value_en,source_url,verified_at,evidence
+model,产品型号,Product model,Raspberry Pi 5,Raspberry Pi 5,https://www.raspberrypi.com/products/raspberry-pi-5/,2026-10-21,Raspberry Pi 5
+processor,处理器,Processor,Broadcom BCM2712，2.4GHz，四核 64 位 Arm Cortex-A76,Broadcom BCM2712; 2.4GHz; quad-core 64-bit Arm Cortex-A76,https://www.raspberrypi.com/products/raspberry-pi-5/,2026-10-21,Broadcom BCM2712 2.4GHz
+display,显示输出,Display output,支持双路 4K 60 帧 HDMI 输出和 HDR,Two HDMI outputs supporting 4K at 60fps and HDR,https://www.raspberrypi.com/products/raspberry-pi-5/,2026-10-21,Dual 4Kp60
+usb,USB 接口,USB ports,2 个 USB 3.0 和 2 个 USB 2.0 接口,Two USB 3.0 and two USB 2.0 ports,https://www.raspberrypi.com/products/raspberry-pi-5/,2026-10-21,USB 3.0; USB 2.0
+ethernet,有线网络,Wired networking,千兆以太网,Gigabit Ethernet,https://www.raspberrypi.com/products/raspberry-pi-5/,2026-10-21,Gigabit Ethernet
+wifi,无线网络,Wireless networking,双频 802.11ac Wi-Fi,Dual-band 802.11ac Wi-Fi,https://www.raspberrypi.com/products/raspberry-pi-5/,2026-10-21,802.11ac
+bluetooth,蓝牙,Bluetooth,Bluetooth 5.0，支持 BLE,Bluetooth 5.0 with BLE,https://www.raspberrypi.com/products/raspberry-pi-5/,2026-10-21,Bluetooth 5.0
+power,电源输入,Power input,通过 USB-C 输入 5V/5A 直流电，支持 Power Delivery,5V/5A DC via USB-C with Power Delivery support,https://www.raspberrypi.com/products/raspberry-pi-5/,2026-10-21,5V/5A

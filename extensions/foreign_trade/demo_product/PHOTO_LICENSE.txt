@@ -1,0 +1,14 @@
+Third-party photograph notice
+
+Photo: SimonWaldherr, Raspberry Pi 5.jpg (CC BY 4.0). Original image unchanged. Source: https://commons.wikimedia.org/wiki/File:Raspberry_Pi_5.jpg License: https://creativecommons.org/licenses/by/4.0/
+
+Source file: raspberry-pi-5-original.jpg
+Original download URL: https://upload.wikimedia.org/wikipedia/commons/e/e7/Raspberry_Pi_5.jpg
+SHA-256: 77a724485f6b48408aacf2e42806783e1c9448997a9e9627905fe2d3f2ada264
+License legal text: https://creativecommons.org/licenses/by/4.0/legalcode.en
+
+The photograph retains its own CC BY 4.0 license; it is not relicensed under the repository software license.
+For adapted layouts, retain creator/title/source/license and state the changes. Suggested credit:
+Photo: SimonWaldherr, Raspberry Pi 5.jpg (CC BY 4.0). Layout and text added; original photo retained. Source: https://commons.wikimedia.org/wiki/File:Raspberry_Pi_5.jpg License: https://creativecommons.org/licenses/by/4.0/
+
+The license does not imply endorsement by the photographer or Raspberry Pi, and does not grant trademark rights.

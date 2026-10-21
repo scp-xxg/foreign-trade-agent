@@ -1,3 +1,4 @@
+# Modified by foreign-trade-agent contributors, 2026-10-21; see CHANGES_FOREIGN_TRADE.md.
 # Core Web Framework
 fastapi>=0.110.0
 uvicorn>=0.27.0
@@ -33,14 +34,17 @@ mcp>=1.0.0,<2.0.0
 tavily-python>=0.5.0
 beautifulsoup4>=4.12.0
 lxml>=5.0.0
-# Heavy office/chart deps (python-docx, pypdf, pdfplumber, matplotlib,
-# Pillow) live in `requirements-mcp.txt` and only get installed inside the
+# Heavy office/chart deps (python-docx, pdfplumber, matplotlib)
+# live in `requirements-mcp.txt` and only get installed inside the
 # dedicated `mcp` container.
 # openpyxl + python-pptx stay in backend so file_parser can parse xlsx /
 # pptx in-process for the read_artifact tool and the file_context preview
 # hook — both must keep working even if individual office MCP servers are
 # disabled by the user.
 openpyxl>=3.1.0
+# Product content workspace: bounded PDF text extraction and original-photo layouts.
+pypdf>=6.0.0
+Pillow>=11.3.0
 python-pptx>=0.6.23
 # 微信渠道扫码绑定：iLink 只回扫码链接，需在后端渲染成二维码 PNG（Pillow 由 python-pptx 带入）。
 qrcode[pil]>=7.4.2

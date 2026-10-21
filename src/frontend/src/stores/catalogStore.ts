@@ -15,7 +15,7 @@ const VALID_PANELS: readonly PanelKey[] = [
   'chat', 'kb', 'docs',
   'app_center', 'settings', 'share_records', 'my_space',
   'ability_center', 'lab', 'projects', 'project_detail',
-  'automation', 'sites', 'trade_inquiries',
+  'automation', 'sites', 'trade_inquiries', 'trade_content',
 ] as const;
 
 /**
