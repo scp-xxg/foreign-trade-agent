@@ -1,3 +1,4 @@
+# Modified by foreign-trade-agent contributors, 2026-10-21; see CHANGES_FOREIGN_TRADE.md.
 """Model factory utilities (AgentScope 2.0 backend) — multi-vendor dispatch.
 
 Important: do NOT construct model instances at import time.
@@ -27,7 +28,9 @@ from __future__ import annotations
 import inspect
 import logging
 import os
+from dataclasses import replace
 from datetime import datetime
+from uuid import uuid4
 from time import monotonic as _monotonic
 from time import perf_counter as _perf_counter
 from typing import Any, AsyncGenerator, Optional
@@ -485,6 +488,53 @@ def _reasoning_steps(msg: Msg) -> list[list[Any]]:
     return steps or [[]]
 
 
+def _namespace_response_tool_calls(
+    response: ChatResponse, call_ids: dict[str, str]
+) -> ChatResponse:
+    """Keep upstream IDs stable within one response but unique across model calls.
+
+    Some compatible gateways recycle call_0/call_1 on later model turns.
+    AgentScope pairs results by ID, so recycling can silently skip a new tool.
+    """
+    content = []
+    changed = False
+    for block in response.content:
+        if isinstance(block, ToolCallBlock):
+            if block.id not in call_ids:
+                call_ids[block.id] = "call_" + uuid4().hex
+            block = block.model_copy(update={"id": call_ids[block.id]})
+            changed = True
+        content.append(block)
+    return replace(response, content=content) if changed else response
+
+
+def _normalize_text_only_content(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Use string content for strict chat endpoints without dropping media or metadata."""
+    normalized = []
+    for row in messages:
+        content = row.get("content")
+        if (
+            isinstance(content, list)
+            and content
+            and all(
+                isinstance(block, dict)
+                and set(block) == {"type", "text"}
+                and block["type"] == "text"
+                and isinstance(block["text"], str)
+                for block in content
+            )
+        ):
+            row = {**row, "content": "\n".join(block["text"] for block in content)}
+        elif (
+            row.get("role") == "assistant"
+            and row.get("tool_calls")
+            and (content is None or content == [])
+        ):
+            row = {**row, "content": ""}
+        normalized.append(row)
+    return normalized
+
+
 class ReasoningEchoChatFormatter(ReasoningReplayMixin, OpenAIChatFormatter):
     """OpenAI wire format, except the model's own reasoning is handed back to it.
 
@@ -582,6 +632,9 @@ class OpenAICompatChatModel(StructuredFallbackMixin, OpenAIChatModel):
         self,
         messages: list[dict[str, Any]],
     ) -> list[dict[str, Any]]:
+        # The listener records the retry request; bind it to the same content
+        # representation that will be sent to the provider.
+        messages = _normalize_text_only_content(messages)
         listener = self._context_rewrite_listener
         if listener is not None:
             rendered = listener(messages)
@@ -596,7 +649,7 @@ class OpenAICompatChatModel(StructuredFallbackMixin, OpenAIChatModel):
             row = dict(message)
             row.pop(PROVIDER_CONTEXT_META_KEY, None)
             cleaned.append(row)
-        return cleaned
+        return _normalize_text_only_content(cleaned)
 
     async def _annotate_retry_context(
         self,
@@ -612,6 +665,19 @@ class OpenAICompatChatModel(StructuredFallbackMixin, OpenAIChatModel):
             formatted_messages,
             row_counts,
         )
+
+    async def _parse_stream_response(self, start_datetime, response, audio_fmt):
+        call_ids: dict[str, str] = {}
+        chunks = super()._parse_stream_response(start_datetime, response, audio_fmt)
+        try:
+            async for chunk in chunks:
+                yield _namespace_response_tool_calls(chunk, call_ids)
+        finally:
+            await chunks.aclose()
+
+    def _parse_completion_response(self, start_datetime, response, audio_fmt):
+        parsed = super()._parse_completion_response(start_datetime, response, audio_fmt)
+        return _namespace_response_tool_calls(parsed, {})
 
     def _build_client(self):
         import openai
@@ -652,7 +718,9 @@ class OpenAICompatChatModel(StructuredFallbackMixin, OpenAIChatModel):
         # ⭐ Only difference from the parent class: inject the reused http_client (with read=600s timeout) / optional Azure client
         client = self._build_client()
 
-        formatted_messages = await self.formatter.format(messages)
+        formatted_messages = _normalize_text_only_content(
+            await self.formatter.format(messages)
+        )
 
         kwargs: dict[str, Any] = {
             "model": model_name,

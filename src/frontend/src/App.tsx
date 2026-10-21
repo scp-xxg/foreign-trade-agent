@@ -1,3 +1,4 @@
+// Modified by foreign-trade-agent contributors, 2026-10-21; see CHANGES_FOREIGN_TRADE.md.
 import { CapabilitySyncGate } from './components/desktop/CapabilitySyncGate';
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
@@ -727,6 +728,11 @@ export default function App() {
   };
 
   const handleCapabilityClick = (capabilityId: string) => {
+    if (capabilityId === 'plugins') {
+      useCatalogStore.getState().setAbilityTab('plugins');
+      setPanelSafe('ability_center');
+      return;
+    }
     // 知识库已并入「我的空间」的 Tab，首页快捷入口直接落到那个 Tab
     if (capabilityId === 'knowledge') {
       setMySpaceTab('kb');
@@ -908,8 +914,8 @@ export default function App() {
               <div className="jx-recommendBanner">
                 <span className="jx-recommendBanner-icon">💡</span>
                 <span className="jx-recommendBanner-text">
-                  {recommendBannerText.trim() || t('推荐用法：优先使用知识库检索可提升可引用性与结果可靠性。')}
-                  <a className="jx-recommendBanner-link" onClick={() => handleCapabilityClick('knowledge')}>{t('前往知识库 >')}</a>
+                  {recommendBannerText.trim() || t('试试产品查询或询盘报价；当前使用模拟产品目录，所有报价仅供演示。')}
+                  <a className="jx-recommendBanner-link" onClick={() => handleCapabilityClick('plugins')}>{t('查看外贸插件 >')}</a>
                 </span>
                 <button className="jx-recommendBanner-close" onClick={() => setRecommendBarVisible(false)} aria-label={t('关闭')}>
                   <CloseOutlined style={{ fontSize: 16 }} />

@@ -1,3 +1,4 @@
+// Modified by foreign-trade-agent contributors, 2026-10-21; see CHANGES_FOREIGN_TRADE.md.
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Modal, Select, message } from 'antd';
 import { FileTextOutlined, PieChartOutlined, ReloadOutlined, SearchOutlined } from '@ant-design/icons';
@@ -274,11 +275,11 @@ export function ChatArea({
   }, [chat?.agentId, agents]);
 
   // ── Page config default values ──
-  const cfgHeroTitle = usePageConfig('branding.hero_title', '你好，我是 HugAgentOS');
-  const cfgHeroSubtitle = usePageConfig('branding.hero_subtitle', '今天想从哪里开始？');
+  const cfgHeroTitle = usePageConfig('branding.hero_title', '外贸询盘，从产品查询到报价');
+  const cfgHeroSubtitle = usePageConfig('branding.hero_subtitle', '查规格与起订量，算阶梯价与包装费，起草英文询盘回复。');
   const cfgProductName = usePageConfig('branding.product_name', 'HugAgentOS');
   const cfgDisclaimer = usePageConfig('branding.disclaimer', '');
-  const cfgInputPlaceholder = usePageConfig('texts.input_placeholder', '请输入你的问题，按Enter发送，Shift+Enter换行');
+  const cfgInputPlaceholder = usePageConfig('texts.input_placeholder', '输入产品名称或 SKU，或粘贴客户询盘…');
   const showHomepageLogo = usePageConfig('homepage.show_logo', true);
   const homepageLogoUrl = usePageConfig('homepage.logo_url', '/icon.png');
   const showHomepageSuggestions = usePageConfig('homepage.show_suggestions', true);
@@ -484,6 +485,8 @@ export function ChatArea({
             {cfgDisclaimer.split('\n').map((line, i, arr) => (
               <span key={i}>{line}{i < arr.length - 1 ? <br /> : null}</span>
             ))}
+            <br />
+            <span>Powered by HugAgentOS</span>
           </div>
         )}
       </div>

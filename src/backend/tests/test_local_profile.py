@@ -1,3 +1,4 @@
+# Modified by foreign-trade-agent contributors, 2026-10-21; see CHANGES_FOREIGN_TRADE.md.
 """Acceptance tests for the no-Docker local/quick-install profile.
 
 Covers the pieces that are new or SQLite-risky (see
@@ -329,9 +330,9 @@ def test_ce_branding_repairs_persistent_page_config(db_session, monkeypatch):
     row = db_session.query(ContentBlock).filter_by(id="page_config").one()
     assert row.payload["branding"] == {
         "product_name": "HugAgentOS",
-        "product_subtitle": "AI 智能助手",
+        "product_subtitle": "外贸产品查询与询盘报价",
         "page_title": "HugAgentOS",
-        "hero_title": "你好，我是 HugAgentOS",
+        "hero_title": "外贸询盘，从产品查询到报价",
         "logo_url": "/custom.svg",
     }
     assert row.payload["navigation"]["admin_header"]["title"] == "HugAgentOS — 后台管理"

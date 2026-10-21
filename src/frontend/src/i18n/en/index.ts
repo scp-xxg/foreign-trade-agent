@@ -1,3 +1,4 @@
+// Modified by foreign-trade-agent contributors, 2026-10-21; see CHANGES_FOREIGN_TRADE.md.
 /** Community-edition English dictionaries only. */
 import { CORE_DICT } from './core';
 import { CHAT_DICT } from './chat';
@@ -14,6 +15,7 @@ import { APIDOC_DICT } from './apidoc';
 import { AGENT_MARKET_DICT } from './agentMarket';
 import { ONBOARDING_DICT } from './onboarding';
 import { CE_SHARED_DICT } from './ceShared';
+import { FOREIGN_TRADE_DICT } from './foreignTrade';
 
 export const EN_DICT: Record<string, string> = {
   ...CORE_DICT,
@@ -31,4 +33,5 @@ export const EN_DICT: Record<string, string> = {
   ...AGENT_MARKET_DICT,
   ...ONBOARDING_DICT,
   ...CE_SHARED_DICT,
+  ...FOREIGN_TRADE_DICT,
 };

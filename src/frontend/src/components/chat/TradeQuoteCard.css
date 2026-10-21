@@ -1,0 +1,85 @@
+.jx-tradeQuotes {
+  display: grid;
+  gap: 12px;
+  margin: 14px 0;
+}
+.jx-tradeQuote {
+  min-width: 0;
+  padding: 18px;
+  border: 1px solid var(--color-border);
+  border-radius: 14px;
+  background: var(--color-bg-container);
+  color: var(--color-text);
+}
+.jx-tradeQuote-heading,
+.jx-tradeQuote-summary,
+.jx-tradeQuote-title,
+.jx-tradeQuote-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.jx-tradeQuote-heading,
+.jx-tradeQuote-summary { justify-content: space-between; }
+.jx-tradeQuote-title { font-size: 15px; }
+.jx-tradeQuote-title .anticon { color: var(--color-primary); }
+.jx-tradeQuote-demo {
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: var(--color-primary-light);
+  color: var(--color-primary);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .06em;
+}
+.jx-tradeQuote-id {
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  overflow-wrap: anywhere;
+}
+.jx-tradeQuote-summary {
+  gap: 16px;
+  align-items: flex-start;
+  margin: 16px 0 12px;
+}
+.jx-tradeQuote-total {
+  margin-bottom: 4px;
+  font-size: 24px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+.jx-tradeQuote-muted,
+.jx-tradeQuote-facts,
+.jx-tradeQuote-notice {
+  color: var(--color-text-secondary);
+  font-size: 12px;
+  line-height: 1.7;
+}
+.jx-tradeQuote-facts {
+  display: grid;
+  flex-shrink: 0;
+  padding-top: 4px;
+  max-width: 50%;
+  overflow-wrap: anywhere;
+}
+.jx-tradeQuote-notice {
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: var(--color-bg-layout);
+  margin: 0 0 14px;
+}
+.jx-tradeQuote-actions { flex-wrap: wrap; }
+.jx-tradeQuote-error {
+  margin: 10px 0 0;
+  color: var(--color-error);
+  font-size: 12px;
+}
+.jx-tradeQuote--history > p { margin: 8px 0 12px; }
+@media (max-width: 560px) {
+  .jx-tradeQuote { padding: 14px; }
+  .jx-tradeQuote-summary { flex-direction: column; gap: 8px; }
+  .jx-tradeQuote-facts { max-width: 100%; }
+  .jx-tradeQuote-actions .ant-btn { width: 100%; }
+}

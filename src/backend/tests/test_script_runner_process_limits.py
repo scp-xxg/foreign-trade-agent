@@ -1,3 +1,4 @@
+# Modified by foreign-trade-agent contributors, 2026-10-21; see CHANGES_FOREIGN_TRADE.md.
 """Regression tests for quick-install script-runner process management."""
 
 from __future__ import annotations
@@ -197,3 +198,16 @@ def test_ce_installer_and_script_runner_ship_office_skill_runtime():
     assert "/usr/local/bin/officecli" in dockerfile
     for retired in ("word-cli", "excel-cli", "ppt-cli"):
         assert f"/usr/local/bin/{retired}" not in dockerfile
+
+
+def test_bash_python_alias_runs_in_the_runner_virtualenv(monkeypatch, tmp_path):
+    """The documented $PY_BIN must work in the clean per-command environment."""
+    monkeypatch.setenv("DEPLOY_PROFILE", "local")
+    assert server.SAFE_ENV["PY_BIN"] == sys.executable
+    result = asyncio.run(server._execute_subprocess(
+        [server._BASH_EXECUTABLE, "-c", '\"$PY_BIN\" -c \"import sys; print(sys.executable); print(12345 * 6789)\"'],
+        stdin_data="", timeout=10, cwd=str(tmp_path),
+    ))
+    assert result["exit_code"] == 0, result["stderr"]
+    assert result["stdout"].splitlines() == [sys.executable, "83810205"]
+    assert result["stderr"] == ""

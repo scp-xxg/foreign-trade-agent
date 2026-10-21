@@ -1,3 +1,4 @@
+# Modified by foreign-trade-agent contributors, 2026-10-21; see CHANGES_FOREIGN_TRADE.md.
 [build-system]
 requires = ["setuptools>=68.0", "wheel"]
 build-backend = "setuptools.build_meta"
@@ -8,7 +9,7 @@ version = "0.1.0"
 description = "Multi-agent platform with MCP integration (AgentScope 2.0)"
 readme = "README.md"
 requires-python = ">=3.11"
-license = {text = "MIT"}
+license = {file = "LICENSE"}
 authors = [
     {name = "HugAgentOS Team"}
 ]

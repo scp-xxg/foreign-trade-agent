@@ -1,3 +1,4 @@
+# Modified by foreign-trade-agent contributors, 2026-10-21; see CHANGES_FOREIGN_TRADE.md.
 """Progressive plugin loading（渐进式插件加载）.
 
 安装后的插件默认把 N 个技能的 yaml 头 + M 个 MCP 工具的完整 JSON Schema 全量
@@ -219,6 +220,58 @@ def _cloud_sticky_selection(tokens, *, user_id, allow_aliases=False):
     return result
 
 
+def _local_sticky_selection(
+    tokens: Sequence[str], rows: Sequence[Any], *, user_id: str
+) -> List[Any]:
+    """Resolve local saved identities without retargeting cloud or builtin sources."""
+    from core.capabilities.paths import BUILTIN_PROFILE, LOCAL_PROFILE
+
+    if not user_id:
+        return []
+    visible = [row for row in rows if row.owner_user_id in (None, user_id)]
+    by_id = {str(row.install_id): row for row in visible}
+    by_slug: Dict[str, List[Any]] = {}
+    for row in visible:
+        by_slug.setdefault(str(row.slug), []).append(row)
+
+    selected: List[Any] = []
+    seen_install_ids: Set[str] = set()
+    for token in tokens:
+        row = None
+        if token.startswith("plugin:"):
+            parts = token.split(":", 2)
+            if (
+                len(parts) != 3
+                or parts[1] not in (LOCAL_PROFILE, BUILTIN_PROFILE)
+                or not parts[2]
+            ):
+                # A cloud installation must never fall back to a local row,
+                # even if an exact local id or slug happens to match it.
+                continue
+            matches = by_slug.get(parts[2]) or []
+            if parts[1] == BUILTIN_PROFILE:
+                matches = [
+                    item
+                    for item in matches
+                    if item.owner_user_id is None and item.source == "builtin"
+                ]
+        else:
+            row = by_id.get(token)
+            # Legacy tokens are exact DB installation ids or bare slugs.
+            matches = by_slug.get(token) or []
+        if row is None:
+            matches = sorted(
+                matches,
+                key=lambda item: (item.owner_user_id != user_id, str(item.install_id)),
+            )
+            row = matches[0] if matches else None
+        install_id = str(getattr(row, "install_id", "") or "")
+        if row is not None and install_id and install_id not in seen_install_ids:
+            selected.append(row)
+            seen_install_ids.add(install_id)
+    return selected
+
+
 def resolve_sticky_plugin_capabilities(
     *,
     user_id: str,
@@ -265,29 +318,7 @@ def resolve_sticky_plugin_capabilities(
                 )
                 .all()
             )
-            by_id = {str(row.install_id): row for row in rows}
-            by_slug: Dict[str, List[Any]] = {}
-            for row in rows:
-                by_slug.setdefault(str(row.slug), []).append(row)
-
-            selected: List[Any] = []
-            seen_install_ids: Set[str] = set()
-            for token in tokens:
-                row = by_id.get(token)
-                if row is None:
-                    # Legacy activation rows stored only the slug. Prefer the
-                    # user's own installation when a private/global duplicate
-                    # exists, matching catalog visibility semantics.
-                    matches = by_slug.get(token) or []
-                    matches = sorted(
-                        matches,
-                        key=lambda item: (item.owner_user_id != user_id, str(item.install_id)),
-                    )
-                    row = matches[0] if matches else None
-                install_id = str(getattr(row, "install_id", "") or "")
-                if row is not None and install_id and install_id not in seen_install_ids:
-                    selected.append(row)
-                    seen_install_ids.add(install_id)
+            selected = _local_sticky_selection(tokens, rows, user_id=user_id)
 
             requested_skills: List[str] = []
             requested_mcps: List[str] = []

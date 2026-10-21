@@ -1,298 +1,85 @@
-<p align="center">
-  <img src="./src/frontend/public/home/hugagentos-logo.png" alt="HugAgentOS logo" width="800" />
-</p>
+<!-- Modified by foreign-trade-agent contributors, 2026-10-21: public team distribution. -->
+# foreign-trade-agent
 
-<p align="center">
-  <strong>HugAgentOS: The Enterprise AgentOS for Ontology-Grounded Trustworthy Reasoning</strong>
-</p>
+面向外贸产品查询与询盘报价的黑客松演示 Agent，基于公开 **HugAgentOS Community Edition desktop-v1.0.2**。仓库名称暂用 `foreign-trade-agent`，页面名称和 Logo 暂保留 HugAgentOS。
 
-<p align="center">
-  The open-source, self-hosted foundation for enterprise AI agents
-</p>
+**全部产品、价格和参考生产周期均为虚构演示数据，非真实商业报价。**
 
-<p align="center">
-  Give models the context and tools to retrieve knowledge, work with files,
-  run code, and carry real tasks through to completion.
-</p>
+## 已实现
 
-<p align="center">
-  <img src="./assets/poster.png" alt="HugAgentOS capability overview poster" width="100%" />
-</p>
+- 8 个办公收纳 SKU：中英文检索、产品规格、MOQ 和数量阶梯价。
+- “询盘转报价（演示）”插件：产品检索、产品详情、Decimal 报价计算三个 MCP 工具及对应技能。
+- 定制包装门槛与费用、交期冲突说明；改量或改包装后重新计算。
+- 中英对照 PDF、中文/英文双工作表 Excel 下载；直接使用工具回执，保留来源和稳定报价编号。
+- 外贸首页、6 条推荐问题、默认助手提示词、团队部署脚本和自动检查。
 
-<p align="center">
-  <a href="./README.md">English</a> ·
-  <a href="./README_CN.md">简体中文</a>
-</p>
+## 队友快速部署（Linux / WSL2）
 
-<!-- Keep these stable launch URLs so they can go live without another README redesign. -->
-<p align="center">
-  <a href="https://hugagentos.com">Website</a> ·
-  <a href="https://app.hugagentos.com">Try HugAgentOS online</a>
-</p>
-
-<p align="center">
-  <a href="./LICENSE">
-    <img src="https://img.shields.io/badge/License-Apache_2.0_%2B_terms-2E8B57?style=flat-square" alt="Apache 2.0 with supplementary terms" />
-  </a>
-  <a href="./document/en/editions/overview.md">
-    <img src="https://img.shields.io/badge/Edition-Community-635BFF?style=flat-square" alt="Community Edition" />
-  </a>
-  <a href="./document/en/deployment/quick-install.md">
-    <img src="https://img.shields.io/badge/Install-One_command-0F766E?style=flat-square" alt="One-command installation" />
-  </a>
-  <a href="./document/en/architecture/overview.md">
-    <img src="https://img.shields.io/badge/Agent-AgentScope_2.0-FF6A00?style=flat-square" alt="AgentScope 2.0" />
-  </a>
-  <a href="./document/en/modules/mcp-tools.md">
-    <img src="https://img.shields.io/badge/Tools-MCP-111827?style=flat-square" alt="Model Context Protocol" />
-  </a>
-</p>
-
-HugAgentOS is an enterprise-grade AgentOS that treats domain ontology as a
-control plane for agent reasoning, decisions, and actions. Its open-source
-Community Edition combines agentic chat, private knowledge-base RAG,
-sub-agents, MCP tools, Agent Skills, sandboxed execution, long-term memory,
-automation, and a data canvas in one self-hosted workspace.
-
-> [!NOTE]
-> This Community repository is generated from the upstream main repository for
-> each release and is marked `generated`. Report changes to `src/**` through an
-> Issue or Discussion. Pull requests for documentation and examples are
-> welcome. See [CONTRIBUTING.md](./CONTRIBUTING.md) for details.
-
-## Demo
-
-A 60-second tour: the same task run twice, with audited self-evolution in between —
-memory, skills and orchestration each settled, and each taking effect only after you
-approve it.
-
-https://github.com/user-attachments/assets/635c5b35-10c0-47b9-a6f1-c73df9510e90
-
-## Quick start
-
-Use the one-command install to try it out, or Docker Compose for a long-running
-service with isolation. Either way you need an OpenAI-compatible or local model.
-**The initial account and password are both `admin` and must be changed on first
-sign-in; the Community Edition has no self-registration.**
-
-### Option 1: one-command install (Linux / macOS / WSL2)
-
-Requires Python 3.11+, Node.js 20+, Git and `curl`. No Docker, PostgreSQL or
-Redis needed.
+先准备 **Python 3.11+、Node.js 22（至少 22.12）、Git**；推荐 Python 3.11。Node 20.19+ 也满足当前前端要求。Windows 队员请进入 WSL2 Linux 终端执行。
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/ZJU-REAL/HugAgentOS/main/install.sh | bash
+git clone https://github.com/scp-xxg/foreign-trade-agent.git
+cd foreign-trade-agent
+python3.11 extensions/foreign_trade/team.py setup
+.venv/bin/python extensions/foreign_trade/team.py init
+.venv/bin/python extensions/foreign_trade/team.py start
 ```
 
-The installer fetches the source into `~/.hugagent/source`, creates an isolated
-Python environment, builds the web application and walks you through first-run
-setup; it then opens [http://127.0.0.1:3001](http://127.0.0.1:3001). Start it
-again later with `~/.hugagent/venv/bin/hugagent`.
+如果本机 `python3` 已是 3.11+，可替换上面的 `python3.11`。Ubuntu 22.04 默认 Python 3.10 不满足要求，准备方法见 [队友部署指南](docs/TEAM_SETUP.md)。
 
-> [!WARNING]
-> The installation listens on `127.0.0.1` only. If you genuinely need remote
-> access, use `hugagent serve --host 0.0.0.0 --port 3001 --no-browser`, and set a
-> strong password, a firewall and HTTPS first. Do not expose it on an untrusted
-> network.
+- `setup`：检查依赖、创建虚拟环境、安装后端、锁定前端依赖并构建中文 CE 页面。
+- `init`：设置自己的登录账号和密码，安装外贸插件并应用首页和提示词。
+- `start`：启动本机外贸 MCP 和网页服务，保持终端打开。
 
-This path uses SQLite, in-process state and a local subprocess sandbox, which
-suits personal use and development. Options and troubleshooting are in the
-[one-command install guide](./document/en/deployment/quick-install.md).
+默认地址 **http://127.0.0.1:3001**；个人数据位于 `~/.foreign-trade-agent`。
 
-### Option 2: Docker Compose
+首次登录进入 **系统设置 → 模型服务 → 添加模型**，填写自己的模型服务地址、API Key、模型名及上下文长度，保存并测试。将对话模型指派给 **主智能体推理 main_agent**，其他使用的对话角色也按页面提示指派。模型须支持工具调用；仓库不附带开发者的模型密钥。
 
-Use this when you need PostgreSQL, Redis, an isolated sandbox and persistent
-volumes. Requires Git, Docker and Compose v2.
+团队入口使用本机 SQLite，报价场景无需 Docker、PostgreSQL、Redis 或外部向量库。首次安装需要网络；老版本 Linux 可能需要 Rust/Cargo 编译依赖，setup 会提前检查。
+
+## 部署后与当前演示一致吗？
+
+| 项目 | 新部署结果 |
+|---|---|
+| 首页、外贸文案、6 条推荐问题、当前 Logo | 同一版本及初始化配置，保持一致 |
+| 模拟目录、报价规则、PDF / Excel 下载卡 | 同一版本保持一致 |
+| 询盘转报价（演示）插件 | init 自动安装到你的账号，技能和代码随仓库保留 |
+| 账号密码、模型 Key、聊天历史、上传文件 | 每台机器独立，不通过 Git 同步 |
+| 模型措辞、速度与推理质量 | 取决于所配模型，金额以计算工具为准 |
+
+**只执行 git clone 不会复制数据库中的安装状态，首次部署必须完成 init。**
+
+## 日常更新
+
+停止自己运行的服务，保存本地改动后执行：
 
 ```bash
-git clone https://github.com/ZJU-REAL/HugAgentOS.git
-cd HugAgentOS
-cp .env.example .env
-mkdir -p data/storage
-docker compose up -d --build
+git pull --ff-only
+python3.11 extensions/foreign_trade/team.py setup
+.venv/bin/python extensions/foreign_trade/team.py install --username YOUR_USERNAME
+.venv/bin/python extensions/foreign_trade/team.py start
 ```
 
-Open [http://localhost:3002](http://localhost:3002), then connect a model under
-**Settings → System → Model services**. Profiles, persistence and production
-configuration are covered in the
-[Docker Compose deployment guide](./document/en/deployment/docker-compose.md).
+install 更新外贸插件、首页和默认提示词，保留原账号密码与业务库；如果自行改过这些场景配置，更新前先保留自己的版本。完整停止、更新和自检步骤见 [部署指南](docs/TEAM_SETUP.md)。
 
-## Why HugAgentOS
+## 验证
 
-The point is not another chat wrapper. It is putting the context, the execution
-capability, and the artifact management an agent needs to finish real work on a
-single path — and raising the domain ontology from a knowledge base to a
-**machine-executable control plane**, so that governed concepts, relations, rules
-and action contracts give the skill, memory and orchestration engines one shared
-business vocabulary.
+```bash
+.venv/bin/python extensions/foreign_trade/team.py check
+```
 
-<table>
-  <tr>
-    <td width="50%" valign="top">
-      <strong>🔌 Model-agnostic</strong><br />
-      Connect cloud or local models through one model-service configuration,
-      without locking the application to a single vendor.
-    </td>
-    <td width="50%" valign="top">
-      <strong>🛠️ Actually does the work</strong><br />
-      ReAct orchestrates MCP servers, skills and sandboxes, so the model can
-      search, analyse, produce files and call external capabilities.
-    </td>
-  </tr>
-  <tr>
-    <td width="50%" valign="top">
-      <strong>🧠 Knowledge and memory</strong><br />
-      Private knowledge bases and layered memory supply long-term context across
-      files and conversations.
-    </td>
-    <td width="50%" valign="top">
-      <strong>🏠 Your data stays yours</strong><br />
-      Application, database and file storage all run on your own infrastructure.
-    </td>
-  </tr>
-  <tr>
-    <td width="50%" valign="top">
-      <strong>🛡️ Gated, trustworthy execution</strong><br />
-      Candidate plans pass deterministic rule checks, risk-tiered evidence review
-      and a gate. A violating action returns with the rule, the evidence and a
-      correction — it is never waved through silently.
-    </td>
-    <td width="50%" valign="top">
-      <strong>🔎 Traceable evolution</strong><br />
-      Approvals, rejections, evidence and outcomes are all recorded, distilled
-      into versioned ontology proposals that take effect only after human review,
-      and can be rolled back.
-    </td>
-  </tr>
-</table>
+网页验收：先查询 DESK-001，再报价“1000 件、定制包装、目的国西班牙”。预期货值 **USD 4800.00**、包装费 **USD 300.00**、不含运费及税费小计 **USD 5100.00**，并能下载两种报价单。
 
-> [!NOTE]
-> The ontology trust control plane is an enterprise target architecture being
-> integrated into the existing harness in stages. It strengthens structured
-> compliance and evidence-based review; it does not promise "zero hallucination"
-> for free text.
+## 四人协作
 
-## Core capabilities
+main 保持可运行；每项功能独立分支、提交 PR，通过 CI 和队友复核后合并。公开仓库任何人都可拉取；直接推送需所有者添加协作者，也可 Fork 后提交 PR。建议按产品/报价规则、插件与工作流、前端与导出、测试与演示分工。
 
-The Community Edition covers the full loop for a personal agent — conversation,
-execution, consolidation and reuse. Optional components are enabled as needed.
+不要提交模型密钥、数据库、上传文件、日志、.runtime、.venv 或 node_modules。模拟产品可以提交，真实客户询盘和业务资料不进入公开仓库。
 
-| Capability | What it gives you |
-|---|---|
-| 💬 **Conversation and plan mode** | SSE streaming, ReAct tool orchestration, deep thinking, plan mode, citations, resumable runs |
-| 📚 **Private knowledge base RAG** | Document chunking, hybrid vector and keyword retrieval, optional reranking, per-user isolation |
-| 🤝 **Personal sub-agents** | Sub-agents with distinct roles, reached by automatic routing or an `@` mention |
-| 🔧 **MCP tool ecosystem** | Built-in web search, page fetch, knowledge retrieval, charts, reports, batch runs, automation, skill management |
-| 🧩 **Agent Skills** | Extend the agent with standardised skill definitions and scripts — built-in, marketplace and personal |
-| ⚙️ **Automation and batch runs** | Create scheduled tasks in natural language; run one process across an Excel sheet, a Word file or a file list |
-| 💬 **Group chat channels** | Feishu / DingTalk / WeCom bots, with optional group listening and history retrieval so the agent can see the conversation around it |
-| 🧪 **Sandbox and artifacts** | Run code in a subprocess or lightweight container sandbox, producing charts, reports, Office files, web pages and data canvases |
-| 🧠 **Three-layer personal memory** | L1 profile in the relational store; optional Milvus vector memory and Neo4j graph memory |
-| 🧬 **Personal evolution** | Settle memory and skills out of your real work, each approved individually before it applies to you, and switchable off |
-| 🗂️ **Personal workspace** | Projects, folders, favourites, conversation sharing and an artifact center |
-| 📊 **Data canvas** | Inspect and edit structured data inside the conversation, keeping analysis and result in one workspace |
+## 来源与许可
 
-## Architecture
+上游：[ZJU-REAL/HugAgentOS](https://github.com/ZJU-REAL/HugAgentOS)，基线 desktop-v1.0.2，提交 d16a09be1e408c1acf3ef6ff89523cda1341ef41。保留上游 Git 历史、版权和第三方归属。
 
-HugAgentOS separates user channels, agent workflows, reusable capability
-engines, ontology contracts, data governance, and infrastructure into clear
-layers. Action contracts connect the ontology layer to planning, validation,
-and gated execution, while security and platform governance span the complete
-stack.
+许可证为 **Apache License 2.0 加补充条款**，完整条件见 [LICENSE](LICENSE) 和 [NOTICE](NOTICE)。界面保留 Powered by HugAgentOS 署名；白标及受限多租户 SaaS 场景遵循原许可。所有实现基于公开社区版，未使用私有商业版代码。
 
-![HugAgentOS layered architecture in English](./assets/hugagentos-architecture-en.svg)
-
-> [!NOTE]
-> The diagram shows the complete HugAgentOS product architecture. Some
-> governance, collaboration, gateway, and persistent-sandbox capabilities are
-> available only in Enterprise Edition.
-
-### Technology stack
-
-The project combines mature, replaceable open-source components behind clear
-service boundaries.
-
-| Layer | Main technologies |
-|---|---|
-| Agent runtime | AgentScope 2.0, ReAct, Model Context Protocol |
-| Backend | Python, FastAPI, SQLAlchemy, Alembic |
-| Frontend | React 19, TypeScript, Vite, Zustand, Ant Design |
-| Data and state | SQLite or PostgreSQL 15, in-process state or Redis 7, local file storage |
-| Optional memory | Milvus 2.4, Neo4j 5 Community, mem0 |
-| Deployment | One-command local installer, Docker Compose, Nginx |
-
-See the [architecture overview](./document/en/architecture/overview.md) for the
-full request lifecycle, container topology, and design decisions.
-
-## Community and Enterprise editions
-
-Community Edition gives an individual a complete agent workspace. Enterprise
-Edition adds the governance, collaboration, and delivery capabilities needed
-to operate the same experience across an organization. Enterprise-only source
-is physically absent from the Community tree.
-
-| Community Edition | Enterprise Edition adds |
-|---|---|
-| Agentic chat, Plan Mode, and personal sub-agents | Teams, organization agents, and permission matrices |
-| 8 general MCP tools, personal skills, and a skill marketplace | Industry data tools, organization governance, and skill review |
-| Private knowledge bases and three-tier personal memory | Public knowledge administration and memory auditing |
-| Automation, batch execution, and a personal data canvas | Organization billing, usage reports, and canvas collaboration |
-| Lightweight sandbox and local file storage | Persistent sandboxes, cloud storage, and offline delivery |
-| Local accounts and branding with Powered-by attribution | SSO, compliance auditing, and full white-labeling |
-
-See the [edition overview](./document/en/editions/overview.md) for the complete
-feature boundary and upgrade path.
-
-## Documentation
-
-The repository includes complete English and Chinese documentation for
-operators, users, and contributors, and you can read it offline.
-
-| Goal | English | 中文文档 |
-|---|---|---|
-| Understand the product | [Introduction](./document/en/getting-started/introduction.md) | [产品简介](./document/zh-CN/getting-started/introduction.md) |
-| Run it in 10 minutes | [Quick start](./document/en/getting-started/quick-start.md) | [快速开始](./document/zh-CN/getting-started/quick-start.md) |
-| Configure a deployment | [Deployment](./document/en/deployment/README.md) | [部署指南](./document/zh-CN/deployment/README.md) |
-| Explore the system design | [Architecture](./document/en/architecture/overview.md) | [架构总览](./document/zh-CN/architecture/overview.md) |
-| Build a domain ontology | [Domain ontology quickstart](./document/en/getting-started/domain-ontology-quickstart.md) | [快速构建领域本体](./document/zh-CN/getting-started/domain-ontology-quickstart.md) |
-| Learn MCP, skills, memory, and sandboxing | [Modules](./document/en/README.md#modules) | [功能模块](./document/zh-CN/README.md#功能模块) |
-| Build backend or frontend features | [Development](./document/en/README.md#development) | [开发指南](./document/zh-CN/README.md#开发指南) |
-
-Start from [document/README.md](./document/README.md) to browse every guide.
-
-## Roadmap
-
-1. **Seamless cloud/local switching across clients** — one server deployment
-   serving multiple clients, keeping conversations, agents, skills, files and task
-   state in sync.
-2. **Adaptive model routing based on Mixture of Agents** — select or combine models
-   by task complexity, modality, latency and cost: light models for simple work,
-   stronger ones only when the task warrants it.
-3. **A richer extension ecosystem** — more built-in and community agents, skills,
-   MCP servers and plugins, with better discovery, installation, updates, and
-   quality and security review.
-
-## Contributing
-
-We welcome bug reports, feature proposals, documentation improvements, and
-reproducible patches. Read [CONTRIBUTING.md](./CONTRIBUTING.md) before you
-start so you understand the boundary between generated and directly editable
-content. By participating, you agree to follow our bilingual
-[Community Code of Conduct](./CODE_OF_CONDUCT.md).
-
-- Include reproduction steps, expected behavior, actual behavior, and your
-  environment in bug reports.
-- Explain the concrete use case and problem when proposing a feature.
-- Keep English and Chinese documentation aligned with the Community and
-  Enterprise edition boundary.
-
-Don't open a public Issue for a security vulnerability. Follow
-[SECURITY.md](./SECURITY.md) to report it through a private channel.
-
-## License
-
-HugAgentOS Community Edition is licensed under Apache License 2.0 with
-supplementary terms. The terms restrict operating the software as a competing
-multi-tenant SaaS offering and require the UI's Powered-by attribution to
-remain visible. [LICENSE](./LICENSE) and [NOTICE](./NOTICE) define the complete
-rights and obligations for internal use, modification, and distribution.
+团队改动见 [CHANGES_FOREIGN_TRADE.md](CHANGES_FOREIGN_TRADE.md)，业务细节见 [外贸插件说明](extensions/foreign_trade/README.md)。上游原始说明保存在 [README_UPSTREAM.md](README_UPSTREAM.md) 和 [README_CN_UPSTREAM.md](README_CN_UPSTREAM.md)；其中的上游安装地址不会安装本项目，请以本页步骤为准。

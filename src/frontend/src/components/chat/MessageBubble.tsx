@@ -1,3 +1,4 @@
+// Modified by foreign-trade-agent contributors, 2026-10-21; see CHANGES_FOREIGN_TRADE.md.
 import {
   Button, Input,
 } from 'antd';
@@ -34,6 +35,7 @@ import { OntologyReviewTrigger } from './OntologyReviewTrigger';
 import { useStallDetector } from '../../hooks';
 import { PlanCard } from './PlanCard';
 import { ArtifactCardList } from './ArtifactCardList';
+import { TradeQuoteCards } from './TradeQuoteCard';
 import { CitationMarkdownBlock } from '../citation';
 import { ToolMessageContext } from '../tool/ToolMessageContext';
 import { useShallow } from 'zustand/react/shallow';
@@ -1069,6 +1071,11 @@ export const MessageBubble = memo(function MessageBubble({ m, messageIndex, curr
             </div>
             )}
           </>
+        )}
+
+        {/* Exports use this message's successful calculation result, never model prose. */}
+        {m.role === 'assistant' && !m.isStreaming && m.toolCalls && (
+          <TradeQuoteCards tools={m.toolCalls} chatId={currentChatId} messageId={m.messageId} />
         )}
 
         {/* Artifact cards */}

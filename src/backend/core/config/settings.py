@@ -26,6 +26,9 @@ def _load_env_files() -> None:
     2. Env-specific file such as .env.dev
     3. Base .env
     """
+    # Modified by foreign-trade-agent: isolated team installs opt out of repository env files.
+    if os.getenv("HUGAGENT_SKIP_ENV_FILES", "").strip().lower() in {"1", "true", "yes"}:
+        return
     base_env_path = _REPO_ROOT / ".env"
     base_values = dotenv_values(base_env_path) if base_env_path.exists() else {}
 

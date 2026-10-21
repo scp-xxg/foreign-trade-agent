@@ -33,7 +33,8 @@
     "test:conversation-navigation": "esbuild scripts/test-conversation-navigation.ts --bundle --platform=node --format=esm --loader:.css=empty --define:import.meta.env={} --outfile=node_modules/.tmp/test-conversation-navigation.mjs && node node_modules/.tmp/test-conversation-navigation.mjs",
     "test:local-sites": "esbuild scripts/test-local-site-editing.ts --bundle --platform=node --format=esm --define:import.meta.env={} --outfile=node_modules/.tmp/test-local-site-editing.mjs && node node_modules/.tmp/test-local-site-editing.mjs",
     "test:automation-location": "esbuild scripts/test-automation-location.ts --bundle --platform=node --format=esm --jsx=automatic --packages=external --loader:.css=empty --define:import.meta.env={} --outfile=node_modules/.tmp/test-automation-location.mjs && node node_modules/.tmp/test-automation-location.mjs",
-    "test:site-origin": "esbuild scripts/test-site-public-origin.ts --bundle --platform=node --format=esm --packages=external --loader:.css=empty --define:import.meta.env={} --outfile=node_modules/.tmp/test-site-public-origin.mjs && node node_modules/.tmp/test-site-public-origin.mjs"
+    "test:site-origin": "esbuild scripts/test-site-public-origin.ts --bundle --platform=node --format=esm --packages=external --loader:.css=empty --define:import.meta.env={} --outfile=node_modules/.tmp/test-site-public-origin.mjs && node node_modules/.tmp/test-site-public-origin.mjs",
+    "test:foreign-trade-quote": "esbuild scripts/test-foreign-trade-quote.ts --bundle --platform=node --format=esm --packages=external --outfile=node_modules/.tmp/test-foreign-trade-quote.mjs && node node_modules/.tmp/test-foreign-trade-quote.mjs"
   },
   "dependencies": {
     "@ant-design/icons": "^6.1.0",
@@ -80,5 +81,6 @@
   },
   "overrides": {
     "@univerjs/icons": "1.1.1"
-  }
+  },
+  "x-modified-by": "Modified by foreign-trade-agent contributors, 2026-10-21; see CHANGES_FOREIGN_TRADE.md."
 }

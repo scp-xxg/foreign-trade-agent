@@ -1,3 +1,4 @@
+# Modified by foreign-trade-agent contributors, 2026-10-21; see CHANGES_FOREIGN_TRADE.md.
 """Helpers for exporting and importing editable docs content blocks."""
 
 from __future__ import annotations
@@ -56,13 +57,13 @@ class ContentSnapshotError(ValueError):
 DEFAULT_PAGE_CONFIG: dict[str, Any] = {
     "branding": {
         "product_name": _BRAND_NAME,
-        "product_subtitle": "AI 智能助手",
+        "product_subtitle": "外贸产品查询与询盘报价",
         "logo_url": "/home/header.svg",
         "favicon_url": "/icon.png",
         "page_title": _BRAND_NAME,
-        "hero_title": f"你好，我是 {_BRAND_NAME}",
-        "hero_subtitle": "今天想从哪里开始？",
-        "disclaimer": "本平台生成内容由AI大模型生成，不构成任何建议；涉及业务决策请以权威信息为准。",
+        "hero_title": "外贸询盘，从产品查询到报价",
+        "hero_subtitle": "查规格与起订量，算阶梯价与包装费，起草英文询盘回复。",
+        "disclaimer": "演示数据：产品、价格和交期均为模拟；报价草案不含运费、税费等未核定费用，实际交易前须人工确认。",
     },
     "homepage": {
         # The homepage uses the transparent standalone brand mark rather than
@@ -71,12 +72,12 @@ DEFAULT_PAGE_CONFIG: dict[str, Any] = {
         "logo_url": "/icon.png",
         "show_suggestions": True,
         "suggested_questions": [
-            "分析新能源汽车产业链的关键环节与代表企业",
-            "对比两份产业政策，提炼支持方向和申报条件",
-            "查询一家企业的基本情况、经营风险和产业链位置",
-            "从这份材料中提炼核心观点和待办事项",
-            "分析这组经营数据的趋势、异常和可能原因",
-            "检索相关政策依据，并给出可核验的来源",
+            "查找办公收纳产品，帮我对比规格和起订量。",
+            "查询 DESK-001 的规格、起订量和阶梯价。",
+            "DESK-001，500 件，标准包装，发往西班牙，请报价并起草英文回复。",
+            "对比 DESK-001 采购 500 件和 2000 件的报价。",
+            "DESK-001，1000 件，定制包装，请列明货值和包装费。",
+            "客户询问 DESK-001 但未提供数量，请起草英文澄清邮件。",
         ],
     },
     "navigation": {
@@ -131,8 +132,8 @@ DEFAULT_PAGE_CONFIG: dict[str, Any] = {
         "menu_items": ["settings", "app_center", "projects", "lab"],
     },
     "texts": {
-        "input_placeholder": "请输入您的问题…",
-        "input_placeholder_agent": "请输入您的问题…",
+        "input_placeholder": "输入产品名称或 SKU，或粘贴客户询盘…",
+        "input_placeholder_agent": "输入产品名称或 SKU，或粘贴客户询盘…",
         "search_placeholder": "搜索对话",
         "btn_new_chat": "新建对话",
         "btn_logout": "退出",
@@ -142,7 +143,7 @@ DEFAULT_PAGE_CONFIG: dict[str, Any] = {
         "dialog_logout_confirm_title": "确认退出登录？",
         "dialog_logout_confirm_content": "退出登录不会丢失任何数据，重新登录后可继续使用。",
         "dialog_logout_confirm_ok": "退出登录",
-        "recommend_banner_text": "",
+        "recommend_banner_text": "试试产品查询或询盘报价；当前使用模拟产品目录，所有报价仅供演示。",
     },
     "defaults": {
         # Initial mode on every user login / new chat:
@@ -267,11 +268,12 @@ def enforce_ce_branding(db: Session) -> bool:
     admin_header = dict(navigation.get("admin_header") or {})
     admin_platform = dict(navigation.get("admin_platform") or {})
 
+    # Keep upstream attribution while retaining this public fork's trade homepage.
     desired_branding = {
         "product_name": product_name,
-        "product_subtitle": "AI 智能助手",
+        "product_subtitle": DEFAULT_PAGE_CONFIG["branding"]["product_subtitle"],
         "page_title": product_name,
-        "hero_title": f"你好，我是 {product_name}",
+        "hero_title": DEFAULT_PAGE_CONFIG["branding"]["hero_title"],
     }
     changed = any(branding.get(key) != value for key, value in desired_branding.items())
     changed = changed or admin_header.get("title") != f"{product_name} — 后台管理"

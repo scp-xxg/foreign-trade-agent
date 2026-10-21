@@ -1,0 +1,72 @@
+# The foreign-trade web demo needs no model credentials or running backend for CI.
+# Dependency downloads are the only network requirement; quote tests run offline.
+name: Foreign Trade CI
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "extensions/foreign_trade/**"
+      - "tests/test_foreign_trade*.py"
+      - "src/frontend/**"
+      - ".github/workflows/foreign-trade-ci.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "extensions/foreign_trade/**"
+      - "tests/test_foreign_trade*.py"
+      - "src/frontend/**"
+      - ".github/workflows/foreign-trade-ci.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: foreign-trade-ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quote-and-web:
+    name: Quote engine, bilingual exports, and CE web build
+    runs-on: ubuntu-22.04
+    timeout-minutes: 25
+    env:
+      VITE_EDITION: ce
+      VITE_DEFAULT_LANGUAGE: zh-CN
+      NODE_OPTIONS: --max-old-space-size=4096
+    steps:
+      - name: Checkout public source
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      # The frontend export checks call <repo>/.venv/bin/python directly.
+      # Only the standard library is needed; do not install backend or model SDKs.
+      - name: Create the quote-test Python environment
+        run: python -m venv --without-pip .venv
+
+      - name: Test the deterministic quote engine
+        run: .venv/bin/python -m unittest discover -s tests -p 'test_foreign_trade*.py' -v
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: src/frontend/package-lock.json
+
+      - name: Install locked frontend dependencies
+        working-directory: src/frontend
+        run: npm ci --no-audit --no-fund
+
+      - name: Test quote cards and bilingual document exports
+        working-directory: src/frontend
+        run: npm run test:foreign-trade-quote
+
+      - name: Build the public CE web app
+        working-directory: src/frontend
+        run: npm run build

@@ -1,3 +1,4 @@
+# Modified by foreign-trade-agent contributors, 2026-10-21; see CHANGES_FOREIGN_TRADE.md.
 # Build and publish the HugAgentOS Tauri desktop client from the public CE tree.
 #
 # This workflow belongs to the CE overlay because the main repository excludes
@@ -37,6 +38,8 @@ concurrency:
 
 jobs:
   validate-release:
+    # Added by the foreign-trade team fork: do not run upstream signed releases.
+    if: ${{ github.repository == 'ZJU-REAL/HugAgentOS' }}
     runs-on: ubuntu-22.04
     outputs:
       version: ${{ steps.desktop_version.outputs.version }}

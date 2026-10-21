@@ -1,0 +1,45 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "foreign-trade-demo",
+  "version": "0.1.0",
+  "description": "外贸询盘转报价演示：查询模拟办公收纳产品，校验 MOQ、包装和交期条件，调用报价工具生成有来源的报价草案与英语客户回复。所有产品和价格均为 DEMO 数据。",
+  "author": {
+    "name": "Foreign Trade Demo"
+  },
+  "extensions": {
+    "org.hugagent": {
+      "mcp": {
+        "foreign_trade": {
+          "display_name": "外贸产品与报价（演示）",
+          "description": "使用本地模拟产品目录检索、核实商品并计算报价。结果仅用于演示，运费和目的国合规须另行确认。",
+          "tools": [
+            {
+              "name": "search_products",
+              "description": "按中英文关键词、SKU 或分类检索模拟办公收纳产品。参数 query、category、limit；找到候选后用 get_product 核对规格、MOQ、价格来源和交期信息。"
+            },
+            {
+              "name": "get_product",
+              "description": "按 sku 读取模拟产品完整事实，包括规格、MOQ、包装、阶梯价、参考生产交期及来源。不得用工具未返回的信息补造认证、库存或合规结论。"
+            },
+            {
+              "name": "calculate_quote",
+              "description": "按 items=[{sku,quantity,custom_packaging}]、destination_country、requested_lead_days 计算模拟报价及条件校验。quantity 必须来自用户明确数量；custom_packaging 表示是否定制包装。每次修改 SKU、数量、包装、目的国或交期均须重新调用；输出不得将不含运费金额称为到岸总价。"
+            }
+          ]
+        }
+      },
+      "ui": {
+        "version": 1,
+        "contributes": {
+          "shortcuts": [
+            {
+              "id": "inquiry-quote",
+              "label": "询盘转报价",
+              "prompt": "请用外贸演示数据处理这条客户询盘：DESK-001，500 件，标准包装，目的国西班牙。先查询并核对产品及 MOQ，再调用报价工具，输出报价草案、数据来源、待确认条件，以及可复制的英语客户回复。交期未指定；运费待确认，不要写成到岸总价。"
+            }
+          ]
+        }
+      }
+    }
+  }
+}

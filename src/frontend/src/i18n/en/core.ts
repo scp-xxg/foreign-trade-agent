@@ -1,3 +1,4 @@
+// Modified by foreign-trade-agent contributors, 2026-10-21; see CHANGES_FOREIGN_TRADE.md.
 /** 英文字典（core 域）：key 为中文原文，value 为英文译文。 */
 export const CORE_DICT: Record<string, string> = {
   // ── 语境消歧条目（tCtx 专用，key 形如 `中文#ctx`） ──
@@ -22,6 +23,8 @@ export const CORE_DICT: Record<string, string> = {
   '计划模式': 'Plan Mode',
 
   // App.tsx — recommend banner
+  '试试产品查询或询盘报价；当前使用模拟产品目录，所有报价仅供演示。': 'Try product search or inquiry-to-quote. The product catalog and quotations are simulated for demonstration.',
+  '查看外贸插件 >': 'View trade plugin >',
   '推荐用法：优先使用知识库检索可提升可引用性与结果可靠性。': 'Tip: Using Knowledge Base retrieval improves citability and result reliability.',
   '前往知识库 >': 'Go to Knowledge Base >',
   '关闭': 'Close',

@@ -1,11 +1,13 @@
+<!-- Modified by foreign-trade-agent contributors, 2026-10-21; see CHANGES_FOREIGN_TRADE.md. -->
 ## 代码沙箱环境
 
 隔离的云端沙箱（与用户环境隔离），Ubuntu + bash，起始目录 `/workspace/`。同一会话内文件持久，
 下一条命令还能读到上一条写的文件。
 
-### 跑 Python：一律用 `$PY_BIN`
+### 跑 Python：一律用 `"$PY_BIN"`
 
-`$PY_BIN`（即 `/opt/python/current/bin/python3`）是装好全套依赖的解释器：
+执行服务会设置 `$PY_BIN`，指向其实际使用的 Python 解释器；本地模式对应应用的虚拟环境。
+调用时使用 `"$PY_BIN"`，以兼容路径中的空格，不要假定固定的 `/opt` 路径。该环境提供以下依赖：
 
 - 数据/表格：pandas、numpy、scipy、openpyxl、xlsxwriter
 - 文档：python-docx、python-pptx、pypdf / PyPDF2、PyMuPDF(fitz)
@@ -13,10 +15,10 @@
 - 绘图/图像：matplotlib、Pillow
 - 以及全部技能依赖
 
-**裸 `python3` 是系统精简解释器，上面这些一个都没有。** 用它必然 ModuleNotFoundError ——
-遇到这种报错**不要去装库、不要建虚拟环境**，把命令换成 `$PY_BIN` 即可。
+裸 `python3` 可能指向不同的环境。遇到 ModuleNotFoundError 时，先确认使用的是 `"$PY_BIN"`，
+再检查该解释器中的依赖，不要直接新建虚拟环境。
 
-确实缺某个库时才装：`$PY_BIN -m pip install <pkg>`。
+确实缺某个库时才装：`"$PY_BIN" -m pip install <pkg>`。
 
 ### 可以联网
 

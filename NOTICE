@@ -14,3 +14,12 @@ dependencies and their licenses:
 Commercial-licensed components (e.g. @univerjs/preset-sheets-advanced) and
 proprietary cloud SDKs (oss2, opensandbox) are NOT part of this distribution;
 they ship only with the commercial edition.
+
+foreign-trade-agent modifications (2026)
+---------------------------------------
+This derived project is based on ZJU-REAL/HugAgentOS Community Edition
+desktop-v1.0.2 (d16a09be1e408c1acf3ef6ff89523cda1341ef41).
+Foreign-trade demo catalog, deterministic quotation tools, inquiry-to-quote
+skill, bilingual quotation exports and team deployment integration were
+added by the foreign-trade-agent contributors. Upstream notices and the
+complete Community Edition License, including Additional Terms, are retained.

@@ -1,3 +1,4 @@
+# Modified by foreign-trade-agent contributors, 2026-10-21; see CHANGES_FOREIGN_TRADE.md.
 """
 Skill script execution sidecar service.
 
@@ -390,6 +391,7 @@ SAFE_ENV = {
     "TMP": _TEMP_ROOT,
     "XDG_CACHE_HOME": str(Path(_TEMP_ROOT) / ".cache"),
     "LANG": "en_US.UTF-8",
+    "PY_BIN": sys.executable,  # same interpreter and dependencies as the runner
     "PYTHONIOENCODING": "utf-8",
     "PYTHONDONTWRITEBYTECODE": "1",  # package revisions stay immutable during Python imports
     "MPLBACKEND": "Agg",  # matplotlib non-interactive backend

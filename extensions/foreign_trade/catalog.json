@@ -1,0 +1,491 @@
+{
+  "catalog_version": "office-storage-demo-v1",
+  "is_simulated": true,
+  "currency": "USD",
+  "source": {
+    "type": "synthetic_demo_catalog",
+    "record_ref": "demo:office-storage-demo-v1",
+    "description": "Entirely fictional office-storage catalog for local hackathon demonstrations. No real supplier, inventory, offer, or freight rate."
+  },
+  "products": [
+    {
+      "sku": "DESK-001",
+      "name": "Modular Desk Organizer",
+      "name_zh": "模块化桌面收纳盒",
+      "category": "desk-organizers",
+      "category_zh": "桌面收纳",
+      "description": "Fictional demonstration product: Modular Desk Organizer. All specifications and prices are simulated.",
+      "material": "PP",
+      "dimensions_cm": "24 x 15 x 12",
+      "available_colors": [
+        "gray",
+        "white"
+      ],
+      "is_simulated": true,
+      "currency": "USD",
+      "moq": 100,
+      "price_tiers": [
+        {
+          "min_quantity": 100,
+          "max_quantity": 499,
+          "unit_price": "5.20"
+        },
+        {
+          "min_quantity": 500,
+          "max_quantity": 1999,
+          "unit_price": "4.80"
+        },
+        {
+          "min_quantity": 2000,
+          "max_quantity": null,
+          "unit_price": "4.20"
+        }
+      ],
+      "packaging": {
+        "standard": {
+          "included_in_price": true,
+          "description": "Simulated standard protective bag and export carton."
+        },
+        "custom": {
+          "supported": true,
+          "moq": 500,
+          "unit_surcharge": "0.30",
+          "additional_production_days": 3,
+          "description": "Simulated custom printed sleeve; artwork requires confirmation."
+        }
+      },
+      "production_lead_days": 15,
+      "production_lead_basis": "Simulated calendar days after order and artwork confirmation; transit is excluded.",
+      "keywords": [
+        "desk",
+        "organizer",
+        "pen",
+        "桌面",
+        "笔筒"
+      ],
+      "source": {
+        "type": "synthetic_demo_catalog",
+        "record_ref": "demo:office-storage-demo-v1:DESK-001"
+      }
+    },
+    {
+      "sku": "DESK-002",
+      "name": "Mesh Pen Cup Set",
+      "name_zh": "金属网格笔筒套装",
+      "category": "desk-organizers",
+      "category_zh": "桌面收纳",
+      "description": "Fictional demonstration product: Mesh Pen Cup Set. All specifications and prices are simulated.",
+      "material": "Powder-coated steel",
+      "dimensions_cm": "9 x 9 x 10",
+      "available_colors": [
+        "gray",
+        "white"
+      ],
+      "is_simulated": true,
+      "currency": "USD",
+      "moq": 200,
+      "price_tiers": [
+        {
+          "min_quantity": 200,
+          "max_quantity": 999,
+          "unit_price": "2.40"
+        },
+        {
+          "min_quantity": 1000,
+          "max_quantity": 2999,
+          "unit_price": "2.10"
+        },
+        {
+          "min_quantity": 3000,
+          "max_quantity": null,
+          "unit_price": "1.85"
+        }
+      ],
+      "packaging": {
+        "standard": {
+          "included_in_price": true,
+          "description": "Simulated standard protective bag and export carton."
+        },
+        "custom": {
+          "supported": true,
+          "moq": 1000,
+          "unit_surcharge": "0.20",
+          "additional_production_days": 3,
+          "description": "Simulated custom printed sleeve; artwork requires confirmation."
+        }
+      },
+      "production_lead_days": 12,
+      "production_lead_basis": "Simulated calendar days after order and artwork confirmation; transit is excluded.",
+      "keywords": [
+        "pen",
+        "cup",
+        "metal",
+        "笔筒"
+      ],
+      "source": {
+        "type": "synthetic_demo_catalog",
+        "record_ref": "demo:office-storage-demo-v1:DESK-002"
+      }
+    },
+    {
+      "sku": "FILE-001",
+      "name": "Stackable Document Tray",
+      "name_zh": "可叠放文件托盘",
+      "category": "file-storage",
+      "category_zh": "文件收纳",
+      "description": "Fictional demonstration product: Stackable Document Tray. All specifications and prices are simulated.",
+      "material": "Recycled PP",
+      "dimensions_cm": "33 x 25 x 7",
+      "available_colors": [
+        "gray",
+        "white"
+      ],
+      "is_simulated": true,
+      "currency": "USD",
+      "moq": 100,
+      "price_tiers": [
+        {
+          "min_quantity": 100,
+          "max_quantity": 499,
+          "unit_price": "3.80"
+        },
+        {
+          "min_quantity": 500,
+          "max_quantity": 1499,
+          "unit_price": "3.40"
+        },
+        {
+          "min_quantity": 1500,
+          "max_quantity": null,
+          "unit_price": "3.00"
+        }
+      ],
+      "packaging": {
+        "standard": {
+          "included_in_price": true,
+          "description": "Simulated standard protective bag and export carton."
+        },
+        "custom": {
+          "supported": true,
+          "moq": 500,
+          "unit_surcharge": "0.25",
+          "additional_production_days": 4,
+          "description": "Simulated custom printed sleeve; artwork requires confirmation."
+        }
+      },
+      "production_lead_days": 18,
+      "production_lead_basis": "Simulated calendar days after order and artwork confirmation; transit is excluded.",
+      "keywords": [
+        "file",
+        "document",
+        "tray",
+        "A4",
+        "文件",
+        "托盘"
+      ],
+      "source": {
+        "type": "synthetic_demo_catalog",
+        "record_ref": "demo:office-storage-demo-v1:FILE-001"
+      }
+    },
+    {
+      "sku": "FILE-002",
+      "name": "Collapsible Magazine Holder",
+      "name_zh": "可折叠文件立架",
+      "category": "file-storage",
+      "category_zh": "文件收纳",
+      "description": "Fictional demonstration product: Collapsible Magazine Holder. All specifications and prices are simulated.",
+      "material": "Corrugated paperboard",
+      "dimensions_cm": "26 x 10 x 30",
+      "available_colors": [
+        "gray",
+        "white"
+      ],
+      "is_simulated": true,
+      "currency": "USD",
+      "moq": 300,
+      "price_tiers": [
+        {
+          "min_quantity": 300,
+          "max_quantity": 999,
+          "unit_price": "1.60"
+        },
+        {
+          "min_quantity": 1000,
+          "max_quantity": 2999,
+          "unit_price": "1.35"
+        },
+        {
+          "min_quantity": 3000,
+          "max_quantity": null,
+          "unit_price": "1.10"
+        }
+      ],
+      "packaging": {
+        "standard": {
+          "included_in_price": true,
+          "description": "Simulated standard protective bag and export carton."
+        },
+        "custom": {
+          "supported": true,
+          "moq": 1000,
+          "unit_surcharge": "0.15",
+          "additional_production_days": 5,
+          "description": "Simulated custom printed sleeve; artwork requires confirmation."
+        }
+      },
+      "production_lead_days": 10,
+      "production_lead_basis": "Simulated calendar days after order and artwork confirmation; transit is excluded.",
+      "keywords": [
+        "magazine",
+        "folder",
+        "holder",
+        "文件夹",
+        "书立"
+      ],
+      "source": {
+        "type": "synthetic_demo_catalog",
+        "record_ref": "demo:office-storage-demo-v1:FILE-002"
+      }
+    },
+    {
+      "sku": "CABLE-001",
+      "name": "Cable Management Box",
+      "name_zh": "桌面理线收纳盒",
+      "category": "cable-storage",
+      "category_zh": "线缆收纳",
+      "description": "Fictional demonstration product: Cable Management Box. All specifications and prices are simulated.",
+      "material": "ABS",
+      "dimensions_cm": "32 x 13 x 12",
+      "available_colors": [
+        "gray",
+        "white"
+      ],
+      "is_simulated": true,
+      "currency": "USD",
+      "moq": 100,
+      "price_tiers": [
+        {
+          "min_quantity": 100,
+          "max_quantity": 499,
+          "unit_price": "4.50"
+        },
+        {
+          "min_quantity": 500,
+          "max_quantity": 1999,
+          "unit_price": "4.00"
+        },
+        {
+          "min_quantity": 2000,
+          "max_quantity": null,
+          "unit_price": "3.55"
+        }
+      ],
+      "packaging": {
+        "standard": {
+          "included_in_price": true,
+          "description": "Simulated standard protective bag and export carton."
+        },
+        "custom": {
+          "supported": true,
+          "moq": 500,
+          "unit_surcharge": "0.35",
+          "additional_production_days": 4,
+          "description": "Simulated custom printed sleeve; artwork requires confirmation."
+        }
+      },
+      "production_lead_days": 20,
+      "production_lead_basis": "Simulated calendar days after order and artwork confirmation; transit is excluded.",
+      "keywords": [
+        "cable",
+        "wire",
+        "box",
+        "理线",
+        "线缆"
+      ],
+      "source": {
+        "type": "synthetic_demo_catalog",
+        "record_ref": "demo:office-storage-demo-v1:CABLE-001"
+      }
+    },
+    {
+      "sku": "DRAWER-001",
+      "name": "Adjustable Drawer Divider Set",
+      "name_zh": "可调节抽屉分隔板套装",
+      "category": "drawer-storage",
+      "category_zh": "抽屉收纳",
+      "description": "Fictional demonstration product: Adjustable Drawer Divider Set. All specifications and prices are simulated.",
+      "material": "PP",
+      "dimensions_cm": "Adjustable 28-44 x 10",
+      "available_colors": [
+        "gray",
+        "white"
+      ],
+      "is_simulated": true,
+      "currency": "USD",
+      "moq": 150,
+      "price_tiers": [
+        {
+          "min_quantity": 150,
+          "max_quantity": 599,
+          "unit_price": "6.40"
+        },
+        {
+          "min_quantity": 600,
+          "max_quantity": 1999,
+          "unit_price": "5.90"
+        },
+        {
+          "min_quantity": 2000,
+          "max_quantity": null,
+          "unit_price": "5.40"
+        }
+      ],
+      "packaging": {
+        "standard": {
+          "included_in_price": true,
+          "description": "Simulated standard protective bag and export carton."
+        },
+        "custom": {
+          "supported": false,
+          "moq": null,
+          "unit_surcharge": null,
+          "additional_production_days": null,
+          "description": "Custom packaging is not available in this demo catalog."
+        }
+      },
+      "production_lead_days": 16,
+      "production_lead_basis": "Simulated calendar days after order and artwork confirmation; transit is excluded.",
+      "keywords": [
+        "drawer",
+        "divider",
+        "抽屉",
+        "分隔板"
+      ],
+      "source": {
+        "type": "synthetic_demo_catalog",
+        "record_ref": "demo:office-storage-demo-v1:DRAWER-001"
+      }
+    },
+    {
+      "sku": "BIN-001",
+      "name": "Felt Desktop Storage Bin",
+      "name_zh": "毛毡桌面收纳篮",
+      "category": "desktop-bins",
+      "category_zh": "收纳篮",
+      "description": "Fictional demonstration product: Felt Desktop Storage Bin. All specifications and prices are simulated.",
+      "material": "PET felt",
+      "dimensions_cm": "22 x 16 x 14",
+      "available_colors": [
+        "gray",
+        "white"
+      ],
+      "is_simulated": true,
+      "currency": "USD",
+      "moq": 200,
+      "price_tiers": [
+        {
+          "min_quantity": 200,
+          "max_quantity": 799,
+          "unit_price": "3.20"
+        },
+        {
+          "min_quantity": 800,
+          "max_quantity": 2499,
+          "unit_price": "2.85"
+        },
+        {
+          "min_quantity": 2500,
+          "max_quantity": null,
+          "unit_price": "2.50"
+        }
+      ],
+      "packaging": {
+        "standard": {
+          "included_in_price": true,
+          "description": "Simulated standard protective bag and export carton."
+        },
+        "custom": {
+          "supported": true,
+          "moq": 800,
+          "unit_surcharge": "0.25",
+          "additional_production_days": 5,
+          "description": "Simulated custom printed sleeve; artwork requires confirmation."
+        }
+      },
+      "production_lead_days": 14,
+      "production_lead_basis": "Simulated calendar days after order and artwork confirmation; transit is excluded.",
+      "keywords": [
+        "felt",
+        "bin",
+        "basket",
+        "毛毡",
+        "收纳篮"
+      ],
+      "source": {
+        "type": "synthetic_demo_catalog",
+        "record_ref": "demo:office-storage-demo-v1:BIN-001"
+      }
+    },
+    {
+      "sku": "MONITOR-001",
+      "name": "Desktop Monitor Riser with Storage",
+      "name_zh": "带收纳格显示器增高架",
+      "category": "monitor-stands",
+      "category_zh": "显示器支架",
+      "description": "Fictional demonstration product: Desktop Monitor Riser with Storage. All specifications and prices are simulated.",
+      "material": "Bamboo",
+      "dimensions_cm": "50 x 20 x 10",
+      "available_colors": [
+        "gray",
+        "white"
+      ],
+      "is_simulated": true,
+      "currency": "USD",
+      "moq": 50,
+      "price_tiers": [
+        {
+          "min_quantity": 50,
+          "max_quantity": 199,
+          "unit_price": "12.50"
+        },
+        {
+          "min_quantity": 200,
+          "max_quantity": 999,
+          "unit_price": "11.40"
+        },
+        {
+          "min_quantity": 1000,
+          "max_quantity": null,
+          "unit_price": "10.20"
+        }
+      ],
+      "packaging": {
+        "standard": {
+          "included_in_price": true,
+          "description": "Simulated standard protective bag and export carton."
+        },
+        "custom": {
+          "supported": false,
+          "moq": null,
+          "unit_surcharge": null,
+          "additional_production_days": null,
+          "description": "Custom packaging is not available in this demo catalog."
+        }
+      },
+      "production_lead_days": 25,
+      "production_lead_basis": "Simulated calendar days after order and artwork confirmation; transit is excluded.",
+      "keywords": [
+        "monitor",
+        "riser",
+        "stand",
+        "显示器",
+        "增高架"
+      ],
+      "source": {
+        "type": "synthetic_demo_catalog",
+        "record_ref": "demo:office-storage-demo-v1:MONITOR-001"
+      }
+    }
+  ]
+}
