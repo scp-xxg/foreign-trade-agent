@@ -238,24 +238,12 @@
       "id": "internet_search",
       "kind": "mcp_server",
       "name": "互联网搜索",
-      "description": "通过互联网实时搜索公开网页、新闻及财经资讯，作为数据库与知识库之外的信息兜底。",
-      "desc": "通过互联网实时搜索公开网页、新闻及财经资讯，作为数据库与知识库之外的信息兜底。",
+      "description": "检索公开网页、官方文档、新闻及财经资讯，支持多查询并发、来源去重和原文核验。",
+      "desc": "检索公开网页、官方文档、新闻及财经资讯，支持多查询并发、来源去重和原文核验。",
       "enabled": true,
       "version": "1",
       "config": {
         "server": "internet_search"
-      }
-    },
-    {
-      "id": "generate_chart_tool",
-      "kind": "mcp_server",
-      "name": "数据可视化",
-      "description": "根据给定数据调用 Python 生成柱状图、折线图、饼图等可视化图表，结果以图片形式直接展示。",
-      "desc": "根据给定数据调用 Python 生成柱状图、折线图、饼图等可视化图表，结果以图片形式直接展示。",
-      "enabled": true,
-      "version": "1",
-      "config": {
-        "server": "generate_chart_tool"
       }
     },
     {
@@ -268,18 +256,6 @@
       "version": "1",
       "config": {
         "server": "web_fetch"
-      }
-    },
-    {
-      "id": "batch_runner",
-      "kind": "mcp_server",
-      "name": "批量执行",
-      "description": "对一组对象（Excel 行/多份文档/文本枚举）批量执行同一个任务；先生成可确认的计划，用户审阅模板后再逐条执行。",
-      "desc": "对一组对象（Excel 行/多份文档/文本枚举）批量执行同一个任务；先生成可确认的计划，用户审阅模板后再逐条执行。",
-      "enabled": true,
-      "version": "1",
-      "config": {
-        "server": "batch_runner"
       }
     },
     {

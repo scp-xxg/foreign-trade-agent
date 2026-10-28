@@ -59,13 +59,13 @@ The backend runs several parallel authentication mechanisms, each covering a dif
 | Mechanism | How to send the credential | Scope | Implementation |
 |---|---|---|---|
 | **Session cookie** | `Cookie: jx_session=<token>` (set automatically on login) | All end-user-facing `/v1/*` endpoints (chats, projects, kb, memories, …) | `get_current_user`: cookie → Redis session lookup |
-| **Personal API key** | `Authorization: Bearer sk-jx-...` | Same user identity as a session cookie; intended for scripts / third-party integrations | Recognized by the `sk-jx-` prefix; plaintext returned only once at creation, DB stores SHA256 only (`core/services/api_key_service.py`); self-managed at `/v1/me/api-keys` |
+| **Personal API key** | `Authorization: Bearer sk-jx-...` | Same user identity as a session cookie; intended for scripts / third-party integrations | Recognized by the `sk-jx-` prefix; plaintext returned only once at creation, DB stores SHA256 only (`core/auth/api_keys.py`); self-managed at `/v1/me/api-keys` |
 | **Bearer token (mock/remote mode)** | `Authorization: Bearer <token>` | `AUTH_MODE=mock` (development: any token, or none, resolves to the mock user) or `remote` (verified against the user center) | Fallback branch of `get_current_user`; not accepted under `AUTH_MODE=session` |
 | **ADMIN_TOKEN** | `Authorization: Bearer <ADMIN_TOKEN>` | `/admin` console backend (`/v1/admin/skills`, `/v1/admin/kb`, …) and content-block write endpoints | `require_admin` (env var `ADMIN_TOKEN`) |
 | **CONFIG_TOKEN** | `Authorization: Bearer <CONFIG_TOKEN>` | `/config` console backend (`/v1/config/*`, `/v1/models`, `/v1/service-configs`, some `/v1/admin/*` observability endpoints) | `require_config` (env var `CONFIG_TOKEN`) |
 | **ADMIN or CONFIG (either)** | Same as above | Prompt snapshot export/import (`/v1/content/prompts/export|import`) | `require_admin_or_config` |
 | **super_admin session** | Session cookie (user with `extra_data.role == "super_admin"`); a valid ADMIN_TOKEN works as fallback | A few cross-user management operations | `require_super_admin` |
-| **BACKEND_INTERNAL_TOKEN** | `Authorization: Bearer <token>` | Only `/v1/internal/batch/*` (service-to-service calls); if the env var is unset the endpoint refuses with 503 (fail-closed) | `api/routes/v1/internal_batch.py` |
+| **BACKEND_INTERNAL_TOKEN** | `Authorization: Bearer <token>` | Internal site, browser and security-tool service calls; requests are rejected when unset | `features/sites/api/internal_site_auth.py`, `internal_security.py` |
 
 Resolution order in `get_current_user`: **cookie session → API-key Bearer (`sk-jx-` prefix) → mock/remote Bearer**. A Bearer that looks like an API key but fails validation gets an immediate 401 — it is never silently downgraded to anonymous.
 
@@ -81,26 +81,64 @@ curl http://localhost:3000/api/v1/admin/skills \
   -H "Authorization: Bearer $ADMIN_TOKEN"
 ```
 
+## Unified response endpoint
+
+`POST /v1/agents/responses` accepts a boolean `stream`: the default `false` returns complete JSON, while `true` returns SSE. The former send/stream POST routes have been removed; clients must update the URL and choose the required transport. Existing resume and cancel endpoints remain unchanged.
+
+Pass `agent_id` in the request body to call a sub-agent. A personal API key from Settings can target any sub-agent the owner may access. A key created in a sub-agent's details remains limited to its bound `agent_id` and that key's API sessions; a missing or different ID is rejected. An agent disabled in the app remains callable when explicitly selected through the API. Both key types require the user's `can_use_api_key` permission. Managing personal keys does not require the model gateway entitlement.
+
+### Call within a project
+
+
+Click the **API icon** at the top right of a project page. The **API-Key** tab creates, copies, enables, disables, and revokes the current user's project keys. **Request example** provides the project ID, endpoint, and JSON/SSE examples. Key management routes to the project's local or cloud backend.
+
+Key management requires project edit/admin access and the `can_use_api_key` capability. Project binding is immutable. Disabled, revoked, expired keys, deleted projects, and loss of project edit access invalidate the key. Disabling or revoking a key cancels its active runs.
+
+| Endpoint | Method | Purpose |
+|---|---|---|
+| `/v1/projects/{project_id}/api-keys` | GET / POST | List / create project keys |
+| `/v1/projects/{project_id}/api-keys/{key_id}/reveal` | GET | Copy the full key |
+| `/v1/projects/{project_id}/api-keys/{key_id}` | PATCH / DELETE | Enable/disable / revoke |
+
+Project keys can access only their bound project's response endpoint, their own API conversation resume/cancel routes, and generated files from those conversations. Other projects, browser conversations, and account management endpoints are blocked. Create/reveal responses use `Cache-Control: no-store`; lists exclude plaintext.
+
+Omitting `project_id` uses the key's bound project. A different project returns 403. Use a separate `chat_id` per key and reuse it to continue a conversation. Conversation references may target accessible conversations within the bound project; references to other projects are rejected. Project API calls use the same capability configuration as in-app project conversations. Bash, attachments, file tools, memory, and conversation modes follow the existing project configuration without additional project-key restrictions. Subagents, plugins, connectors, and skills follow project configuration and user permissions.
+
+```bash
+curl -X POST 'https://<HOST>/api/v1/agents/responses' \
+  -H 'Authorization: Bearer <YOUR_PROJECT_API_KEY>' \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "chat_id": "project-api-demo",
+    "project_id": "<PROJECT_ID>",
+    "message": "Hello",
+    "stream": false
+  }'
+```
+
+`stream: false` returns complete `ChatResponse` JSON; read the reply from `response`. For SSE, set `stream: true` and add `-N` to cURL. Personal keys from Settings may still explicitly target accessible projects. Agent-specific keys do not support project calls.
+
 ## SSE Streaming Protocol
 
-The streaming chat endpoint `POST /v1/chats/stream` (`src/backend/api/routes/v1/chats.py`) starts a background run after validation, then follows that run over SSE; after a disconnect, the client can resume from any offset via `GET /v1/chats/stream/{run_id}`. Events are produced by `src/backend/orchestration/workflow.py` and serialized to the wire by `src/backend/orchestration/chat_run_executor.py`.
+The streaming chat endpoint `POST /v1/agents/responses` (`src/backend/api/routes/v1/agent_responses.py`, `stream: true`) starts a background run after validation, then follows that run over SSE; after a disconnect, the client can resume from any offset via `GET /v1/chats/stream/{run_id}`. Events are produced by `src/backend/core/agent_runtime/runner.py` and serialized to the wire by `src/backend/core/chat/runtime/`.
 
 **Wire format**: `Content-Type: text/event-stream`; each event is one `data: {JSON}` line with the event type in the JSON `type` field (the SSE `event:` line is not used). The stream terminates with `data: [DONE]`. After 15 seconds of silence, an SSE comment line `: heartbeat` keeps reverse-proxy connections alive.
 
 ### Request
 
 ```bash
-curl -N http://localhost:3000/api/v1/chats/stream \
+curl -N http://localhost:3000/api/v1/agents/responses \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer sk-jx-xxxxxxxx" \
   -d '{
+    "stream": true,
     "chat_id": "chat_abc123",
     "message": "What is the weather in Beijing today?",
     "chat_mode": "fast"
   }'
 ```
 
-The request body is a `ChatRequest` (`src/backend/api/schemas.py`): `chat_id` and `message` are required; optional fields include `model_name`, `chat_mode` (`turbo`/`fast`/`medium`/`high`/`max` — `turbo` is the retrieval-only quick-lookup mode with its own standalone prompt), `attachments`, and `enabled_kbs` / `enabled_skills` / `enabled_mcps` / `enabled_agents`. Each attachment accepts only `file_id`, `name`, and `mime_type`; the backend parses its body lazily by `file_id`, so file content must not be embedded in the request.
+The request body is a `ChatRequest` (`src/backend/core/chat/schemas.py`): `chat_id` and `message` are required; optional fields include `model_name`, `chat_mode` (`turbo`/`fast`/`medium`/`high`/`max` — `turbo` is the retrieval-only quick-lookup mode with its own standalone prompt), `attachments`, and `enabled_kbs` / `enabled_skills` / `enabled_mcps` / `enabled_agents`. Each attachment accepts only `file_id`, `name`, and `mime_type`; the backend parses its body lazily by `file_id`, so file content must not be embedded in the request.
 
 ### Event types
 
@@ -119,7 +157,6 @@ The request body is a `ChatRequest` (`src/backend/api/schemas.py`): `chat_id` an
 | `file_confirm` | A tool is suspended awaiting user confirmation of a "My Space" write | `confirm_id`, `op`, `logical_path`, `message`, `expired`; the stream stays open — the user confirms out-of-band via `POST /v1/chats/{chat_id}/file-confirm` and the tool resumes |
 | `user_question` | The model called `ask_user_question` and is suspended in place | `request_id`, `questions[]`, `created_at`, `expires_at`, `chat_id` |
 | `user_question_resolved` | The server accepted an answer, cancellation, or timeout | `request_id`, `outcome` (`answered` / `cancelled` / `timeout`), `chat_id` |
-| `batch_confirm` | A batch-execution plan awaits user confirmation | `plan_id`, `total`, `preview`, `default_template`, `placeholder_keys`; confirm via `POST /v1/batch/{plan_id}/confirm` |
 | `meta` | Final wrap-up frame of an answer | `route`, `sources`, `artifacts`, `citations`, `warnings`, `is_markdown`, `message_id`, `workspace_files` |
 | `error` | Streaming failure | `error` (user-readable message), `chat_id` |
 
@@ -160,15 +197,15 @@ All endpoints use the current user identity and verify chat ownership. Pending r
 
 The answer count, question IDs, and order must exactly match the request. Private option IDs must come from the pending response, a single-select answer cannot contain multiple options, and every question must be answered or explicitly use `skipped=true`. The backend projects those private IDs back to the original option labels before returning the DSH-compatible model result `{"answers":[{"id":"scope","selected":["Minimal"]}]}`. The first valid answer/cancel atomically claims the request; concurrent submissions return `stale=true` and cannot wake the tool twice. A successful POST represents that atomic server claim, so the submitting tab may remove the exact `request_id` immediately; `user_question_resolved` and periodic authoritative pending snapshots synchronize other tabs and disconnected clients.
 
-`[ref:tool_name-N]` markers in the answer text are parsed into `citations` items by `orchestration/citations.py`; the frontend renders them as citation badges (see [Chat module](../modules/chat.md)).
+`[ref:tool_name-N]` markers in the answer text are parsed into `citations` items by `core/llm/citations/`; the frontend renders them as citation badges (see [Chat module](../modules/chat.md)).
 
 ### Resume, Steer, and cancel
 
 The answer is generated by a background run; the SSE connection merely *follows* it — disconnecting does not stop generation:
 
 ```bash
-# Resume after a disconnect (from_offset selects the starting event offset)
-curl -N "http://localhost:3000/api/v1/chats/stream/run_9f8e7d?from_offset=0" \
+# Resume after a disconnect (from selects the starting event offset)
+curl -N "http://localhost:3000/api/v1/chats/stream/run_9f8e7d?from=0" \
   -H "Authorization: Bearer sk-jx-xxxxxxxx"
 
 # Cancel generation
@@ -209,7 +246,7 @@ wait is controlled by `HUMAN_INTERACTION_MAX_WAIT_SECONDS`.
 
 ### Other SSE endpoints
 
-The remaining SSE endpoints reuse the same wire format: `GET /v1/batch/{plan_id}/stream` (batch execution progress); plan-mode streams additionally emit `plan_generated` / `plan_error` events. The non-streaming counterpart is `POST /v1/chats/send`, which returns a complete envelope in one response.
+The remaining SSE endpoints reuse the same wire format: plan-mode streams additionally emit `plan_generated` / `plan_error` events. The same endpoint with `stream: false` (the default) returns a complete `ChatResponse` JSON object with `chat_id`, `response`, `timestamp`, `is_markdown`, `route`, `sources`, `artifacts`, and `warnings`; it is not wrapped in a `data` envelope.
 
 ## Health Checks
 
@@ -232,6 +269,7 @@ Auth column legend: "User" = session cookie or personal API key (`get_current_us
 | Group | Module (`api/routes/v1/`) | Prefix | Representative endpoints | Auth |
 |---|---|---|---|---|
 | Chat & messages | `chats.py` | `/v1/chats` | `POST /stream` (SSE), `GET /stream/{run_id}` (resume), `POST /send` (non-streaming), `GET /`, `GET /{chat_id}/messages`, `POST /{chat_id}/share` | User |
+| Chats & messages | `chat_forks.py` | `/v1/chats` | `POST /{chat_id}/fork` | User |
 | Chat & messages | `chat_runs.py` | `/v1/chat-runs` | `POST /{run_id}/cancel`, `POST /{run_id}/steer`, `GET /{run_id}/steers`, `DELETE /{run_id}/steer/{steer_id}` | User |
 | Chat & messages | `chat_shares.py` | `/v1/chat-shares` | `POST /`, `GET /{share_id}`, `POST /{share_id}/revoke` | User |
 | Chat & messages | `summary.py` | `/v1/summary` | `POST /` (chat title summarization) | User |
@@ -251,11 +289,10 @@ Auth column legend: "User" = session cookie or personal API key (`get_current_us
 | Capability catalog | `agents.py` | `/v1/agents` | `GET/POST /`, `PUT/DELETE /{agent_id}` (personal agents) | User |
 | Models | `models.py` | `/v1/models` | `GET /capabilities` (public); `GET/POST /providers`, `PUT /roles/{role_key}` and other management endpoints | Public / CONFIG |
 | Files | `file_upload.py` | `/v1/file` | `POST /upload`, `PUT /{file_id}` | User |
+| File text | `file_text.py` (registered by the file router) | `/v1/file` | `GET/PUT /{file_id}/text` (UTF-8 content and revision-aware saving) | User; saving requires write permission |
 | Files | `file_parse.py` | `/v1/file` | `POST /parse` (document parsing) | User |
 | Content blocks | `content.py` | `/v1/content` | `GET /docs` (public read); `PUT /docs/{block_id}` (ADMIN), `GET /prompts/export` / `POST /prompts/import` (ADMIN or CONFIG) | Public / ADMIN / CONFIG |
 | Automation | `automations.py` | `/v1/automations` | `GET/POST /`, `POST /{task_id}/trigger`, `GET /notifications/list` | User |
-| Batch execution | `batch.py` | `/v1/batch` | `GET /active`, `POST /{plan_id}/confirm`, `GET /{plan_id}/stream` (SSE) | User |
-| Batch execution | `internal_batch.py` | `/v1/internal/batch` | `POST /resolve` (service-to-service internal endpoint) | BACKEND_INTERNAL_TOKEN |
 | Plan mode | `plans.py` | `/v1/plans` | `POST /generate`, `POST /{plan_id}/execute`, `POST /{plan_id}/cancel` | User |
 | System info | `config.py` | `/v1/config` | `GET /tool-names` (tool display-name map, public) | Public |
 | System info | `meta.py` | `/v1/meta` | `GET /edition` (edition/mode/feature-flag booleans; public probe, never exposes license details) | Public |

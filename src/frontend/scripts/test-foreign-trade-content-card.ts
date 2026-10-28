@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 import ts from 'typescript';
+import { normalizeToolId, resolveToolCardIndex } from '../src/utils/toolMatching';
 import type { ToolCall } from '../src/types';
 import type { InquiryRecord } from '../src/utils/foreignTradeInquiryApi';
 import { canCopyInquiryDraft, extractTradeInquiryReceipts, readCurrentTradeInquiry, safeInquirySourceUrl, summarizeTradeInquiry } from '../src/utils/foreignTradeInquiryReceipt';
@@ -211,37 +212,39 @@ await test('inquiry source links exclude executable schemes, credentials and rel
 });
 
 
-// Execute the actual private matching functions and ontology result branch from
-// chatStream.ts, without importing its browser UI/store graph into Node. This
-// exercises production code (not a copy of its matching algorithm).
-const streamSource = readFileSync('src/hooks/chatStream.ts', 'utf8');
-const streamAst = ts.createSourceFile('chatStream.ts', streamSource, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
-const helperNames = new Set(['normalizeToolId', 'getEventToolId', 'getEventToolRawName', 'findLastRunningToolIndex', 'findToolCallIndex']);
+// Execute the upstream modular reducer helpers and ontology branch, preserving
+// behavior coverage while avoiding the browser store graph in this Node test.
+const streamAst = ts.createSourceFile('messageReducer.ts', readFileSync('src/hooks/chatStream/messageReducer.ts', 'utf8'), ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
+const lifecycleAst = ts.createSourceFile('lifecycleAndTools.ts', readFileSync('src/hooks/chatStream/lifecycleAndTools.ts', 'utf8'), ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
+const helperNames = new Set(['getEventToolId', 'getEventToolRawName', 'findToolCallIndex']);
 const streamHelpers = new Map<string, string>();
 let ontologyResultBranch = '';
-function visitStreamNode(node: ts.Node) {
-  if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && helperNames.has(node.name.text)) streamHelpers.set(node.name.text, `const ${node.getText(streamAst)};`);
-  if (ts.isIfStatement(node)) {
-    const condition = node.expression.getText(streamAst);
-    if (condition.includes('ontologyRevisionTool') && condition.includes("eventType === 'tool_result'")) ontologyResultBranch = node.thenStatement.getText(streamAst);
-  }
-  ts.forEachChild(node, visitStreamNode);
+function visitHelpers(node: ts.Node) {
+  if (ts.isFunctionDeclaration(node) && node.name && helperNames.has(node.name.text)) streamHelpers.set(node.name.text, node.getText(streamAst).replace(/^export /, ''));
+  ts.forEachChild(node, visitHelpers);
 }
-visitStreamNode(streamAst);
+function visitLifecycle(node: ts.Node) {
+  if (ts.isIfStatement(node)) {
+    const condition = node.expression.getText(lifecycleAst);
+    if (condition.includes('ontologyRevisionTool') && condition.includes("eventType === 'tool_result'")) ontologyResultBranch = node.thenStatement.getText(lifecycleAst);
+  }
+  ts.forEachChild(node, visitLifecycle);
+}
+visitHelpers(streamAst); visitLifecycle(lifecycleAst);
 assert.equal(streamHelpers.size, helperNames.size); assert.ok(ontologyResultBranch);
 const helperSource = [...streamHelpers.values()].join('\n');
 const compileStream = (body: string) => ts.transpileModule(helperSource + '\n' + body, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None } }).outputText;
-const matchingCode = compileStream('globalThis.testResult = findToolCallIndex(eventObj);');
+const matchingCode = compileStream('globalThis.testResult = findToolCallIndex(s, eventObj);');
 const ontologyCode = compileStream(`function applyResult() ${ontologyResultBranch}\napplyResult();`);
 const streamCall = (id: string, status: ToolCall['status'] = 'running'): ToolCall => ({ id, name: 'trade_inquiry', input: { call_id: id }, status });
 function matchStream(tools: ToolCall[], event: Record<string, unknown>): number {
-  const context = { toolCalls: tools, eventObj: event, stripMcpToolPrefix: (value: string) => value, testResult: -99 };
+  const context = { s: { toolCalls: tools, normalizeToolId }, eventObj: event, resolveToolCardIndex, stripMcpToolPrefix: (value: string) => value, testResult: -99 };
   vm.runInNewContext(matchingCode, context); return context.testResult;
 }
 function applyOntology(tools: ToolCall[], event: Record<string, unknown>): ToolCall[] {
   const revision = { toolCalls: tools, toolPending: true };
-  const context = { toolCalls: tools, eventObj: event, obj: event, stripMcpToolPrefix: (value: string) => value,
-    ensureOntologyRevision: () => revision, appendOrUpdate: () => {}, allCitations: [], t: (value: string) => value, toolStartedAt: () => 1 };
+  const context = { s: { toolCalls: tools, normalizeToolId, allCitations: [] }, eventObj: event, obj: event, resolveToolCardIndex, stripMcpToolPrefix: (value: string) => value,
+    ensureOntologyRevision: () => revision, appendOrUpdate: () => {}, t: (value: string) => value, toolStartedAt: () => 1 };
   vm.runInNewContext(ontologyCode, context); return revision.toolCalls;
 }
 await test('main stream never binds an unknown id to a same-name running sibling', () => {

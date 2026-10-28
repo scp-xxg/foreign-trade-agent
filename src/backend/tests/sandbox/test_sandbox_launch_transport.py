@@ -9,17 +9,22 @@ otherwise.
 """
 
 from __future__ import annotations
+from tests.sandbox.runner_client import run_spawn
 
 import asyncio
 import dataclasses
+import os
 import shutil
 import sys
 
 import pytest
-from core.sandbox.os_sandbox import LocalAccessDecision, build_context, build_policy, confine
+from core.sandbox.permissions.os_gate import LocalAccessDecision
+from core.sandbox.permissions.os_gate import build_context
+from core.sandbox.permissions.os_gate import build_policy
+from core.sandbox.permissions.os_gate import confine
 from core.sandbox.oslayer import SandboxLaunch
-from core.sandbox.protocol import ExecuteRequest
-from services.script_runner_service import server
+from core.sandbox.protocol import ProcessRequest
+from core.sandbox.runner import server
 
 
 def test_both_ends_describe_the_same_launch():
@@ -40,7 +45,7 @@ def test_a_launch_round_trips_through_the_wire_model():
 
 
 def test_the_provider_sends_the_launch_to_the_sidecar(monkeypatch):
-    from core.sandbox.script_runner_provider import ScriptRunnerProvider
+    from core.sandbox.providers.script_runner.provider import ScriptRunnerProvider
 
     captured: dict = {}
 
@@ -66,16 +71,16 @@ def test_the_provider_sends_the_launch_to_the_sidecar(monkeypatch):
             return _Response()
 
     monkeypatch.setattr(
-        "core.sandbox.script_runner_provider.httpx.AsyncClient", lambda **_: _Client()
+        "core.sandbox.providers.script_runner.provider.httpx.AsyncClient", lambda **_: _Client()
     )
     monkeypatch.setattr(
-        "core.sandbox.script_runner_provider._refresh_skill_view", lambda *_args, **_kw: None
+        "core.sandbox.providers.script_runner.provider._refresh_skill_view", lambda *_args, **_kw: None
     )
 
     launch = SandboxLaunch(backend="bwrap", argv_prefix=("bwrap", "--"), env={"A": "B"})
     asyncio.run(
-        ScriptRunnerProvider().execute(
-            ExecuteRequest(
+        ScriptRunnerProvider().start_process(
+            ProcessRequest(
                 script_content="ls",
                 script_name="_bash.sh",
                 language="bash",
@@ -89,7 +94,7 @@ def test_the_provider_sends_the_launch_to_the_sidecar(monkeypatch):
 
 
 def test_no_launch_is_sent_as_null():
-    request = ExecuteRequest(
+    request = ProcessRequest(
         script_content="ls", script_name="_bash.sh", language="bash", session_id="chat-1"
     )
     assert request.sandbox_launch is None
@@ -123,7 +128,7 @@ def test_the_runner_spawns_with_the_prefix_and_env_it_was_given(monkeypatch, tmp
         )
 
     asyncio.run(
-        server._execute_subprocess(
+        run_spawn(
             cmd=["bash", "script.sh"],
             stdin_data="{}",
             timeout=5,
@@ -178,7 +183,7 @@ def test_the_runner_really_confines_a_command_end_to_end(monkeypatch, tmp_path):
         script_path = workspace / "probe.sh"
         script_path.write_text(script, encoding="utf-8")
         return asyncio.run(
-            server._execute_subprocess(
+            run_spawn(
                 cmd=["bash", str(script_path)],
                 stdin_data="{}",
                 timeout=30,
@@ -194,3 +199,71 @@ def test_the_runner_really_confines_a_command_end_to_end(monkeypatch, tmp_path):
     blocked = _run(f"echo nope > {outside}/written.txt")
     assert blocked["exit_code"] != 0
     assert not (outside / "written.txt").exists()
+
+
+@pytest.mark.skipif(
+    sys.platform != "win32" or server._BASH_EXECUTABLE is None,
+    reason="真机验证需要 Windows 与 Git Bash",
+)
+def test_the_runner_really_confines_git_bash_on_windows(monkeypatch, tmp_path):
+    """The Windows twin of the test above, and the one that catches the failure
+    the plan-level tests cannot: the restricted-token design passed all of them
+    and still could not start bash at all (MSYS2 stamps its own security
+    descriptor on its startup pipe, which no restricting SID ever matched).
+    """
+    from core.sandbox.runner.runtime_tools import windows_tool_path_entries
+
+    monkeypatch.setenv("DEPLOY_PROFILE", "local")
+    monkeypatch.setitem(
+        server.SAFE_ENV, "PATH", os.pathsep.join(windows_tool_path_entries(server._BASH_EXECUTABLE))
+    )
+    workspace = tmp_path / "ws"
+    outside = tmp_path / "outside"
+    (workspace / ".git").mkdir(parents=True)
+    (workspace / ".git" / "HEAD").write_text("ref: refs/heads/main\n")
+    outside.mkdir()
+
+    launch = confine(
+        build_policy(LocalAccessDecision(approval_mode="ask", writable_roots=(str(workspace),))),
+        build_context(workspace_root=str(workspace)),
+    )
+    wire = server.SandboxLaunch(**launch.to_json())
+
+    def _run(script: str) -> dict:
+        script_path = workspace / "probe.sh"
+        script_path.write_text(script, encoding="utf-8")
+        return asyncio.run(
+            run_spawn(
+                cmd=[server._BASH_EXECUTABLE, str(script_path)],
+                stdin_data="{}",
+                timeout=30,
+                cwd=str(workspace),
+                sandbox_launch=wire,
+            )
+        )
+
+    inside = _run(
+        "ls . | grep -c . > /dev/null && bash -c 'echo nested' && "
+        "echo ok > written.txt && echo t > /tmp/t.txt && cat written.txt"
+    )
+    assert inside["exit_code"] == 0, inside
+    assert inside["stdout"].split() == ["nested", "ok"]
+
+    for target in (f"$(cygpath '{outside}')/written.txt", ".git/written.txt"):
+        blocked = _run(f'echo nope > "{target}"')
+        assert blocked["exit_code"] != 0, blocked
+    assert not (outside / "written.txt").exists()
+    assert not (workspace / ".git" / "written.txt").exists()
+
+    # A one-off grant is one-off: the label it needed leaves with the plan.
+    granted = confine(
+        build_policy(
+            LocalAccessDecision(approval_mode="ask", writable_roots=(str(workspace), str(outside)))
+        ),
+        build_context(workspace_root=str(workspace)),
+    )
+    wire = server.SandboxLaunch(**granted.to_json())
+    assert _run(f"echo once > \"$(cygpath '{outside}')/once.txt\"")["exit_code"] == 0
+    wire = server.SandboxLaunch(**launch.to_json())
+    assert _run(f"echo again > \"$(cygpath '{outside}')/again.txt\"")["exit_code"] != 0
+    assert (outside / "once.txt").exists() and not (outside / "again.txt").exists()

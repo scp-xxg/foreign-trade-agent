@@ -1,6 +1,15 @@
 // Modified by foreign-trade-agent contributors, 2026-10-21; see CHANGES_FOREIGN_TRADE.md.
 /** 英文字典（core 域）：key 为中文原文，value 为英文译文。 */
 export const CORE_DICT: Record<string, string> = {
+  '选择会话': 'Select Chats',
+  '连接': 'Connection',
+  '离线': 'Offline',
+  '邮箱': 'Email',
+  '进行中': 'In Progress',
+  '任务': 'Task',
+
+  '导航': 'Navigation',
+  '更多': 'More',
   // ── 语境消歧条目（tCtx 专用，key 形如 `中文#ctx`） ──
   '关闭#switch': 'Off',
   '退出#leave': 'Leave',
@@ -21,6 +30,7 @@ export const CORE_DICT: Record<string, string> = {
   '项目': 'Project',
   '对话': 'Chat',
   '计划模式': 'Plan Mode',
+  '任务计划清单': 'Task Plan',
 
   // App.tsx — recommend banner
   '试试产品查询或询盘报价；当前使用模拟产品目录，所有报价仅供演示。': 'Try product search or inquiry-to-quote. The product catalog and quotations are simulated for demonstration.',

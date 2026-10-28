@@ -5,6 +5,7 @@ import {
   existsSync,
   lstatSync,
   mkdirSync,
+  mkdtempSync,
   readFileSync,
   readdirSync,
   renameSync,
@@ -12,8 +13,12 @@ import {
   statSync,
   writeFileSync,
 } from "node:fs";
+import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
+import { fileURLToPath } from "node:url";
 
+import { assertMacosSigning } from "./macos-signing.mjs";
+import { isBrowserRuntimeCode, macRuntimeSigningTargets, refreshSignedBrowserManifest } from "./macos-runtime-signing.mjs";
 import {
   currentDesktopTarget,
   desktopDependencyFingerprint,
@@ -22,6 +27,7 @@ import {
 } from "./desktop-dependencies.mjs";
 
 export function buildDesktopRuntime({ desktopDir, repoRoot, sourceRoot, python }) {
+  assertMacosSigning();
   const target = currentDesktopTarget();
   const config = desktopTargetConfig(target);
   const dependencyFingerprint = desktopDependencyFingerprint(repoRoot, target);
@@ -38,6 +44,19 @@ export function buildDesktopRuntime({ desktopDir, repoRoot, sourceRoot, python }
     console.log(
       `[desktop] Reusing offline runtime ${target}/${dependencyFingerprint.slice(0, 12)}`,
     );
+    // Source can gain imports while dependency inputs stay unchanged.
+    const probeRoot = mkdtempSync(join(tmpdir(), "desktop-runtime-probe-"));
+    try {
+      run(python.command, [...python.prefix,
+        join(desktopDir, "scripts", "extract-runtime-probe.py"),
+        archive, probeRoot], { cwd: repoRoot });
+      run(join(probeRoot, ...config.executable.split("/")), [
+        join(desktopDir, "scripts", "runtime-smoke.py"),
+        "--source-only", "--source", sourceRoot,
+      ], { cwd: sourceRoot });
+    } finally {
+      rmSync(probeRoot, { recursive: true, force: true });
+    }
     return cached;
   }
 
@@ -93,6 +112,9 @@ export function buildDesktopRuntime({ desktopDir, repoRoot, sourceRoot, python }
         "--break-system-packages",
         "--only-binary",
         ":all:",
+        // AgentScope is pinned to a reviewed source commit; other packages require wheels.
+        "--no-binary",
+        "agentscope",
         join(repoRoot, config.lockFile),
       ],
       { cwd: repoRoot },
@@ -100,6 +122,29 @@ export function buildDesktopRuntime({ desktopDir, repoRoot, sourceRoot, python }
   }
   run("uv", ["pip", "check", "--python", executable], { cwd: repoRoot });
 
+  run(python.command, [
+    ...python.prefix,
+    join(desktopDir, "scripts", "install-native-tools.py"),
+    "--manifest", join(desktopDir, "native-tools.json"),
+    "--target", target,
+    "--runtime", runtimeRoot,
+    "--executable", config.executable,
+  ], { cwd: repoRoot });
+  run(executable, [join(desktopDir, "scripts", "browser-runtime.py"), "--runtime", runtimeRoot], { cwd: repoRoot });
+  copyFileSync(join(desktopDir, "scripts", "browser-runtime.py"), join(runtimeRoot, "browser-runtime.py"));
+  run(executable, [join(desktopDir, "scripts", "plugin-cli-runtime.py"),
+    "--runtime", runtimeRoot, "--source", join(desktopDir, "plugin-clis")], { cwd: repoRoot });
+  copyFileSync(join(desktopDir, "scripts", "plugin-cli-runtime.py"), join(runtimeRoot, "plugin-cli-runtime.py"));
+  mkdirSync(join(runtimeRoot, "licenses"), { recursive: true });
+  for (const name of ["OfficeCLI-LICENSE.txt", "Pandoc-COPYING.md", "Office-runtime-NOTICES.txt", "Git-Bash-NOTICES.txt"]) {
+    copyFileSync(join(desktopDir, "licenses", name), join(runtimeRoot, "licenses", name));
+  }
+  const nativeTools = readJson(join(runtimeRoot, "native-tools.json"));
+
+  copyFileSync(
+    join(repoRoot, "src/backend/core/sandbox/runner/runtime_tools.py"),
+    join(runtimeRoot, "runtime_tools.py"),
+  );
   const smokeTest = join(runtimeRoot, "runtime-smoke.py");
   copyFileSync(join(desktopDir, "scripts", "runtime-smoke.py"), smokeTest);
   const pythonVersion = capture(executable, ["-c", "import platform; print(platform.python_version())"]);
@@ -110,6 +155,7 @@ export function buildDesktopRuntime({ desktopDir, repoRoot, sourceRoot, python }
     dependency_fingerprint: dependencyFingerprint,
     executable: config.executable,
     smoke_test: "runtime-smoke.py",
+    native_tools: nativeTools,
   };
   writeFileSync(
     join(runtimeRoot, "runtime-layout.json"),
@@ -118,6 +164,9 @@ export function buildDesktopRuntime({ desktopDir, repoRoot, sourceRoot, python }
   );
   run(executable, [smokeTest, "--source", sourceRoot], { cwd: sourceRoot });
   signMacRuntime(runtimeRoot);
+  // Catch Hardened Runtime library-validation failures in native Python wheels.
+  run(executable, [smokeTest, "--source", sourceRoot], { cwd: sourceRoot });
+  run(executable, [smokeTest, "--native-only"], { cwd: runtimeRoot });
 
   rmSync(archive, { force: true });
   run(
@@ -202,29 +251,63 @@ function directorySize(root) {
   return total;
 }
 
-function signMacRuntime(root) {
+export function signMacRuntime(root) {
   if (process.platform !== "darwin") return;
-  const identity = process.env.APPLE_SIGNING_IDENTITY?.trim() || "-";
+  const browserEntitlements = fileURLToPath(new URL("./browser-jit.entitlements.plist", import.meta.url));
+  const officecliEntitlements = fileURLToPath(new URL("./officecli-jit.entitlements.plist", import.meta.url));
+  const libreOfficeJitEntitlements = fileURLToPath(new URL("./libreoffice-jit.entitlements.plist", import.meta.url));
+  const libreOfficeSelfSignedEntitlements = fileURLToPath(new URL("./libreoffice-self-signed.entitlements.plist", import.meta.url));
+  const pythonEntitlements = fileURLToPath(new URL("./python-self-signed.entitlements.plist", import.meta.url));
+  const { identity, mode } = assertMacosSigning();
   if (identity === "-") {
     console.warn(
-      "[desktop] Apple signing identity unavailable; using ad-hoc signing for the macOS runtime.",
+      "[desktop] Explicit local-test ad-hoc signing; this runtime must not be released.",
     );
   }
-  const files = [];
-  const visit = (directory) => {
-    for (const entry of readdirSync(directory, { withFileTypes: true })) {
-      const path = join(directory, entry.name);
-      if (entry.isDirectory()) visit(path);
-      else if (!entry.isSymbolicLink()) files.push(path);
-    }
-  };
-  visit(root);
+  const { files, bundles } = macRuntimeSigningTargets(root);
   for (const path of files) {
     const kind = capture("/usr/bin/file", ["-b", path]);
     if (!kind.includes("Mach-O")) continue;
     const args = ["--force", "--sign", identity];
-    if (identity !== "-") args.push("--timestamp", "--options", "runtime");
+    if (identity !== "-") args.push(mode === "self-signed" ? "--timestamp=none" : "--timestamp", "--options", "runtime");
+    // OfficeCLI embeds CoreCLR, which needs JIT permission under Hardened Runtime.
+    if (path === join(root, "python", "bin", "officecli") && identity !== "-") {
+      args.push("--entitlements", officecliEntitlements);
+    }
+    // Self-signed Python has no Team ID, so native wheels need this exception.
+    if (path === join(root, "python", "bin", "python3.11") && mode === "self-signed") {
+      args.push("--entitlements", pythonEntitlements);
+    }
+    // LibreOffice generates UNO vtables at runtime. Self-signed builds also
+    // have no Team ID, so its executable must load its bundled libraries.
+    if (path === join(root, "native", "libreoffice", "LibreOffice.app", "Contents", "MacOS", "soffice") && identity !== "-") {
+      args.push("--entitlements", mode === "self-signed"
+        ? libreOfficeSelfSignedEntitlements : libreOfficeJitEntitlements);
+    }
+    if (isBrowserRuntimeCode(root, path) && identity !== "-") {
+      args.push("--entitlements", browserEntitlements);
+    }
     args.push(path);
     run("/usr/bin/codesign", args);
   }
+  // Re-seal nested application resources after signing their Mach-O files.
+  for (const path of bundles) {
+    const args = ["--force", "--sign", identity];
+    if (identity !== "-") args.push(mode === "self-signed" ? "--timestamp=none" : "--timestamp", "--options", "runtime");
+    // Re-sealing the .app re-signs its main executable, so retain its exceptions.
+    if (path === join(root, "native", "libreoffice", "LibreOffice.app") && identity !== "-") {
+      args.push("--entitlements", mode === "self-signed"
+        ? libreOfficeSelfSignedEntitlements : libreOfficeJitEntitlements);
+    }
+    if (isBrowserRuntimeCode(root, path) && identity !== "-") {
+      args.push("--entitlements", browserEntitlements);
+    }
+    args.push(path);
+    run("/usr/bin/codesign", args);
+  }
+  for (const path of bundles.filter((path) => path.endsWith(".app"))) {
+    run("/usr/bin/codesign", ["--verify", "--deep", "--strict", path]);
+  }
+  // Code signing changes Mach-O bytes; pin the final, verified executable.
+  refreshSignedBrowserManifest(root);
 }

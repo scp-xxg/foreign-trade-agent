@@ -1,6 +1,7 @@
+import { useComposerDraft, chatDraftKey } from '../../stores/composerStore';
 import { useMemo } from 'react';
 import { Popover } from 'antd';
-import { useChatStore, useFileStore, useModelCapabilitiesStore } from '../../stores';
+import { useChatStore, useModelCapabilitiesStore } from '../../stores';
 import {
   combineContextUsage,
   computeContextBreakdown,
@@ -63,7 +64,7 @@ function GaugeContent({ breakdown, window, ratio, modelName, note }: GaugeConten
       {/* Stacked composition bar */}
       <div className="jx-ctxPop-bar" role="img" aria-label={t('上下文占用构成')}>
         {rows.map((r) => {
-          const w = Math.min((r.value / window) * 100, 100);
+          const w = (r.value / Math.max(window, breakdown.total)) * 100;
           if (w <= 0) return null;
           return (
             <span
@@ -96,7 +97,7 @@ function GaugeContent({ breakdown, window, ratio, modelName, note }: GaugeConten
  * A small ring gauge shown beside the model selector. Completed calls use the
  * upstream total; only unsent input and explicit fallback states are estimated.
  */
-export function ContextGauge() {
+export function ContextGauge({ draftKey }: { draftKey?: string } = {}) {
   const currentChatId = useChatStore((s) => s.currentChatId);
   const messages = useChatStore((s) => (s.currentChatId ? s.store.chats[s.currentChatId]?.messages : undefined));
   const compaction = useChatStore((s) => (
@@ -105,13 +106,11 @@ export function ContextGauge() {
   const contextUsage = useChatStore((s) => (
     s.currentChatId ? s.contextUsages[s.currentChatId] : undefined
   ));
-  const draft = useChatStore((s) => s.input);
-  const uploadedFiles = useFileStore((s) => s.uploadedFiles);
-  const importedSpaceFiles = useFileStore((s) => s.importedSpaceFiles);
+  const { input: draft, uploadedFiles, importedSpaceFiles } = useComposerDraft(draftKey ?? chatDraftKey(currentChatId));
 
   const model = useModelCapabilitiesStore((s) => {
     const models = s.capabilities.user_selectable_models;
-    if (!models.length) return undefined;
+    if (!s.capabilities.user_model_switch_enabled || !models.length) return undefined;
     return (
       models.find((m) => m.provider_id === s.selectedModelProviderId)
       || models.find((m) => m.is_default)
@@ -132,13 +131,13 @@ export function ContextGauge() {
     [uploadedFiles, importedSpaceFiles],
   );
 
-  const window = useMemo(() => {
-    const snapshotMatchesModel = !model
-      || !contextUsage?.modelProviderId
-      || model.provider_id === contextUsage.modelProviderId;
-    if (snapshotMatchesModel && contextUsage?.contextWindow) return contextUsage.contextWindow;
-    return getContextWindow(model, mainContextLength);
-  }, [model, mainContextLength, contextUsage]);
+  const configuredWindow = model ? model.context_length : mainContextLength;
+  const snapshotMatchesModel = (!model || !contextUsage?.modelProviderId
+    || model.provider_id === contextUsage.modelProviderId)
+    && (!configuredWindow || !contextUsage?.contextWindow || configuredWindow === contextUsage.contextWindow);
+  const window = snapshotMatchesModel && contextUsage?.contextWindow
+    ? contextUsage.contextWindow
+    : getContextWindow(model, model ? 0 : mainContextLength);
 
   const breakdown = useMemo(
     () => contextUsage
@@ -155,11 +154,13 @@ export function ContextGauge() {
   const hasContent = (messages?.length || 0) > 0 || !!draft.trim() || uploadedFiles.length > 0 || importedSpaceFiles.length > 0;
   if (!currentChatId || !hasContent) return null;
 
-  const ratio = Math.min(breakdown.total / window, 1);
+  const ratio = breakdown.total / window;
   const level = levelOf(ratio);
   const pct = Math.round(ratio * 100);
   const hasPendingInput = !!draft.trim() || stagedFiles.length > 0;
-  const note = contextUsage?.exact
+  const note = contextUsage && !snapshotMatchesModel
+    ? '已切换模型；占用沿用上一模型快照，下一次调用后重新校准'
+    : contextUsage?.exact
     ? hasPendingInput
       ? '已发送内容为上游实测；当前输入与待发送文件为预估'
       : '总数为上游 usage 实测；分类按后端最终请求清单归一'
@@ -201,7 +202,7 @@ export function ContextGauge() {
             fill="none"
             strokeWidth="3.4"
             strokeLinecap="round"
-            style={{ strokeDasharray: `${ratio * CIRC} ${CIRC}` }}
+            style={{ strokeDasharray: `${Math.min(ratio, 1) * CIRC} ${CIRC}` }}
           />
         </svg>
       </button>

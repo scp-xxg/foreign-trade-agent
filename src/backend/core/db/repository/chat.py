@@ -4,15 +4,16 @@ Split out of the former monolithic ``core/db/repository.py``. The package
 ``__init__`` re-exports every repository class, so ``from core.db.repository
 import XxxRepository`` keeps working unchanged.
 """
+from core.infra.time import utc_now
 
-import logging
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 import sqlalchemy as sa
+from core.db.reserved_chats import ordinary_chat_filter, reserved_chat_error, reserved_chat_owner
 from core.db.models import ChatMessage, ChatSession
 from core.db.models.chat import reserve_chat_message_sequences
-from sqlalchemy import and_, desc, func, or_, select
+from sqlalchemy import desc, func, or_
 from sqlalchemy.orm import Session
 
 
@@ -35,28 +36,6 @@ def _strip_nul(value: Any) -> Any:
     return value
 
 
-def _visible_message_text(content: str) -> str:
-    """assistant 消息 content 的可见正文（剥离 <think> 思考段）。
-
-    存储格式（多轮工具调用）：``思考1</think>可见文本<think>思考2</think>…最终正文``；
-    也可能只有裸 ``</think>`` 分隔（开标签被服务栈吞掉）。规则与前端
-    ``utils/segments.ts`` 的历史重建一致：每个 ``</think>`` 之前、上一个
-    ``<think>`` 之后的内容是思考；其余是可见正文。
-    """
-    if "</think>" not in content and "<think>" not in content:
-        return content
-    parts = content.split("</think>")
-    out: List[str] = []
-    for i, part in enumerate(parts):
-        if i == len(parts) - 1:
-            # 最后一段：若有未闭合的 <think>，其后是（被截断的）思考
-            out.append(part.split("<think>", 1)[0])
-        else:
-            idx = part.find("<think>")
-            if idx >= 0:
-                out.append(part[:idx])
-            # 无开标签 → 整段是思考，丢弃
-    return " ".join(x for x in out if x.strip()).strip()
 
 
 class ChatSessionRepository:
@@ -86,6 +65,9 @@ class ChatSessionRepository:
         query = self.db.query(ChatSession).filter(
             ChatSession.user_id == user_id, ChatSession.deleted_at.is_(None)
         )
+
+        # Conversations owned by a dedicated module surface stay out of ordinary history.
+        query = query.filter(ordinary_chat_filter(ChatSession.chat_id))
 
         if pinned_only:
             query = query.filter(ChatSession.pinned == True)
@@ -120,8 +102,8 @@ class ChatSessionRepository:
     def create(self, session_data: Dict[str, Any]) -> ChatSession:
         """Create a new chat session."""
         session = ChatSession(**session_data)
-        session.created_at = datetime.utcnow()
-        session.updated_at = datetime.utcnow()
+        session.created_at = utc_now()
+        session.updated_at = utc_now()
         self.db.add(session)
         self.db.commit()
         self.db.refresh(session)
@@ -132,13 +114,15 @@ class ChatSessionRepository:
     ) -> Optional[ChatSession]:
         """Update chat session."""
         session = self.get_by_id(chat_id)
+        if reserved_chat_owner(chat_id):
+            raise ValueError(reserved_chat_error(chat_id))
         if not session:
             return None
 
         for key, value in update_data.items():
             setattr(session, key, value)
 
-        session.updated_at = datetime.utcnow()
+        session.updated_at = utc_now()
         self.db.commit()
         self.db.refresh(session)
         return session
@@ -146,10 +130,12 @@ class ChatSessionRepository:
     def soft_delete(self, chat_id: str) -> bool:
         """Soft delete a chat session."""
         session = self.get_by_id(chat_id)
+        if reserved_chat_owner(chat_id):
+            raise ValueError(reserved_chat_error(chat_id))
         if not session:
             return False
 
-        session.deleted_at = datetime.utcnow()
+        session.deleted_at = utc_now()
         self.db.commit()
         return True
 
@@ -161,144 +147,9 @@ class ChatSessionRepository:
         page_size: int = 20,
         scope: str = "title",
     ) -> tuple[List[Dict[str, Any]], int]:
-        """Search chat sessions by title and optionally message content.
+        from core.db.chat_search import search_sessions
 
-        Args:
-            scope: "title" (default) searches title only;
-                   "all" searches both title and message content.
-
-        Returns:
-            A list of dicts with ChatSession + match_type + matched_snippet, and total count.
-            Results are ordered: title matches first (by updated_at desc),
-            then content-only matches (by updated_at desc).
-        """
-        like_pattern = f"%{query}%"
-
-        base_filter = and_(
-            ChatSession.user_id == user_id,
-            ChatSession.deleted_at.is_(None),
-        )
-
-        # Title-matching chat_ids (always needed)
-        title_id_set: set[str] = {
-            row[0]
-            for row in self.db.query(ChatSession.chat_id)
-            .filter(base_filter, ChatSession.title.ilike(like_pattern))
-            .all()
-        }
-
-        if scope == "all":
-            # Content-only matching chat_ids (exclude ones already matched by title).
-            # SQL ilike 只做粗筛：assistant 消息的 content 里混有 <think> 思考文本
-            # （代码字段/英文/路径等），不应参与搜索（问题11）。粗筛命中后在
-            # Python 层剥掉思考、只对可见正文复核，摘要同样基于可见正文生成。
-            content_id_set: set[str] = set()
-            content_snippet_source: Dict[str, str] = {}
-            candidate_rows = (
-                self.db.query(ChatMessage.chat_id)
-                .join(ChatSession, ChatMessage.chat_id == ChatSession.chat_id)
-                .filter(
-                    base_filter,
-                    ChatMessage.role.in_(["user", "assistant"]),
-                    ChatMessage.content.ilike(like_pattern),
-                )
-                .distinct()
-                .all()
-            )
-            q_lower = query.lower()
-            for (cid,) in candidate_rows:
-                if cid in title_id_set:
-                    continue
-                msgs = (
-                    self.db.query(ChatMessage.content)
-                    .filter(
-                        ChatMessage.chat_id == cid,
-                        ChatMessage.role.in_(["user", "assistant"]),
-                        ChatMessage.content.ilike(like_pattern),
-                    )
-                    .order_by(ChatMessage.chat_seq)
-                    .limit(20)
-                    .all()
-                )
-                for (raw,) in msgs:
-                    visible = _visible_message_text(raw or "")
-                    if q_lower in visible.lower():
-                        content_id_set.add(cid)
-                        content_snippet_source[cid] = visible
-                        break
-            all_ids = title_id_set | content_id_set
-        else:
-            content_id_set = set()
-            content_snippet_source = {}
-            all_ids = title_id_set
-
-        total = len(all_ids)
-
-        # Fetch title-matched sessions first, then content-matched sessions
-        title_sessions = (
-            (
-                self.db.query(ChatSession)
-                .filter(ChatSession.chat_id.in_(title_id_set))
-                .order_by(desc(ChatSession.updated_at))
-                .all()
-            )
-            if title_id_set
-            else []
-        )
-
-        content_sessions = (
-            (
-                self.db.query(ChatSession)
-                .filter(ChatSession.chat_id.in_(content_id_set))
-                .order_by(desc(ChatSession.updated_at))
-                .all()
-            )
-            if content_id_set
-            else []
-        )
-
-        # Merge: title matches first, then content matches
-        ordered = title_sessions + content_sessions
-
-        # Apply pagination on the merged list
-        start = (page - 1) * page_size
-        page_sessions = ordered[start : start + page_size]
-
-        results: List[Dict[str, Any]] = []
-        for s in page_sessions:
-            match_type = "title" if s.chat_id in title_id_set else "content"
-            matched_snippet: Optional[str] = None
-
-            if match_type == "content":
-                snippet_source = content_snippet_source.get(s.chat_id)
-                if snippet_source:
-                    # Center the snippet around the keyword（基于剥离思考后的可见正文）
-                    content = snippet_source.replace("\n", " ")
-                    lower_content = content.lower()
-                    idx = lower_content.find(query.lower())
-                    if idx == -1:
-                        matched_snippet = content[:30]
-                    else:
-                        snippet_len = 30
-                        half = snippet_len // 2
-                        start_pos = max(0, idx - half)
-                        end_pos = min(len(content), start_pos + snippet_len)
-                        snippet = content[start_pos:end_pos]
-                        if start_pos > 0:
-                            snippet = "..." + snippet
-                        if end_pos < len(content):
-                            snippet = snippet + "..."
-                        matched_snippet = snippet
-
-            results.append(
-                {
-                    "session": s,
-                    "match_type": match_type,
-                    "matched_snippet": matched_snippet,
-                }
-            )
-
-        return results, total
+        return search_sessions(self.db, user_id, query, page, page_size, scope)
 
 
 class ChatMessageRepository:
@@ -322,6 +173,7 @@ class ChatMessageRepository:
         page_size: int = 50,
         *,
         newest_first: bool = False,
+        display_only: bool = False,
     ) -> tuple[List[ChatMessage], int]:
         """List messages for a chat session with pagination.
 
@@ -339,6 +191,9 @@ class ChatMessageRepository:
         )
 
         total = query.count()
+        if display_only:
+            from core.db.history_page import display_query
+            query = display_query(self.db, chat_id)
         order = ChatMessage.chat_seq.desc() if newest_first else ChatMessage.chat_seq
         messages = (
             query.order_by(order)
@@ -357,6 +212,7 @@ class ChatMessageRepository:
         *,
         limit: int = 8,
         before_seq: Optional[int] = None,
+        metadata_only: bool = False,
     ) -> List[ChatMessage]:
         """Return the newest visible messages in chronological order.
 
@@ -364,7 +220,8 @@ class ChatMessageRepository:
         message it belongs to, so a later overlapping turn cannot leak in.
         """
 
-        query = self.db.query(ChatMessage).filter(
+        selected = (ChatMessage.chat_seq, ChatMessage.extra_data) if metadata_only else (ChatMessage,)
+        query = self.db.query(*selected).filter(
             ChatMessage.chat_id == chat_id,
             ChatMessage.role.in_(("user", "assistant")),
         )
@@ -382,18 +239,6 @@ class ChatMessageRepository:
         stable sequence boundary in the visible history without exposing the
         checkpoint row or its replacement payload.
         """
-        return int(
-            self.db.query(ChatMessage)
-            .filter(
-                ChatMessage.chat_id == chat_id,
-                ChatMessage.role != "system",
-                ChatMessage.chat_seq <= covered_seq,
-            )
-            .count()
-        )
-
-    def count_visible_through_seq(self, chat_id: str, covered_seq: int) -> int:
-        """Count user-facing rows at or below an exact compaction watermark."""
         return int(
             self.db.query(ChatMessage)
             .filter(
@@ -417,7 +262,7 @@ class ChatMessageRepository:
                 clean["chat_seq"] = next_seq
 
         message = ChatMessage(**clean)
-        message.created_at = datetime.utcnow()
+        message.created_at = utc_now()
         self.db.add(message)
         if commit:
             self.db.commit()

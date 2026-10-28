@@ -10,8 +10,8 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 from sqlalchemy.pool import StaticPool
 
-from core.services import foreign_trade_ai as ai
-from core.services.foreign_trade_inquiry import InquiryService
+from core.foreign_trade import ai as ai
+from core.foreign_trade.inquiry import InquiryService
 from core.db.models.foreign_trade import ForeignTradeInquiry
 from api.routes.v1 import foreign_trade as routes
 
@@ -238,3 +238,27 @@ def test_postfixed_packaging_negation_is_not_a_positive_request():
                                 {"field": "items[0].custom_packaging", "quote": "Custom packaging"}])
     assert "custom_packaging" not in ai.validate_model_suggestions(value, raw, PRODUCTS)["suggestions"]["items"][0]
     assert "custom_packaging" not in ai.rule_suggestions(raw, PRODUCTS)["suggestions"]["items"][0]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("protocol", ["chat_completions", "responses"])
+async def test_business_model_helpers_preserve_configured_api_protocol(monkeypatch, protocol):
+    from core.models import chat_models
+    from core.models.config import ModelConfigService
+    from core.foreign_trade import content_generation
+    from core.models.config import ResolvedModelConfig
+
+    cfg = ResolvedModelConfig(
+        model_name="offline-test-model", base_url="https://invalid.example/", api_key="",
+        provider="openai_compatible", provider_extra={}, context_length=8192,
+        extra={"api_protocol": protocol},
+    )
+    monkeypatch.setattr(ModelConfigService, "get_instance", lambda: SimpleNamespace(resolve=lambda role: cfg))
+    calls = []
+    def factory(**kwargs):
+        calls.append(kwargs)
+        return AsyncMock(return_value=SimpleNamespace(content=[{"type": "text", "text": "{}"}]))
+    monkeypatch.setattr(chat_models, "make_chat_model", factory)
+    await ai._model_json("Test inquiry", PRODUCTS)
+    await content_generation._translate([{"label": "Material", "value": "PP", "source_url": ""}])
+    assert len(calls) == 2 and all(call["api_protocol"] == protocol for call in calls)

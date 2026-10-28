@@ -50,7 +50,7 @@ setup 会创建本仓库 `.venv`、安装 requirements.txt 和 editable 项目�
 
 1. 在 `~/.foreign-trade-agent` 创建独立 SQLite 和本机文件目录。
 2. 创建本机账号，应用外贸首页、6 条推荐问题和外贸助手提示词。
-3. 将“外贸业务助手（演示）”0.2.0 安装到该账号，包含三个技能、原报价 MCP 工具和本公开项目提供的会话绑定业务工具。
+3. 将“外贸业务助手（演示）”0.3.0 安装到该账号，包含四个技能、原报价 MCP 工具和本公开项目提供的会话绑定业务工具。
 
 同名账号已存在时，init 保留密码和权限，仅继续安装/更新场景内容。数据目录已有其他账号时，不会额外创建管理员；请用已有用户名执行 `init --username YOUR_USERNAME` 或 `install --username YOUR_USERNAME`。
 
@@ -90,14 +90,16 @@ setup 会创建本仓库 `.venv`、安装 requirements.txt 和 editable 项目�
 
 网页检查：
 
-- 首页介绍和推荐问题为外贸场景，支持询盘报价与商品资料制作。
+- 首页介绍和推荐问题为外贸场景，支持询盘报价、商品资料制作与跨岗位协同。
 - 能力中心 → 插件能看到已启用的“外贸业务助手（演示）”；新聊天可输入 / 显式选择。
 - 输入“查询 DESK-001 的规格、起订量和阶梯价”，确认发生产品工具调用。
 - 输入“DESK-001，1000 件，定制包装，目的国西班牙，交期未指定，请报价”：货值 USD 4800.00、包装费 USD 300.00、小计 USD 5100.00，不含运费及税费。
 - 点击报价下方的“下载中英文 PDF”和“下载中英文 Excel”，核对金额、模拟标识和数据来源。
 - 改数量或包装后重新报价，使用新一轮结果的编号下载；Excel 是固定报价快照，不是改数量就自动重算的计算器。
 
-两场景的对话验收、用户确认步骤与工作台联动见 [对话插件指南](CHAT_PLUGIN.md)。新能力来自整个公开分支，单独把 ZIP 导入未修改的上游实例不会安装原生业务工具。
+三场景的对话验收、用户确认步骤与工作台联动见 [对话插件指南](CHAT_PLUGIN.md)。新能力来自整个公开分支，单独把 ZIP 导入未修改的上游实例不会安装原生业务工具。
+
+场景三按 [协同说明](SCENARIO_THREE.md) 检查六项岗位任务、人工验收、来源变更失效和 Markdown/JSON 内部交接下载。负责人标签不赋予其他账号访问权限。
 
 布局、样式、功能、模拟目录和初始化提示词随代码复现。账号、模型、历史记录和上传文件每台机器独立；仓库不是运行数据库的备份。
 
@@ -119,9 +121,29 @@ python3.11 extensions/foreign_trade/team.py setup
 .venv/bin/python extensions/foreign_trade/team.py start
 ```
 
-`install` 应用仓库里的首页、提示词与插件新版本。若自行修改过这些配置，请先保留修改；账号密码和聊天历史不被这个步骤替换。新增后端原生工具或其他代码变更后必须重启本公开实例；只有插件说明内容更新时，可在网页关闭再开启插件刷新缓存，然后新建对话。插件安装标识保持 foreign-trade-demo，原 inquiry-quote 保留；新提示词使用 foreign-trade-demo-v2。
+`install` 应用仓库里的首页、提示词与插件新版本。若自行修改过这些配置，请先保留修改；账号密码和聊天历史不被这个步骤替换。新增后端原生工具或其他代码变更后必须重启本公开实例；只有插件说明内容更新时，可在网页关闭再开启插件刷新缓存，然后新建对话。插件安装标识保持 foreign-trade-demo，原 inquiry-quote 保留；新提示词使用 foreign-trade-demo-v3。
 
-## 7. 团队提交代码
+## 7. 从旧公共版本升级数据库
+
+本次同步点及兼容变化见 [上游同步记录](UPSTREAM_SYNC_20261028.md)。Python 服务命令已改为 hugagent-server；推荐继续使用 team.py，不混用上游同名终端客户端。Python 所链接 SQLite 需至少 3.38，团队脚本会提前校验，避免旧 SQLite 错误打开新版库。
+
+停止当前实例后，先在自己的 app-home 上执行升级。来自旧版公共演示、未设模型协议时，保留原 Chat Completions 传输：
+
+```bash
+.venv/bin/python extensions/foreign_trade/team.py upgrade --app-home /your/data/directory --legacy-chat-completions
+```
+
+升级会先建立本机 0600 SQLite 快照，再正常执行 Alembic 和本地初始化。若遇到旧上传文件重名，会停止并报告需修复的数量；核对本机备份后，用 `--repair-legacy-filenames --expected-filename-repairs N` 明确限定本次修复数量。它只给重复记录的文件名加唯一后缀并保留原名审计，不删除文件、不改文件 ID、归属或字节。不要照抄别人的 N，也不要用 stamp 越过失败。成功升级后再执行 install，不要重复传仍期待 N 条修复的参数。
+
+可以用 `--venv /absolute/path/to/another/venv` 在隔离虚拟环境预演升级；setup、upgrade、install、start 等命令均使用同一个所选 venv 和 app-home。回滚快照位于本机 app-home/upgrade-backups，不提交仓库、不复制给队友。恢复示例：
+
+```bash
+.venv/bin/python extensions/foreign_trade/team.py upgrade --app-home /your/data/directory --restore /your/data/directory/upgrade-backups/YOUR_SNAPSHOT.db
+```
+
+恢复前同样必须停止服务；恢复会先另存当前数据库快照。数据库回滚后还需使用对应版本的源码和依赖。当前环境的迁移程序不会改密码、角色授权、模型地址或密钥。
+
+## 8. 团队提交代码
 
 ```bash
 git switch main

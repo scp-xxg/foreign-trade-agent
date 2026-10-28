@@ -1,6 +1,8 @@
 """Ontology harness APIs: user opt-in plus Admin/CE asset governance."""
 
 from __future__ import annotations
+from core.infra.time import as_utc
+from core.infra.time import utc_now
 
 from collections import Counter, defaultdict
 from datetime import datetime, timedelta
@@ -13,14 +15,9 @@ from core.db.engine import get_db
 from core.db.models import OntologyDraft, OntologyEnforcementEvent, OntologyReviewRun
 from core.infra.exceptions import BadRequestError, ResourceNotFoundError
 from core.infra.responses import success_response
-from core.services import UserService
-from core.services.ontology_policy import (
-    plugin_import_build_validation_forced,
-    require_ontology_validation_permission,
-    set_plugin_import_build_validation_forced,
-    user_can_use_ontology_validation,
-)
-from core.services.ontology_service import OntologyService
+from core.auth.users import UserService
+from core.ontology.policy import plugin_import_build_validation_forced, require_ontology_validation_permission, set_plugin_import_build_validation_forced, user_can_use_ontology_validation
+from core.ontology.service import OntologyService
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel, Field
 from sqlalchemy import func
@@ -180,7 +177,7 @@ def preview_ontology_runtime(
     settings = UserService(db).get_user_settings(str(user.user_id))
     if not settings.get("ontology_enabled", False):
         return success_response(data={"enabled": False, "packs": [], "review_level": "none"})
-    from core.services.ontology_service import build_user_ontology_runtime
+    from core.ontology.runtime_policy import build_user_ontology_runtime
 
     _, runtime = build_user_ontology_runtime(
         user_id=str(user.user_id),
@@ -335,7 +332,7 @@ def get_ontology_metrics(db: Session = Depends(get_db)):
             "acceptance_rate": round(counts["approved"] / decided, 4) if decided else None,
         }
 
-    cutoff = datetime.utcnow() - timedelta(days=30)
+    cutoff = utc_now() - timedelta(days=30)
     daily: dict[str, Counter] = defaultdict(Counter)
     recent_events = (
         db.query(OntologyEnforcementEvent.decision, OntologyEnforcementEvent.created_at)
@@ -348,10 +345,10 @@ def get_ontology_metrics(db: Session = Depends(get_db)):
         .all()
     )
     for decision, created_at in recent_events:
-        if created_at and created_at.replace(tzinfo=None) >= cutoff:
+        if created_at and as_utc(created_at) >= cutoff:
             daily[created_at.date().isoformat()][f"event_{decision}"] += 1
     for verdict, created_at in recent_reviews:
-        if created_at and created_at.replace(tzinfo=None) >= cutoff:
+        if created_at and as_utc(created_at) >= cutoff:
             daily[created_at.date().isoformat()][f"review_{verdict}"] += 1
 
     return success_response(
@@ -679,8 +676,8 @@ def review_ontology_draft(
         raise BadRequestError("该演进草案已经完成审核，不能重复修改裁决")
     row.review_status = "approved" if body.approved else "rejected"
     row.reviewer_comment = body.comment
-    row.reviewed_at = datetime.utcnow()
-    row.updated_at = datetime.utcnow()
+    row.reviewed_at = utc_now()
+    row.updated_at = utc_now()
     db.commit()
     return success_response(data={"draft_id": row.draft_id, "review_status": row.review_status})
 
@@ -697,11 +694,10 @@ def review_ontology_draft(
 )
 async def generate_ontology_evolution_drafts(
     body: OntologyEvolutionGenerateRequest,
-    db: Session = Depends(get_db),
 ):
-    from core.services.ontology_evolution_service import OntologyEvolutionService
+    from core.ontology.evolution import generate_candidates
 
-    result = await OntologyEvolutionService(db).generate_candidates(
+    result = await generate_candidates(
         min_occurrences=body.min_occurrences,
         limit=body.limit,
         model_name=body.model_name,
@@ -723,7 +719,7 @@ def materialize_ontology_draft(
     draft_id: str,
     db: Session = Depends(get_db),
 ):
-    from core.services.ontology_evolution_service import OntologyEvolutionService
+    from core.ontology.evolution import OntologyEvolutionService
 
     row = OntologyEvolutionService(db).materialize_approved_draft(draft_id)
     return success_response(data=_version_dict(row, include_content=True))

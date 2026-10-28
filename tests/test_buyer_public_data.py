@@ -10,7 +10,7 @@ from pathlib import Path
 from unittest.mock import Mock, patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src/backend"))
-from core.services import foreign_trade_public_data as data
+from core.foreign_trade import public_data as data
 
 WEBSITE = "https://example.com/"
 HTML = "<title>Example Co</title><p>Example Co provides office supplies and furniture.</p>"

@@ -1,479 +1,34 @@
-import { useEffect, useRef } from 'react';
-import { t } from '../i18n';
-import { authFetch, checkSession, listActiveBatchPlans, getBatchPlan, chatTargetHeaders, isHybridDual, registerLocalChat, toPlanProgress, LOCAL_TARGET_HEADER } from '../api';
-import { nowId, saveCatalog } from '../storage';
-import { buildHistorySegments } from '../utils/segments';
-import { attachArtifactsToToolCalls } from '../utils/fileParser';
-import { isAutomationHistoryChat } from '../utils/history';
-import { markResolvedPlanPreviews, scanPlanSnapshots } from '../utils/planHistory';
-import { mergeHistoryPage } from '../utils/historyMerge';
-import { stripMcpToolPrefix } from '../utils/constants';
-import { parseContextCompactionState, parseContextUsageSnapshot } from '../utils/contextUsage';
-import { shouldRestorePlanModeFromHistory } from '../utils/chatMode';
-import { isLocalDraftChat, LOGIN_LANDING_KEY, useAuthStore, useSettingsStore, useUIStore, useChatStore, useCatalogStore, useAutomationChatStore, useBatchStore, useSidebarOrderStore } from '../stores';
+import { useChatResourceRecovery } from './useChatResourceRecovery';
+import { useEffect,useRef } from 'react';
+import { authFetch,chatTargetHeaders,checkSession,isHybridDual } from '../api';
+import { usePanel } from '../routing/usePanel';
+import { newDraftChatId } from '../storage';
+import { isLocalDraftChat,useAuthStore,useAutomationChatStore,useCatalogStore,useChatStore,useSettingsStore,useSidebarOrderStore,useUIStore } from '../stores';
 import { useDeploymentModeStore } from '../stores/deploymentModeStore';
-import type { Catalog, ChatItem, ChatMessage, CitationItem, EvolutionSummary, OntologyGovernanceSummary, StoredSegment, ThinkingBlock, ToolCall, UpdateEntry, BatchPlanMeta, BatchSourceType, BatchItemResult, ReferencedChatCard } from '../types';
+import type { ChatItem,UpdateEntry } from '../types';
+import { preservedChatsOnRebuild } from '../utils/sessionRebuild';
+import { inflightMsgLoads,MSG_LOAD_MAX_RETRIES,msgLoadRetryCounts,reloadChatHistory } from './chatHistoryLoader';
+import { isLocalSidebarChat,mergeLocalSessions,sessionToChatItem } from './chatSessionMapping';
 
+export { ensureFullMessages,loadOlderMessages,MESSAGE_PAGE_SIZE,reloadChatHistory } from './chatHistoryLoader';
+export { parseHistoryMessage } from './chatHistoryMessage';
 const effectiveApiUrl = (import.meta.env.VITE_API_BASE_URL as string || '').trim() || '/api';
-
-// Chats with a message fetch currently in flight. Separate from
-// `loadedMsgIds` on purpose: the store mark means "successfully loaded"
-// (drives the skeleton-vs-empty-state UI), while this set is only the
-// re-entrancy lock so concurrent effect runs / the startup preload don't
-// double-fetch the same chat. Module-level is fine — it must survive
-// re-renders but reset on page refresh, exactly like the store marks.
-const inflightMsgLoads = new Set<string>();
-
-// Per-chat failed message-load attempts. A non-2xx / network failure used to
-// leave the chat stuck on the skeleton until the user switched away and back;
-// now we self-retry a few times with backoff (bumpSessionLoadEpoch re-fires
-// the lazy-load effect), then give up until the next manual visit.
-/** 打开会话先渲染多少条历史；往上滚续拉也按这个粒度。
- *
- *  过去是把每一页都拉完再一次性渲染整段历史——跑过大文件的长对话，光这一步就能
- *  把浏览器压垮。这里只铺第一屏，剩下的交给滚动续拉。 */
-export const MESSAGE_PAGE_SIZE = 30;
-
-const msgLoadRetryCounts = new Map<string, number>();
-const MSG_LOAD_MAX_RETRIES = 3;
-
-/**
- * 往上滚到顶时续拉更早的一页历史，拼回消息列表的最前面。
- *
- * 返回本次真正新增了多少条：0 表示已经到最早的一条、正在拉、或者这一页全是重复。
- * 去重按消息身份——滚动触发可能与其它路径的写入并发。
- */
-export async function loadOlderMessages(chatId: string): Promise<number> {
-  const store = useChatStore.getState();
-  const paging = store.messagePaging[chatId];
-  if (!paging || !paging.hasOlder || paging.loading) return 0;
-  store.setMessagePaging(chatId, { ...paging, loading: true });
-  try {
-    const r = await authFetch(
-      `${effectiveApiUrl}/v1/chats/${chatId}/messages`
-      + `?page=${paging.nextPage}&page_size=${MESSAGE_PAGE_SIZE}&order=desc`,
-      { headers: { ...chatTargetHeaders(chatId) } },
-    );
-    if (!r.ok) throw new Error(`older messages: HTTP ${r.status}`);
-    const payload = await r.json();
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const items: any[] = payload?.data?.items || [];
-    const older = items.map(parseHistoryMessage);
-    let added = 0;
-    useChatStore.getState().updateStore((prev) => {
-      const chat = prev.chats[chatId];
-      if (!chat) return prev;
-      const existing = chat.messages || [];
-      const seen = new Set(existing.map((m) => m.uid));
-      const fresh = older.filter((m) => !seen.has(m.uid));
-      added = fresh.length;
-      if (fresh.length === 0) return prev;
-      return {
-        ...prev,
-        chats: {
-          ...prev.chats,
-          [chatId]: { ...chat, messages: markResolvedPlanPreviews([...fresh, ...existing]) },
-        },
-      };
-    });
-    useChatStore.getState().setMessagePaging(chatId, {
-      nextPage: paging.nextPage + 1,
-      hasOlder: !!payload?.data?.pagination?.has_next,
-      loading: false,
-    });
-    return added;
-  } catch {
-    // 失败就把 loading 放掉，让下一次滚动重试；不改 nextPage，不丢游标。
-    const latest = useChatStore.getState().messagePaging[chatId];
-    if (latest) useChatStore.getState().setMessagePaging(chatId, { ...latest, loading: false });
-    return 0;
-  }
-}
-
-/** 服务端会话行 → 侧边栏条目。`prior` 是刷新前本地已有的同一会话（保留手动改名、模式开关等本地态）。 */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function sessionToChatItem(s: any, prior?: ChatItem): ChatItem {
-  const id: string = s.chat_id;
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const meta = (s.metadata || {}) as any;
-  // 手动重命名保护：后端已带 title_manually_set 直接用；本地改过名但还没
-  // 同步到后端（流式期间改名后刷新）→ 保留本地标题，后续流结束时自动补同步
-  const localManual = prior?.titleManuallySet === true;
-  const backendManual = meta.title_manually_set === true;
-  const preservedTitle = !backendManual && localManual && prior?.title
-    ? prior.title
-    : (s.title || '新对话');
-  return {
-    id,
-    title: preservedTitle,
-    ...(backendManual || localManual ? { titleManuallySet: true } : {}),
-    createdAt: s.created_at ? new Date(s.created_at).getTime() : Date.now(),
-    updatedAt: s.updated_at ? new Date(s.updated_at).getTime() : Date.now(),
-    messages: [],
-    favorite: !!s.favorite,
-    pinned: !!s.pinned,
-    businessTopic: meta.businessTopic || '综合咨询',
-    agentId: meta.agent_id || undefined,
-    agentName: meta.agent_name || undefined,
-    planChat: meta.plan_chat === true ? true : undefined,
-    ...(typeof prior?.planModeActive === 'boolean'
-      ? { planModeActive: prior.planModeActive }
-      : {}),
-    batchChat: meta.batch_chat === true ? true : undefined,
-    ...(typeof prior?.batchModeActive === 'boolean'
-      ? { batchModeActive: prior.batchModeActive }
-      : {}),
-    workflowChat: meta.workflow_chat === true ? true : undefined,
-    ...(typeof prior?.workflowModeActive === 'boolean'
-      ? { workflowModeActive: prior.workflowModeActive }
-      : {}),
-    automationTaskId: typeof meta.automation_task_id === 'string' ? meta.automation_task_id : undefined,
-    automationRun: meta.automation_run === true ? true : undefined,
-    planProgress: toPlanProgress(meta.plan_progress),
-    // When the backend session hasn't bound project_id (e.g. bound locally via the input-box dropdown, not yet persisted with a message),
-    // keep the locally bound projectId/projectName — otherwise the session would fall back to the default project after refresh. The next send
-    // carries project_id and self-heals into the DB.
-    projectId: (typeof s.project_id === 'string' && s.project_id)
-      ? s.project_id
-      : (prior?.projectId || undefined),
-    projectName: prior?.projectName || undefined,
-    ...(prior?.runTarget === 'local' ? { runTarget: 'local' as const } : {}),
-  };
-}
-
-const pendingReloads = new Map<string, Promise<boolean>>();
-
-/**
- * 取这个会话的最近一页并并进本地。首屏加载、对账、重挂、回放收尾、后端自起轮次——
- * 所有需要历史的地方都走这里。服务端那一行从轮次接纳起就存在并持续刷新，所以这一页
- * 天然包含正在跑的那一轮。同一会话并发的请求合并成一次。
- */
-export function reloadChatHistory(chatId: string): Promise<boolean> {
-  const pending = pendingReloads.get(chatId);
-  if (pending) return pending;
-  const task = fetchAndMergeHistoryPage(chatId).finally(() => pendingReloads.delete(chatId));
-  pendingReloads.set(chatId, task);
-  return task;
-}
-
-async function fetchAndMergeHistoryPage(chatId: string): Promise<boolean> {
-  const r = await authFetch(
-    `${effectiveApiUrl}/v1/chats/${chatId}/messages?page=1&page_size=${MESSAGE_PAGE_SIZE}&order=desc`,
-    { headers: { ...chatTargetHeaders(chatId) } },
-  );
-  if (!r.ok) return false;
-  const payload = await r.json();
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const items: any[] = payload?.data?.items || [];
-  const page = items.map(parseHistoryMessage);
-  const { hasPlanMessages, pendingPlanId } = scanPlanSnapshots(items);
-  const st = useChatStore.getState();
-  if (Object.prototype.hasOwnProperty.call(payload?.data || {}, 'context_usage')) {
-    st.setContextUsage(chatId, parseContextUsageSnapshot(payload.data.context_usage));
-  }
-  if (Object.prototype.hasOwnProperty.call(payload?.data || {}, 'context_compaction')) {
-    st.setContextCompaction(chatId, parseContextCompactionState(payload.data.context_compaction));
-  }
-  // 更早的页可能已经滚上去加载过了，游标只能前进不能回拨。
-  st.setMessagePaging(chatId, {
-    nextPage: Math.max(2, st.messagePaging[chatId]?.nextPage ?? 0),
-    hasOlder: !!payload?.data?.pagination?.has_next,
-    loading: false,
-  });
-  st.updateStore((prev) => {
-    const c = prev.chats[chatId];
-    if (!c) return prev;
-    const merged = mergeHistoryPage(c.messages || [], page, {
-      localIsWriter: useChatStore.getState().sendingChatIds.has(chatId),
-    });
-    return {
-      ...prev,
-      chats: {
-        ...prev.chats,
-        [chatId]: {
-          ...c,
-          messages: markResolvedPlanPreviews(merged),
-          ...(hasPlanMessages && !c.planChat ? { planChat: true } : {}),
-        },
-      },
-    };
-  });
-  st.addLoadedMsgId(chatId);
-  const latest = useChatStore.getState();
-  if (chatId !== latest.currentChatId) return true;
-  if (hasPlanMessages && shouldRestorePlanModeFromHistory(latest.store.chats[chatId]) && !latest.planMode) {
-    latest.setPlanMode(true);
-  }
-  if (pendingPlanId) latest.setCurrentPlanId(pendingPlanId);
-  return true;
-}
-
-/**
- * 把这个会话剩下的历史全部补齐（一页一页续拉，直到没有更早的）。
- *
- * 常规浏览一律走"只铺第一屏 + 滚动续拉"，但有几件事**必须**看到整段历史：导出 PDF、
- * 计划模式把历史带给后端。这两处在动手前先调一次这里，别拿半截历史当全部。
- * 上限兜一道：真有异常长的会话也不至于在这儿转到天荒地老。
- */
-export async function ensureFullMessages(chatId: string, maxPages = 100): Promise<void> {
-  for (let i = 0; i < maxPages; i += 1) {
-    const paging = useChatStore.getState().messagePaging[chatId];
-    if (!paging?.hasOlder) return;
-    const added = await loadOlderMessages(chatId);
-    // 拉不动了（请求失败 / 整页都是重复）就停，避免空转。
-    if (added === 0 && !useChatStore.getState().messagePaging[chatId]?.loading) return;
-  }
-}
-
-// Convert a backend message item (from GET /v1/chats/{id}/messages) into a
-// frontend ChatMessage. Pure — used by both the preload path (during initial
-// session fetch) and the lazy-load path (when switching into a never-loaded
-// chat). Adding new fields persisted in metadata? Add them here, both paths
-// pick it up automatically.
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export function parseHistoryMessage(m: any): ChatMessage {
-  const allToolCalls: ToolCall[] | undefined = Array.isArray(m.tool_calls) && m.tool_calls.length > 0
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    ? m.tool_calls.map((tc: any) => ({
-        id: tc.tool_id ?? tc.id,
-        name: stripMcpToolPrefix(tc.tool_name ?? tc.name ?? t('工具调用')),
-        // in old history, tool_display_name may be the raw mcp__ name echoed back by the backend — discard it,
-        // and let the TOOL_NAME_OVERRIDES / toolDisplayNames lookup chain take over by bare name.
-        displayName: ((d) => (typeof d === 'string' && d.startsWith('mcp__') ? undefined : d))(
-          tc.tool_display_name ?? tc.displayName,
-        ),
-        input: tc.tool_args ?? tc.arguments ?? tc.input,
-        output: tc.result ?? tc.output,
-        status: (tc.status === 'error'
-          ? 'error'
-          : tc.status === 'interrupted'
-            ? 'interrupted'
-            : 'success') as 'success' | 'error' | 'interrupted',
-        // 后端把开始时刻与耗时一并落库，历史因此能还原出这次调用真实占了多久；
-        // 拿不到就不给值，让卡片不显示耗时，而不是拿"这张卡刚画出来"当起点。
-        timestamp: typeof tc.started_at === 'number' ? tc.started_at : tc.timestamp,
-        ...(typeof tc.duration_ms === 'number' ? { durationMs: tc.duration_ms } : {}),
-        // sub-agent internal process (thinking + tool calls) — replayed from the DB after refresh
-        ...(Array.isArray(tc.sub_steps ?? tc.subSteps)
-          ? { subSteps: (tc.sub_steps ?? tc.subSteps) }
-          : {}),
-        ...(tc.subagent_name ?? tc.subagentName
-          ? { subagentName: tc.subagent_name ?? tc.subagentName }
-          : {}),
-        ...(typeof tc.scope === 'string' ? { scope: tc.scope } : {}),
-        // 历史列表只给了梗概；展开这张卡时 ToolCallRow 会按需回取完整结果。
-        ...(tc.result_truncated === true ? { outputTruncated: true } : {}),
-      }))
-    : undefined;
-  const revisionToolCalls = allToolCalls?.filter((tool) => tool.scope === 'ontology_revision') ?? [];
-  const baseToolCalls = allToolCalls?.filter((tool) => tool.scope !== 'ontology_revision');
-  const metadataArtifacts = Array.isArray(m.metadata?.artifacts) ? m.metadata.artifacts : [];
-  const toolCalls = attachArtifactsToToolCalls(
-    baseToolCalls,
-    metadataArtifacts,
-    m.created_at ? new Date(m.created_at).getTime() : Date.now(),
-  );
-
-  const rawContent = String(m.content || '');
-  // 思考单独存一列（新消息）；老消息该字段为空，思考仍内联在 content 里。
-  const storedThinking = Array.isArray(m.thinking)
-    ? (m.thinking as ThinkingBlock[]).filter((b) => b && typeof b.content === 'string')
-    : undefined;
-  // 展示顺序由后端在流式那一刻记下，落在 metadata.segments；这里原样取出。
-  const storedSegments = Array.isArray(m.metadata?.segments)
-    ? (m.metadata.segments as StoredSegment[])
-    : undefined;
-  let { segments, cleanContent } = m.role === 'assistant'
-    ? buildHistorySegments(rawContent, toolCalls, storedThinking, storedSegments)
-    : { segments: undefined, cleanContent: rawContent };
-
-  // Reconstruct plan segment from saved plan_snapshot metadata
-  const planSnapshot = m.metadata?.plan_snapshot;
-  if (m.role === 'assistant' && planSnapshot && typeof planSnapshot === 'object') {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const snap = planSnapshot as any;
-    const planSeg = {
-      type: 'plan' as const,
-      planData: {
-        mode: (snap.mode || 'complete') as 'preview' | 'executing' | 'complete',
-        planId: m.metadata?.plan_id ? String(m.metadata.plan_id) : undefined,
-        title: String(snap.title || ''),
-        description: snap.description ? String(snap.description) : undefined,
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        steps: Array.isArray(snap.steps) ? snap.steps.map((s: any) => ({
-          step_order: Number(s.step_order ?? 0),
-          title: String(s.title || ''),
-          description: s.description ? String(s.description) : undefined,
-          expected_tools: Array.isArray(s.expected_tools) ? s.expected_tools : [],
-          expected_skills: Array.isArray(s.expected_skills) ? s.expected_skills : [],
-          expected_agents: Array.isArray(s.expected_agents) ? s.expected_agents : [],
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          status: s.status as any,
-          summary: s.summary ? String(s.summary) : undefined,
-          text: s.ai_output ? String(s.ai_output) : undefined,
-        })) : [],
-        completedSteps: snap.completed_steps != null ? Number(snap.completed_steps) : undefined,
-        totalSteps: snap.total_steps != null ? Number(snap.total_steps) : undefined,
-        resultText: snap.result_text ? String(snap.result_text) : undefined,
-        agentNameMap: snap.agent_name_map || undefined,
-        // 中断状态要跟着历史一起回来：不带这一位的话，用户停掉的那一轮在下次
-        // 拉历史后又渲染成「执行中」的转圈，看起来像自己又跑起来了。
-        ...(snap.cancelled === true ? { cancelled: true } : {}),
-      },
-    };
-    // Place plan segment first; add tool segments from saved tool_calls; then text.
-    // In preview/executing mode, suppress the auto-generated "已生成执行计划：…"
-    // text the backend stores as message content — the plan card already shows it.
-    const toolSegs: typeof segments = toolCalls
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      ? toolCalls.map((_tc: any, idx: number) => ({ type: 'tool' as const, toolIndex: idx }))
-      : [];
-    const textSegments = snap.mode === 'complete' && snap.result_text
-      ? [{ type: 'text' as const, content: String(snap.result_text) }]
-      : [];
-    segments = [planSeg, ...toolSegs, ...textSegments];
-    cleanContent = snap.mode === 'complete' && snap.result_text
-      ? String(snap.result_text)
-      : '';
-  }
-
-  const rawAttachments = m.role === 'user' && Array.isArray(m.metadata?.attachments)
-    ? m.metadata.attachments as Array<{ name: string; mime_type?: string; file_id?: string; download_url?: string }>
-    : undefined;
-  // Ensure download_url is populated from file_id when missing
-  const histAttachments = rawAttachments?.map(att => ({
-    ...att,
-    download_url: att.download_url || (att.file_id ? `/files/${att.file_id}` : undefined),
-  }));
-  const histCitations = Array.isArray(m.metadata?.citations)
-    ? m.metadata.citations as CitationItem[]
-    : Array.isArray(m.citations)
-    ? m.citations as CitationItem[]
-    : undefined;
-  const histFollowUps = Array.isArray(m.metadata?.follow_up_questions)
-    ? m.metadata.follow_up_questions as string[]
-    : undefined;
-  const histQuotedFollowUp = m.role === 'user' && m.metadata?.quoted_follow_up && typeof m.metadata.quoted_follow_up === 'object'
-    ? {
-      text: String((m.metadata.quoted_follow_up as Record<string, unknown>).text ?? ''),
-      ts: Number((m.metadata.quoted_follow_up as Record<string, unknown>).ts ?? 0) || undefined,
-    }
-    : undefined;
-  const histReferencedChats = m.role === 'user' && Array.isArray(m.metadata?.referenced_chats)
-    ? (m.metadata.referenced_chats as ReferencedChatCard[])
-    : undefined;
-  const histWorkspaceFiles = Array.isArray(m.metadata?.workspace_files)
-    ? (m.metadata.workspace_files as unknown[])
-        .filter((x): x is string => typeof x === 'string' && x.trim().length > 0)
-    : undefined;
-  const rawEvolution = m.role === 'assistant'
-    && m.metadata?.evolution
-    && typeof m.metadata.evolution === 'object'
-    ? m.metadata.evolution as Partial<EvolutionSummary>
-    : undefined;
-  const histEvolution: EvolutionSummary | undefined = rawEvolution
-    && ['pending', 'settled', 'failed', 'empty'].includes(String(rawEvolution.state))
-    ? rawEvolution as EvolutionSummary
-    : undefined;
-  const rawOntologyGovernance = m.role === 'assistant'
-    && m.metadata?.ontology_governance
-    && typeof m.metadata.ontology_governance === 'object'
-    ? m.metadata.ontology_governance as Partial<OntologyGovernanceSummary>
-    : undefined;
-  const histOntologyGovernance: OntologyGovernanceSummary | undefined = rawOntologyGovernance
-    ? {
-        governance_run_id: rawOntologyGovernance.governance_run_id,
-        activations: Array.isArray(rawOntologyGovernance.activations) ? rawOntologyGovernance.activations : [],
-        gates: Array.isArray(rawOntologyGovernance.gates) ? rawOntologyGovernance.gates : [],
-        review: rawOntologyGovernance.review && typeof rawOntologyGovernance.review === 'object'
-          ? rawOntologyGovernance.review
-          : {},
-        revision: (rawOntologyGovernance.review
-          && typeof rawOntologyGovernance.review === 'object'
-          && typeof rawOntologyGovernance.review.candidate_answer === 'string'
-          && rawOntologyGovernance.review.candidate_answer)
-          || revisionToolCalls.length > 0
-          ? {
-              status: 'completed',
-              content: typeof rawOntologyGovernance.review?.candidate_answer === 'string'
-                ? rawOntologyGovernance.review.candidate_answer
-                : '',
-              thinking: [],
-              toolCalls: revisionToolCalls,
-              toolCallCount: revisionToolCalls.length,
-            }
-          : undefined,
-      }
-    : undefined;
-
-  // Citation badges (/skills, /plugins, @sub-agents) are rebuilt from extra_data so they still show after a history session refresh.
-  const histSkillName = m.role === 'user' && typeof m.metadata?.skill_name === 'string'
-    ? m.metadata.skill_name as string : undefined;
-  const histSkillId = m.role === 'user' && typeof m.metadata?.skill_id === 'string'
-    ? m.metadata.skill_id as string : undefined;
-  const histPluginName = m.role === 'user' && typeof m.metadata?.plugin_name === 'string'
-    ? m.metadata.plugin_name as string : undefined;
-  const histConnectorName = m.role === 'user' && typeof m.metadata?.connector_name === 'string'
-    ? m.metadata.connector_name as string : undefined;
-  const histMentionName = m.role === 'user' && typeof m.metadata?.mention_name === 'string'
-    ? m.metadata.mention_name as string : undefined;
-  // The @sub-agent routing prefix was written into the persisted body ("@name body"); when there's a mention badge, strip it,
-  // otherwise the body would display it once more, duplicating the badge.
-  if (histMentionName) {
-    const prefix = `@${histMentionName} `;
-    if (cleanContent.startsWith(prefix)) cleanContent = cleanContent.slice(prefix.length);
-    else if (cleanContent === `@${histMentionName}`) cleanContent = '';
-  }
-
-  return {
-    role: (m.role === 'assistant' ? 'assistant' : 'user') as 'user' | 'assistant',
-    content: cleanContent,
-    isMarkdown: !!(m.metadata?.is_markdown),
-    // message_id 是 chat_messages 的主键，历史消息一定带；它就是这条消息的身份。
-    uid: String(m.message_id),
-    ts: m.created_at ? new Date(m.created_at).getTime() : Date.now(),
-    toolCalls,
-    segments,
-    ...(histCitations && histCitations.length > 0 && { citations: histCitations }),
-    ...(histFollowUps && histFollowUps.length > 0 && { followUpQuestions: histFollowUps }),
-    ...(histAttachments && histAttachments.length > 0 && { attachments: histAttachments }),
-    ...(histQuotedFollowUp?.text && { quotedFollowUp: histQuotedFollowUp }),
-    ...(histReferencedChats && histReferencedChats.length > 0 && { referencedChats: histReferencedChats }),
-    ...(histWorkspaceFiles !== undefined && { workspaceFiles: histWorkspaceFiles }),
-    ...(histEvolution && { evolution: histEvolution }),
-    ...(histOntologyGovernance && { ontologyGovernance: histOntologyGovernance }),
-    ...(histSkillId && { skillId: histSkillId }),
-    ...(histSkillName && { skillName: histSkillName }),
-    ...(histPluginName && { pluginName: histPluginName }),
-    ...(histConnectorName && { connectorName: histConnectorName }),
-    ...(histMentionName && { mentionName: histMentionName }),
-    ...(typeof m.message_id === 'string' && m.message_id && { messageId: m.message_id }),
-    ...(m.role === 'assistant' && typeof m.metadata?.duration_ms === 'number' && m.metadata.duration_ms >= 0
-      && { durationMs: m.metadata.duration_ms }),
-    // 后端在轮次接纳时就建好了这一行、跑的过程中持续刷新：带 in_flight 的就是
-    // 正在跑的那一轮。按活气泡渲染，跟随流的时候从 event_offset 接着补，不从头重放。
-    ...(m.role === 'assistant' && m.in_flight && {
-      isStreaming: true,
-      inFlight: {
-        ...(typeof m.in_flight.event_offset === 'number' && { eventOffset: m.in_flight.event_offset as number }),
-      },
-    }),
-    ...(m.role === 'assistant' && m.error && typeof m.error.error === 'string' && { error: m.error.error as string }),
-  } as ChatMessage;
-}
+/** 人在窗口前时「别处在跑」与新会话的对账间隔。 */
+const RUNNING_REFRESH_MS = 15_000;
 
 export function useChatInit() {
   const { authUser, authExpiredUrl, authChecking, initAuth } = useAuthStore();
   const { loadMemorySettings, loadOntologySettings } = useSettingsStore();
   const { setFeatureUpdates } = useUIStore();
   const {
-    updateStore, setCurrentChatId, setChatsLoading, setToolDisplayNames,
+    updateStore, adoptChatFromUrl, setChatsLoading, setToolDisplayNames,
     addBackendSessionId, clearBackendSessionIds,
     clearLoadedMsgIds,
     currentChatId, sessionLoadEpoch, bumpSessionLoadEpoch,
     hydrateForUser,
   } = useChatStore();
-  const { catalog, setCatalog, setCatalogLoading, panel, setPanel } = useCatalogStore();
+  const fetchCatalog = useCatalogStore((state) => state.fetchCatalog);
+  const panel = usePanel();
 
   const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -532,36 +87,12 @@ export function useChatInit() {
       .catch(() => {});
   }, [panel, authChecking, authUser, setFeatureUpdates]);
 
-  // Persist catalog
-  useEffect(() => {
-    saveCatalog(catalog);
-  }, [catalog]);
-
-  // Refresh catalog from backend
-  const refreshCatalog = async () => {
-    setCatalogLoading(true);
-    try {
-      const r = await authFetch(`${effectiveApiUrl}/v1/catalog`, { method: 'GET' });
-      if (!r.ok) { setCatalogLoading(false); return; }
-      const payload = await r.json();
-      const remote = payload?.data ?? payload;
-      if (!remote || typeof remote !== 'object') { setCatalogLoading(false); return; }
-      const next: Catalog = {
-        skills: Array.isArray(remote.skills) ? remote.skills : [],
-        agents: Array.isArray(remote.agents) ? remote.agents : [],
-        mcp: Array.isArray(remote.mcp) ? remote.mcp : [],
-        kb: Array.isArray(remote.kb) ? remote.kb : [],
-      };
-      setCatalog(next);
-    } catch {} finally {
-      setCatalogLoading(false);
-    }
-  };
-
+  // 能力目录只有 catalogStore.fetchCatalog 一个取法；这里曾经另写过一份等价实现，
+  // 两份分别演化就会出现「同一个开关两个页面显示不一样」。
   useEffect(() => {
     if (authChecking || !authUser) return;
-    refreshCatalog();
-  }, [effectiveApiUrl, authUser, authChecking]);
+    void fetchCatalog();
+  }, [effectiveApiUrl, authUser, authChecking, fetchCatalog]);
 
   // Fetch tool display names
   useEffect(() => {
@@ -601,9 +132,10 @@ export function useChatInit() {
     const fetchSessions = async () => {
       setChatsLoading(true);
       try {
-        const r = await authFetch(`${effectiveApiUrl}/v1/chats?page_size=100&exclude_automation=true`);
+        const r = await authFetch(`${effectiveApiUrl}/v1/chats?page_size=100`);
         if (!r.ok || cancelled) return;
         const payload = await r.json();
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const items: any[] = payload?.data?.items || [];
         // 云端会话先上屏；双模式下本机会话由下面的就绪效应并入，不让侧边栏等本机启动。
         const chats: Record<string, ChatItem> = {};
@@ -627,23 +159,21 @@ export function useChatInit() {
             const mergedServerChats: Record<string, ChatItem> = {};
             for (const [id, serverChat] of Object.entries(chats)) {
               const active = prev.chats[id]?.planModeActive;
-              const batchActive = prev.chats[id]?.batchModeActive;
               mergedServerChats[id] = {
                 ...serverChat,
                 ...(typeof active === 'boolean' ? { planModeActive: active } : {}),
-                ...(typeof batchActive === 'boolean' ? { batchModeActive: batchActive } : {}),
               };
             }
-            const preserved: Record<string, ChatItem> = {};
-            const preservedOrder: string[] = [];
-            for (const id of localSnapshot.order) {
-              const localChat = localSnapshot.chats[id];
-              const hasMessages = Array.isArray(localChat?.messages) && localChat.messages.length > 0;
-              if (!mergedServerChats[id] && localChat && hasMessages && !isAutomationHistoryChat(localChat)) {
-                preserved[id] = localChat;
-                preservedOrder.push(id);
-              }
-            }
+            // 保留判定看**来源**（见 utils/sessionRebuild）：本机会话不在云端名单里
+            // 是天经地义的，不能当成它已过期。
+            const kept = preservedChatsOnRebuild(
+              new Set(Object.keys(mergedServerChats)),
+              prev,
+              localSnapshot,
+              isLocalSidebarChat,
+            );
+            const preserved = kept.chats;
+            const preservedOrder = kept.order;
             // A pending server list must not erase a newly selected execution target.
             const currentId = useChatStore.getState().currentChatId;
             const draft = prev.chats[currentId];
@@ -657,28 +187,19 @@ export function useChatInit() {
             };
           });
 
-          // On a fresh login (SSO ticket exchange) always land on the home page
-          // (chat panel + a brand-new empty chat → recommend banner). On a plain
-          // browser refresh, restore the previously-selected chat and keep the
-          // user on whichever panel they were on (sub-agents / knowledge base / app center / my space, etc.).
-          const isFreshLogin = typeof window !== 'undefined'
-            && window.sessionStorage.getItem(LOGIN_LANDING_KEY) === '1';
           const allChats = { ...chats };
-          // 恢复目标：非新登录一律保留原会话 id（问题14/17）。后端已有 → 恢复
-          // 历史；后端没有（正在流式输出首条消息、或本地空会话）→ 保留同一 id：
-          // 空会话渲染出来就是空首页，与生成新 id 的 UX 等价，但指针稳定——
-          // 不会把新 id 写回共享 localStorage 去覆盖别的标签页的恢复目标。
-          const targetChatId = isFreshLogin ? nowId('chat') : (prevChatId || nowId('chat'));
-          if (isFreshLogin) setPanel('chat');
-          setCurrentChatId(targetChatId);
+          // 恢复目标就是地址栏指的那段会话（prevChatId 已由 hydrateForUser 从地址读出）。
+          // 后端已有 → 恢复历史；后端没有（正在流式输出首条消息、或本地会话还没并进来）
+          // → 保留同一 id，空会话渲染出来就是空首页。
+          //
+          // 用 adopt 而不是 setCurrentChatId：这里的输入本来就来自地址栏，再走一遍
+          // 写地址的动作，会在会话列表尚未合并完时把「还没进历史」误判成草稿，
+          // 把用户刚点开的那条链接退回首页。
+          const targetChatId = prevChatId || newDraftChatId(authUserId);
+          adoptChatFromUrl(targetChatId);
           // Bump epoch so the lazy-load messages effect re-fires even when
-          // currentChatId hasn't changed (e.g. page refresh restores the
-          // same chat ID from localStorage).
+          // currentChatId hasn't changed (e.g. the same chat id is restored from the URL).
           bumpSessionLoadEpoch();
-          // Clean up legacy login landing flag if present
-          if (typeof window !== 'undefined') {
-            window.sessionStorage.removeItem(LOGIN_LANDING_KEY);
-          }
 
           // Pre-load messages for the target chat BEFORE clearing chatsLoading,
           // so the user never sees the empty home page flash.
@@ -709,23 +230,18 @@ export function useChatInit() {
             }
           }
         }
-      } catch {} finally {
+      } catch { /* Lazy history loading remains available after a session-list failure. */ } finally {
         if (!cancelled) setChatsLoading(false);
       }
     };
 
     fetchSessions();
-
-    // Load sidebar-activated automation tasks (non-blocking)
-    const fetchSidebarAutomations = async () => {
-      try {
-        const { listSidebarAutomations } = await import('../api');
-        const tasks = await listSidebarAutomations();
-        if (cancelled) return;
-        useAutomationChatStore.getState().setSidebarTasks(tasks);
-      } catch { /* ignore — sidebar automation entries are optional */ }
-    };
-    fetchSidebarAutomations();
+    // 本机那一面和云端并行拉、各自到达即上屏，不让侧边栏等本机启动。本机执行面
+    // 这一刻可能还在装（客户端更新后必然如此）——就绪后下面的效应会再并一次。
+    if (isHybridDual()) {
+      mergeLocalSessions(effectiveApiUrl, () => cancelled)
+        .catch(() => { /* 本机执行面暂不可达：就绪效应会重来 */ });
+    }
 
     // 侧边栏「运行中」小圆点：本标签页只知道自己挂着的流，换设备 / 换浏览器登录时
     // 得问一次服务端才知道哪些会话还在跑（非阻塞，失败留给下一次刷新）。
@@ -736,68 +252,34 @@ export function useChatInit() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [effectiveApiUrl, authUserId, authChecking]);
 
-  // 窗口重新切回前台时再问一次"哪些会话还在跑"。
+  // 「别处在跑」对账的唯一入口：切回前台立刻问一次，人在窗口前时每 RUNNING_REFRESH_MS 再问。
   //
-  // 这盏灯反映的是别处（另一台设备 / 另一个标签页）的进度，本标签页收不到它的
-  // 事件，所以跑完之后得有人来灭灯。挂在"切回前台"上而不是定时轮询：人不在这个
-  // 窗口前时灯亮不亮没人看，没必要为此持续给服务端加压。
+  // 这盏灯反映的是别处（另一台设备 / 另一个标签页 / Personal Agent）的进度，本标签页
+  // 收不到它的事件，所以跑完之后得有人来灭灯；别处新开的会话也借这份运行列表并进侧边栏。
+  // 隐藏的标签页不请求：人不在窗口前时灯亮不亮没人看。
   useEffect(() => {
     if (authChecking || !authUserId) return;
     const refresh = () => {
       if (document.visibilityState !== 'visible') return;
-      useChatStore.getState().refreshRemoteRunningChats().catch(() => { /* 下次切回来再试 */ });
+      useChatStore.getState().refreshRemoteRunningChats().catch(() => { /* 下一次再问 */ });
     };
+    const timer = window.setInterval(refresh, RUNNING_REFRESH_MS);
     document.addEventListener('visibilitychange', refresh);
     window.addEventListener('focus', refresh);
     return () => {
+      window.clearInterval(timer);
       document.removeEventListener('visibilitychange', refresh);
       window.removeEventListener('focus', refresh);
     };
   }, [authUserId, authChecking]);
 
-  // 双模式：本机执行面就绪（可能晚于首屏）后把本机会话并进侧边栏，并登记 chat→本机
-  // 路由。不动当前会话指针；当前会话正是本机的时候，重新触发它的历史加载。
+  // 双模式：本机执行面就绪（可能晚于首屏）后再并一次本机会话。就绪帧意味着壳已经
+  // 成功把身份推给本机后端，所以此刻它一定起得来——首屏那次没赶上的，这次补齐。
   useEffect(() => {
     if (authChecking || !authUserId || !isHybridDual() || !localReady) return;
     let cancelled = false;
-    import('../api').then(({ listSidebarAutomations }) => listSidebarAutomations())
-      .then(tasks => { if (!cancelled) useAutomationChatStore.getState().setSidebarTasks(tasks); })
-      .catch(() => { /* Next sidebar refresh retries both execution planes. */ });
-    (async () => {
-      try {
-        const r = await authFetch(
-          `${effectiveApiUrl}/v1/chats?page_size=100&exclude_automation=true`,
-          { headers: { [LOCAL_TARGET_HEADER]: 'local' } },
-        );
-        if (!r.ok || cancelled) return;
-        const payload = await r.json();
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const items: any[] = payload?.data?.items || [];
-        if (!items.length) return;
-        const snapshot = useChatStore.getState().store;
-        const currentChat = useChatStore.getState().currentChatId;
-        let currentIsLocal = false;
-        updateStore((prev) => {
-          const chats = { ...prev.chats };
-          const order = [...prev.order];
-          for (const s of items) {
-            const id: string = s.chat_id;
-            registerLocalChat(id);
-            addBackendSessionId(id);
-            if (!chats[id]) {
-              chats[id] = sessionToChatItem(s, snapshot.chats[id]);
-              order.push(id);
-            }
-            chats[id] = { ...chats[id], runTarget: 'local' };
-            if (id === currentChat) currentIsLocal = true;
-          }
-          return { ...prev, chats, order };
-        });
-        if (currentIsLocal) bumpSessionLoadEpoch();
-      } catch {
-        /* 本机执行面这一刻不可达：下一次就绪事件会再来一遍 */
-      }
-    })();
+    mergeLocalSessions(effectiveApiUrl, () => cancelled)
+      .catch(() => { /* 下一次侧边栏加载还会两面都问 */ });
     return () => { cancelled = true; };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [effectiveApiUrl, authUserId, authChecking, localReady]);
@@ -820,9 +302,10 @@ export function useChatInit() {
     st.setPlanProgress(chatId, persisted);
   }, [currentChatId, sessionLoadEpoch]);
 
-  // Lazy-load messages for current chat
+  // User identity owns history. Renewed expiry/profile/capability fields must
+  // not restart hydration while the same account is streaming a response.
   useEffect(() => {
-    if (authChecking || !authUser) return;
+    if (authChecking || !authUserId) return;
     const chatId = currentChatId;
     const state = useChatStore.getState();
     if (state.loadedMsgIds.has(chatId)) return;
@@ -849,44 +332,14 @@ export function useChatInit() {
         return false;
       }
       try {
-        const sr = await authFetch(`${effectiveApiUrl}/v1/chats/${chatId}`);
+        const sr = await authFetch(`${effectiveApiUrl}/v1/chats/${chatId}`, { headers: chatTargetHeaders(chatId) });
         if (!sr.ok || cancelled) return false;
         const sp = await sr.json();
         const s = sp?.data;
         if (!s || !s.chat_id) return false;
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const meta = (s.metadata || {}) as any;
+        if (cancelled) return false;
         updateStore(prev => {
-          const newChatItem: ChatItem = {
-            id: s.chat_id,
-            title: s.title || '新对话',
-            ...(meta.title_manually_set === true ? { titleManuallySet: true } : {}),
-            createdAt: s.created_at ? new Date(s.created_at).getTime() : Date.now(),
-            updatedAt: s.updated_at ? new Date(s.updated_at).getTime() : Date.now(),
-            messages: [],
-            favorite: !!s.favorite,
-            pinned: !!s.pinned,
-            businessTopic: meta.businessTopic || '综合咨询',
-            agentId: meta.agent_id || undefined,
-            agentName: meta.agent_name || undefined,
-            planChat: meta.plan_chat === true ? true : undefined,
-            ...(typeof prev.chats[s.chat_id]?.planModeActive === 'boolean'
-              ? { planModeActive: prev.chats[s.chat_id].planModeActive }
-              : {}),
-            batchChat: meta.batch_chat === true ? true : undefined,
-            ...(typeof prev.chats[s.chat_id]?.batchModeActive === 'boolean'
-              ? { batchModeActive: prev.chats[s.chat_id].batchModeActive }
-              : {}),
-            automationTaskId: typeof meta.automation_task_id === 'string' ? meta.automation_task_id : undefined,
-            automationRun: meta.automation_run === true ? true : undefined,
-            workflowChat: meta.workflow_chat === true ? true : undefined,
-            planProgress: toPlanProgress(meta.plan_progress),
-            // Same as above: when the backend hasn't bound project_id, keep the local binding to avoid falling back to the default project on refresh.
-            projectId: (typeof s.project_id === 'string' && s.project_id)
-              ? s.project_id
-              : (prev.chats[s.chat_id]?.projectId || undefined),
-            projectName: prev.chats[s.chat_id]?.projectName || undefined,
-          };
+          const newChatItem = sessionToChatItem(s, prev.chats[s.chat_id]);
           return {
             ...prev,
             chats: { ...prev.chats, [s.chat_id]: newChatItem },
@@ -947,79 +400,13 @@ export function useChatInit() {
 
     fetchMessages();
     return () => { cancelled = true; };
-  }, [currentChatId, effectiveApiUrl, authUser, authChecking, sessionLoadEpoch]);
+  }, [currentChatId, effectiveApiUrl, authUserId, authChecking, sessionLoadEpoch]);
 
-  // ── Reconnect / hydrate batch executions when this chat opens ──
-  // - Active plans (confirmed/running): re-attach the SSE stream; the
-  //   orchestrator runs as a detached server-side task so refresh
-  //   doesn't kill it.
-  // - Finished plans (done/failed): hydrate the panel directly from
-  //   plan.item_results — no fake "in-progress" pulse, no replay flicker.
-  useEffect(() => {
-    if (authChecking || !authUser) return;
-    const chatId = currentChatId;
-    if (!chatId) return;
-    let cancelled = false;
-    (async () => {
-      try {
-        const plans = await listActiveBatchPlans(chatId);
-        if (cancelled) return;
-        // Hydrate finished plans + reconnect to running ones in parallel
-        // so users with multiple historical batches don't wait for N
-        // sequential GETs.
-        await Promise.all(plans.map(async (p) => {
-          const meta: BatchPlanMeta = {
-            plan_id: p.plan_id,
-            total: p.items_total,
-            source_type: p.source_type as BatchSourceType,
-            preview: p.items_preview as Record<string, unknown>[],
-            default_template: p.prompt_template,
-            placeholder_keys: p.placeholder_keys,
-            chat_id: chatId,
-          };
-
-          if (p.status !== 'done' && p.status !== 'failed') {
-            useBatchStore.getState().connectStream(p.plan_id, meta);
-            return;
-          }
-          // Finished — pull the per-item results directly and render
-          // as a static snapshot. Saves an SSE round-trip and keeps
-          // the sidebar pulse off (work is already done).
-          try {
-            const detail = await getBatchPlan(p.plan_id);
-            if (cancelled) return;
-            const results = (detail.item_results || []).map((r) => ({
-              index: r.index,
-              status: r.status,
-              content: r.content,
-              error: r.error,
-              retry_count: r.retry_count,
-              // Backend returns these as opaque arrays; BatchItemBubble
-              // normalizes snake_case → camelCase per item.
-              tool_calls: (Array.isArray(r.tool_calls) ? r.tool_calls : undefined) as BatchItemResult['tool_calls'],
-              artifacts: Array.isArray(r.artifacts) ? r.artifacts : undefined,
-              citations: (Array.isArray(r.citations) ? r.citations : undefined) as BatchItemResult['citations'],
-            } satisfies BatchItemResult));
-            useBatchStore.getState().hydratePlan(
-              meta,
-              p.status as 'done' | 'failed',
-              results,
-              { success: detail.progress?.success ?? 0, failed: detail.progress?.failed ?? 0 },
-            );
-          } catch {
-            // best-effort — chat still works without this plan
-          }
-        }));
-      } catch {
-        // best-effort — chat still works without reattach
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [currentChatId, authUser, authChecking]);
+  useChatResourceRecovery(currentChatId, authChecking ? null : authUserId);
 
   return {
     effectiveApiUrl,
-    refreshCatalog,
+    refreshCatalog: fetchCatalog,
     searchTimerRef,
   };
 }

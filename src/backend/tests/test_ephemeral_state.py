@@ -36,6 +36,32 @@ async def test_put_get_roundtrip(state):
 
 
 @pytest.mark.asyncio
+async def test_hold_takes_a_free_mutex_and_extends_its_own(state):
+    assert await state.hold("role", "worker-a", ttl=60) is True
+    # Renewing is the same call: the holder says "still me" and keeps it.
+    assert await state.hold("role", "worker-a", ttl=60) is True
+
+
+@pytest.mark.asyncio
+async def test_hold_refuses_a_mutex_another_token_owns(state):
+    await state.hold("role", "worker-a", ttl=60)
+
+    assert await state.hold("role", "worker-b", ttl=60) is False
+    # The loser must not have extended or stolen it on the way past.
+    assert await state.hold("role", "worker-a", ttl=60) is True
+
+
+@pytest.mark.asyncio
+async def test_hold_moves_the_mutex_once_it_lapses(state):
+    """A leader that stops renewing hands its role to the next process."""
+    await state.hold("role", "worker-a", ttl=1)
+    await asyncio.sleep(1.05)
+
+    assert await state.hold("role", "worker-b", ttl=60) is True
+    assert await state.hold("role", "worker-a", ttl=60) is False
+
+
+@pytest.mark.asyncio
 async def test_take_reads_once(state):
     """One-shot handoffs (login tickets, steer notes) must not be redeemable twice."""
     await state.put("ticket", "payload", ttl=60)
@@ -93,3 +119,34 @@ async def test_non_positive_ttl_is_rejected_the_same_way(state):
     ):
         with pytest.raises(ValueError, match="positive"):
             await write()
+
+
+@pytest.mark.asyncio
+async def test_release_checks_owner_and_allows_immediate_reacquisition(state):
+    assert await state.hold("desktop", "first", ttl=60)
+    assert not await state.release("desktop", "other")
+    assert await state.get("desktop") == "first"
+    assert await state.release("desktop", "first")
+    assert await state.hold("desktop", "second", ttl=60)
+    assert not await state.release("desktop", "first")
+    assert await state.get("desktop") == "second"
+
+
+@pytest.mark.asyncio
+async def test_guarded_mutation_publishes_both_directions_and_retires_together(state):
+    await state.put("lease", "owner", ttl=60)
+    assert await state.mutate_if({"lease": "owner"}, {"forward": "sandbox", "reverse": "chat"}, ttl=60)
+    assert await state.get("forward") == "sandbox"
+    assert await state.get("reverse") == "chat"
+    assert await state.mutate_if({"lease": "owner", "forward": "sandbox"}, {}, remove=("forward", "reverse"), ttl=60)
+    assert await state.get("forward") is None
+    assert await state.get("reverse") is None
+
+
+@pytest.mark.asyncio
+async def test_guarded_mutation_refuses_old_lease_without_partial_writes_or_deletes(state):
+    await state.put("lease", "new-owner", ttl=60)
+    await state.put("preserve", "value", ttl=60)
+    assert not await state.mutate_if({"lease": "old-owner"}, {"new": "wrong"}, remove=("preserve",), ttl=60)
+    assert await state.get("new") is None
+    assert await state.get("preserve") == "value"

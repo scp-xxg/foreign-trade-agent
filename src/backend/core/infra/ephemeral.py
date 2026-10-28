@@ -20,6 +20,8 @@ import threading
 import time
 from typing import Optional, Protocol, runtime_checkable
 
+from redis.exceptions import WatchError
+
 from core.infra.redis import get_redis, redis_configured
 
 
@@ -44,11 +46,26 @@ class EphemeralState(Protocol):
     caller error and raises ``ValueError`` on either backend.
     """
 
+    async def keys(self, prefix: str) -> list[str]:
+        """List live keys under a namespace."""
+
+    async def compare_exchange(self, key: str, expected: str, value: str, *, ttl: int) -> bool:
+        """Replace an existing value only if it still equals expected."""
+
+    async def release(self, key: str, token: str) -> bool:
+        """Remove a mutex only while it is owned by this token."""
+
     async def get(self, key: str) -> Optional[str]:
         """Read a value, or None when absent/expired."""
 
     async def put(self, key: str, value: str, *, ttl: int) -> None:
         """Write a value that expires after *ttl* seconds."""
+
+    async def mutate_if(
+        self, expected: dict[str, Optional[str]], values: dict[str, str],
+        *, remove: tuple[str, ...] = (), ttl: int,
+    ) -> bool:
+        """Atomically mutate TTL entries only while all ownership guards match."""
 
     async def take(self, key: str) -> Optional[str]:
         """Read and remove in one step (one-shot handoffs)."""
@@ -62,15 +79,73 @@ class EphemeralState(Protocol):
     async def claim(self, key: str, *, ttl: int) -> bool:
         """Take a mutex; True only for the caller that created the entry."""
 
+    async def hold(self, key: str, token: str, *, ttl: int) -> bool:
+        """Take or extend a mutex owned by *token*; True while it is ours.
+
+        ``claim`` can only take a mutex, never extend one, so a holder that must
+        keep a lock alive across many TTLs has no way to say "still me".
+        Renewing through ``put`` would instead let a holder whose lease already
+        lapsed overwrite whoever legitimately took it. ``hold`` expresses both
+        steps against one ownership token, which is what a leader lease needs.
+        """
+
 
 class RedisEphemeralState:
     """Redis-backed implementation for deployments that have one."""
+
+    async def keys(self, prefix: str) -> list[str]:
+        return [key async for key in get_redis().scan_iter(match=prefix + "*", count=128)]
+
+    async def compare_exchange(self, key: str, expected: str, value: str, *, ttl: int) -> bool:
+        async with get_redis().pipeline() as pipe:
+            try:
+                await pipe.watch(key)
+                if await pipe.get(key) != expected:
+                    return False
+                pipe.multi()
+                pipe.set(key, value, ex=_seconds(ttl))
+                await pipe.execute()
+                return True
+            except WatchError:
+                return False
+
+    async def release(self, key: str, token: str) -> bool:
+        async with get_redis().pipeline() as pipe:
+            try:
+                await pipe.watch(key)
+                if await pipe.get(key) != token: return False
+                pipe.multi(); pipe.delete(key)
+                await pipe.execute()
+                return True
+            except WatchError: return False
 
     async def get(self, key: str) -> Optional[str]:
         return await get_redis().get(key)
 
     async def put(self, key: str, value: str, *, ttl: int) -> None:
         await get_redis().set(key, value, ex=_seconds(ttl))
+
+    async def mutate_if(
+        self, expected: dict[str, Optional[str]], values: dict[str, str],
+        *, remove: tuple[str, ...] = (), ttl: int,
+    ) -> bool:
+        expiry = _seconds(ttl)
+        async with get_redis().pipeline() as pipe:
+            try:
+                if expected:
+                    await pipe.watch(*expected)
+                    for key, value in expected.items():
+                        if await pipe.get(key) != value:
+                            return False
+                pipe.multi()
+                for key, value in values.items():
+                    pipe.set(key, value, ex=expiry)
+                if remove:
+                    pipe.delete(*remove)
+                await pipe.execute()
+                return True
+            except WatchError:
+                return False
 
     async def take(self, key: str) -> Optional[str]:
         redis = get_redis()
@@ -95,6 +170,35 @@ class RedisEphemeralState:
     async def claim(self, key: str, *, ttl: int) -> bool:
         return bool(await get_redis().set(key, "1", ex=_seconds(ttl), nx=True))
 
+    async def hold(self, key: str, token: str, *, ttl: int) -> bool:
+        ttl_ms = _seconds(ttl) * 1000
+        redis = get_redis()
+        if await redis.set(key, token, px=ttl_ms, nx=True):
+            return True
+        # Extending has to be atomic with the check that we still own it.
+        # Reading the owner and then extending as two plain commands leaves a
+        # window where the lease lapses in between, and the extend would
+        # resurrect a lock somebody else now holds — two leaders, the one
+        # outcome this must never produce. WATCH makes EXEC fail if the key
+        # moved, which is the same answer as "not ours".
+        #
+        # A Lua script would say this in one round trip, but the test double
+        # this project pins its Redis behaviour against (see the fakeredis note
+        # in requirements.txt) does not run Lua, and an operation that only the
+        # in-process backend can be tested on is worse than one extra round
+        # trip on a call that happens a few times a minute.
+        async with redis.pipeline() as pipe:
+            try:
+                await pipe.watch(key)
+                if await pipe.get(key) != token:
+                    return False
+                pipe.multi()
+                pipe.pexpire(key, ttl_ms)
+                await pipe.execute()
+                return True
+            except WatchError:
+                return False
+
 
 class LocalEphemeralState:
     """In-process implementation for deployments without Redis.
@@ -108,6 +212,21 @@ class LocalEphemeralState:
     def __init__(self) -> None:
         self._entries: dict[str, tuple[float, str]] = {}
         self._lock = threading.Lock()
+
+    async def keys(self, prefix: str) -> list[str]:
+        with self._lock:
+            self._prune(time.time())
+            return [key for key in self._entries if key.startswith(prefix)]
+
+    async def compare_exchange(self, key: str, expected: str, value: str, *, ttl: int) -> bool:
+        with self._lock:
+            now = time.time()
+            self._prune(now)
+            entry = self._entries.get(key)
+            if entry is None or entry[1] != expected:
+                return False
+            self._entries[key] = (now + _seconds(ttl), value)
+            return True
 
     def _read(self, key: str, *, pop: bool = False) -> Optional[str]:
         now = time.time()
@@ -128,6 +247,14 @@ class LocalEphemeralState:
         for key in expired:
             self._entries.pop(key, None)
 
+    async def release(self, key: str, token: str) -> bool:
+        with self._lock:
+            self._prune(time.time())
+            entry = self._entries.get(key)
+            if entry is None or entry[1] != token: return False
+            self._entries.pop(key)
+            return True
+
     async def get(self, key: str) -> Optional[str]:
         return self._read(key)
 
@@ -136,6 +263,23 @@ class LocalEphemeralState:
         with self._lock:
             self._prune(expires_at - ttl)
             self._entries[key] = (expires_at, value)
+
+    async def mutate_if(
+        self, expected: dict[str, Optional[str]], values: dict[str, str],
+        *, remove: tuple[str, ...] = (), ttl: int,
+    ) -> bool:
+        expiry = _seconds(ttl)
+        now = time.time()
+        with self._lock:
+            self._prune(now)
+            for key, value in expected.items():
+                entry = self._entries.get(key)
+                if (entry[1] if entry is not None else None) != value:
+                    return False
+            self._entries.update({key: (now + expiry, value) for key, value in values.items()})
+            for key in remove:
+                self._entries.pop(key, None)
+            return True
 
     async def take(self, key: str) -> Optional[str]:
         return self._read(key, pop=True)
@@ -164,6 +308,17 @@ class LocalEphemeralState:
             if key in self._entries:
                 return False
             self._entries[key] = (now + ttl, "1")
+            return True
+
+    async def hold(self, key: str, token: str, *, ttl: int) -> bool:
+        ttl = _seconds(ttl)
+        now = time.time()
+        with self._lock:
+            self._prune(now)
+            entry = self._entries.get(key)
+            if entry is not None and entry[1] != token:
+                return False
+            self._entries[key] = (now + ttl, token)
             return True
 
 

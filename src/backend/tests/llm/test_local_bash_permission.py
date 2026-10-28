@@ -16,20 +16,19 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 from agentscope.message import ToolCallBlock
-from core.llm.tool_permissions import (
-    APPROVAL_ASK,
-    CURRENT_PERMISSION_TICKET,
-    FAIL_CLOSED_MODE,
-    PermissionRuntime,
-    ToolPermissionRegistry,
-    ToolPermissionService,
-    builtin_tool_permission,
-)
+from core.sandbox.permissions.approval import APPROVAL_ASK
+from core.sandbox.permissions.dispatch_models import CURRENT_PERMISSION_TICKET, FAIL_CLOSED_MODE, PermissionRuntime
+from core.sandbox.permissions.tool_specs import ToolPermissionRegistry, builtin_tool_permission
+from core.llm.tool_permissions import ToolPermissionService
 from core.llm.tools.sandbox_tool import register_bash
-from core.sandbox.local_policy import Grant, Policy
+from tests.llm.command_test_support import command_tool_state
+
+pytestmark = pytest.mark.usefixtures("command_tool_state")
+from core.sandbox.permissions.models import Grant
+from core.sandbox.permissions.models import Policy
 from core.sandbox.oslayer import AccessMode, NetworkPolicy, SandboxUnavailableError
 
-_CONFINE = "core.sandbox.os_sandbox.confine"
+_CONFINE = "core.sandbox.permissions.os_gate.confine"
 
 
 def _host_provider(execute=None):
@@ -38,7 +37,18 @@ def _host_provider(execute=None):
     async def _unreachable(_req):
         raise AssertionError("execution should not have been reached")
 
-    return SimpleNamespace(runs_on_host=True, execute=execute or _unreachable)
+    async def start(req, yield_time_ms=10000):
+        result = await (execute or _unreachable)(req)
+        return {
+            "stdout": result.stdout,
+            "stderr": result.stderr,
+            "exit_code": result.exit_code,
+            "execution_time_ms": result.execution_time_ms,
+            "status": "exited",
+            "session_id": None,
+        }
+
+    return SimpleNamespace(runs_on_host=True, start_process=start)
 
 
 def _patch_host_provider(execute=None):
@@ -62,18 +72,18 @@ def _capture_policy(captured: dict):
 class _Toolkit:
     fn = None
 
-    def register_tool_function(self, fn, **_kwargs):
+    def append(self, tool):
+        fn = tool._func
+        _kwargs = {"func_description": tool.description, "permission": getattr(tool, "dispatch_spec", None)}
         self.fn = fn
 
 
-def _bash(*, interactive: bool):
+def _bash():
     toolkit = _Toolkit()
     register_bash(
         toolkit,
         loader=None,
-        loaded_skill_ids=set(),
-        chat_id="chat-1",
-        interactive=interactive,
+        chat_id="chat-1", user_id="user-1",
     )
     assert toolkit.fn is not None
     return toolkit.fn
@@ -87,9 +97,9 @@ def _payload(response) -> dict:
 
 async def _authorize(command: str, *, interactive: bool, approval_mode: str = APPROVAL_ASK):
     registry = ToolPermissionRegistry()
-    spec = builtin_tool_permission("bash")
+    spec = builtin_tool_permission("Bash")
     assert spec is not None
-    registry.register("bash", spec, source="test")
+    registry.register("Bash", spec, source="test")
     service = ToolPermissionService(
         registry,
         PermissionRuntime(
@@ -103,7 +113,7 @@ async def _authorize(command: str, *, interactive: bool, approval_mode: str = AP
     return await service.authorize(
         ToolCallBlock(
             id="bash-1",
-            name="bash",
+            name="Bash",
             input=json.dumps({"command": command}),
         )
     )
@@ -115,7 +125,7 @@ async def _run_authorized(command: str, *, interactive: bool, approval_mode: str
     assert outcome.ticket is not None
     token = CURRENT_PERMISSION_TICKET.set(outcome.ticket)
     try:
-        return await _bash(interactive=interactive)(command)
+        return await _bash()(command)
     finally:
         CURRENT_PERMISSION_TICKET.reset(token)
 
@@ -124,9 +134,9 @@ async def test_noninteractive_confirm_is_rejected_before_execution():
     with (
         patch.dict("os.environ", {"SANDBOX_TOOLS_ENABLED": "true"}),
         patch("core.config.local_mode.local_mode_enabled", return_value=True),
-        patch("core.services.local_grant_service.grants_for_gate", return_value=[]),
+        patch('features.desktop.local.grants.grants_for_gate', return_value=[]),
         patch(
-            "core.services.local_grant_service.policy_for_gate",
+            'features.desktop.local.grants.policy_for_gate',
             return_value=Policy(),
         ),
     ):
@@ -140,7 +150,7 @@ async def test_local_bash_execution_boundary_rejects_missing_ticket():
         patch.dict("os.environ", {"SANDBOX_TOOLS_ENABLED": "true"}),
         patch("core.config.local_mode.local_mode_enabled", return_value=True),
     ):
-        response = await _bash(interactive=True)("ls")
+        response = await _bash()("ls")
     payload = _payload(response)
     assert payload["blocked"] is True
     assert "授权票据" in payload["error"]
@@ -152,9 +162,9 @@ async def test_a_command_that_cannot_be_confined_is_refused(approval_mode):
     with (
         patch.dict("os.environ", {"SANDBOX_TOOLS_ENABLED": "true"}),
         patch("core.config.local_mode.local_mode_enabled", return_value=True),
-        patch("core.services.local_grant_service.grants_for_gate", return_value=[]),
+        patch('features.desktop.local.grants.grants_for_gate', return_value=[]),
         patch(
-            "core.services.local_grant_service.policy_for_gate",
+            'features.desktop.local.grants.policy_for_gate',
             return_value=Policy(),
         ),
         patch(_CONFINE, side_effect=SandboxUnavailableError("sandbox unavailable")),
@@ -181,9 +191,9 @@ async def test_the_execution_boundary_forwards_the_launch_and_the_command_verbat
     with (
         patch.dict("os.environ", {"SANDBOX_TOOLS_ENABLED": "true"}),
         patch("core.config.local_mode.local_mode_enabled", return_value=True),
-        patch("core.services.local_grant_service.grants_for_gate", return_value=[]),
+        patch('features.desktop.local.grants.grants_for_gate', return_value=[]),
         patch(
-            "core.services.local_grant_service.policy_for_gate",
+            'features.desktop.local.grants.policy_for_gate',
             return_value=Policy(),
         ),
         _patch_host_provider(_execute),
@@ -204,9 +214,9 @@ async def test_blocking_the_network_category_restricts_the_sandbox_network():
     with (
         patch.dict("os.environ", {"SANDBOX_TOOLS_ENABLED": "true"}),
         patch("core.config.local_mode.local_mode_enabled", return_value=True),
-        patch("core.services.local_grant_service.grants_for_gate", return_value=[]),
+        patch('features.desktop.local.grants.grants_for_gate', return_value=[]),
         patch(
-            "core.services.local_grant_service.policy_for_gate",
+            'features.desktop.local.grants.policy_for_gate',
             return_value=Policy(danger={"network": "block"}),
         ),
         patch(_CONFINE, new=_capture_policy(captured)),
@@ -222,9 +232,9 @@ async def test_leaving_the_network_category_alone_keeps_the_sandbox_network_open
     with (
         patch.dict("os.environ", {"SANDBOX_TOOLS_ENABLED": "true"}),
         patch("core.config.local_mode.local_mode_enabled", return_value=True),
-        patch("core.services.local_grant_service.grants_for_gate", return_value=[]),
+        patch('features.desktop.local.grants.grants_for_gate', return_value=[]),
         patch(
-            "core.services.local_grant_service.policy_for_gate",
+            'features.desktop.local.grants.policy_for_gate',
             return_value=Policy(),
         ),
         patch(_CONFINE, new=_capture_policy(captured)),
@@ -251,15 +261,15 @@ async def test_approved_copy_only_adds_destination_to_one_shot_write_set():
             patch.dict("os.environ", {"SANDBOX_TOOLS_ENABLED": "true"}),
             patch("core.config.local_mode.local_mode_enabled", return_value=True),
             patch(
-                "core.services.local_grant_service.grants_for_gate",
+                'features.desktop.local.grants.grants_for_gate',
                 return_value=[Grant(str(source_dir), "read")],
             ),
             patch(
-                "core.services.local_grant_service.policy_for_gate",
+                'features.desktop.local.grants.policy_for_gate',
                 return_value=Policy(),
             ),
             patch(
-                "core.llm.tools._myspace_confirm.gate",
+                "core.llm.tools.confirmation.gate",
                 new=AsyncMock(return_value=None),
             ),
             patch(_CONFINE, new=_capture_policy(captured)),
@@ -284,11 +294,11 @@ async def test_system_overlapping_grant_is_not_a_standing_os_write_bind():
         patch.dict("os.environ", {"SANDBOX_TOOLS_ENABLED": "true"}),
         patch("core.config.local_mode.local_mode_enabled", return_value=True),
         patch(
-            "core.services.local_grant_service.grants_for_gate",
+            'features.desktop.local.grants.grants_for_gate',
             return_value=[Grant("/", "readwrite")],
         ),
         patch(
-            "core.services.local_grant_service.policy_for_gate",
+            'features.desktop.local.grants.policy_for_gate',
             return_value=Policy(),
         ),
         patch(_CONFINE, new=_capture_policy(captured)),
@@ -304,9 +314,9 @@ async def test_an_unattended_run_is_confined_like_an_interactive_one():
     """自动化/子智能体只是跳过「问一句」，不跳过沙箱。"""
     captured: dict = {}
     registry = ToolPermissionRegistry()
-    spec = builtin_tool_permission("bash")
+    spec = builtin_tool_permission("Bash")
     assert spec is not None
-    registry.register("bash", spec, source="test")
+    registry.register("Bash", spec, source="test")
     service = ToolPermissionService(
         registry,
         PermissionRuntime(
@@ -322,23 +332,23 @@ async def test_an_unattended_run_is_confined_like_an_interactive_one():
     with (
         patch.dict("os.environ", {"SANDBOX_TOOLS_ENABLED": "true"}),
         patch("core.config.local_mode.local_mode_enabled", return_value=True),
-        patch("core.services.local_grant_service.grants_for_gate", return_value=[]),
+        patch('features.desktop.local.grants.grants_for_gate', return_value=[]),
         patch(
-            "core.services.local_grant_service.policy_for_gate",
+            'features.desktop.local.grants.policy_for_gate',
             return_value=Policy(),
         ),
         patch(_CONFINE, new=_capture_policy(captured)),
         _patch_host_provider(),
     ):
         outcome = await service.authorize(
-            ToolCallBlock(id="bash-1", name="bash", input=json.dumps({"command": "ls -la"}))
+            ToolCallBlock(id="bash-1", name="Bash", input=json.dumps({"command": "ls -la"}))
         )
         assert outcome.ticket is not None
         assert outcome.ticket.local_command is not None
         assert outcome.ticket.local_command.confined is True
         token = CURRENT_PERMISSION_TICKET.set(outcome.ticket)
         try:
-            response = await _bash(interactive=False)("ls -la")
+            response = await _bash()("ls -la")
         finally:
             CURRENT_PERMISSION_TICKET.reset(token)
 

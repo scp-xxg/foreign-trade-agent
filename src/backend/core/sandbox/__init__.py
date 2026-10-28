@@ -1,33 +1,36 @@
-"""Sandbox driver abstraction layer.
+"""Sandbox contracts and provider selection, loaded only when requested.
 
-Callers only depend on ``get_sandbox_provider()`` + ``ExecuteRequest`` / ``StageFile``;
-the concrete implementation is decided by the environment variable ``SANDBOX_PROVIDER``.
+The runner image contains a small subset of this package. Importing its HTTP
+service must not load backend settings, databases or cloud SDKs.
 """
 
-from .errors import SandboxConnectError, SandboxError, SandboxFileTooLargeError, SandboxTimeoutError
-from .factory import get_sandbox_provider, reset_provider_cache
-from .protocol import (
-    ExecuteRequest,
-    ExecuteResult,
-    SandboxFile,
-    SandboxProvider,
-    StagedFile,
-    StageFile,
-)
-from .script_runner_provider import result_to_dict
+_EXPORTS = {
+    "ProcessRequest": "protocol",
+    "ProcessResult": "protocol",
+    "SandboxProvider": "protocol",
+    "SandboxCapacityExhausted": "errors",
+    "SandboxConnectError": "errors",
+    "SandboxError": "errors",
+    "SandboxFileTooLargeError": "errors",
+    "SandboxTimeoutError": "errors",
+    "get_sandbox_provider": "factory",
+    "reset_provider_cache": "factory",
+}
 
-__all__ = [
-    "ExecuteRequest",
-    "ExecuteResult",
-    "SandboxConnectError",
-    "SandboxError",
-    "SandboxFile",
-    "SandboxFileTooLargeError",
-    "SandboxProvider",
-    "SandboxTimeoutError",
-    "StageFile",
-    "StagedFile",
-    "get_sandbox_provider",
-    "reset_provider_cache",
-    "result_to_dict",
-]
+
+def __getattr__(name):
+    module = _EXPORTS.get(name)
+    if module is None:
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+    from importlib import import_module
+
+    value = getattr(import_module(f".{module}", __name__), name)
+    globals()[name] = value
+    return value
+
+
+def __dir__():
+    return sorted(set(globals()) | set(_EXPORTS))
+
+
+__all__ = sorted(_EXPORTS)

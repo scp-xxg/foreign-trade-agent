@@ -1,29 +1,55 @@
 # 模型接入
 
-> 最后更新：2026-08-24
+> 最后更新：2026-10-15
 
-HugAgentOS 通过 **OpenAI 兼容协议**接入任意大模型端点（vLLM、Ollama、DashScope、DeepSeek、各类网关均可）。模型配置以数据库为准——管理员在 Config 管理台登记「模型供应商」，再把供应商绑定到「角色」（主推理、摘要、向量化等），全链路经 `ModelConfigService` 30 秒 TTL 缓存生效，改配置无需重启。`MODEL_URL` / `API_KEY` / `BASE_MODEL_NAME` 等环境变量保留为兼容兜底与 MCP 子进程注入用途。
+HugAgentOS 通过 **OpenAI 兼容协议**接入任意大模型端点（vLLM、Ollama、DashScope、DeepSeek、各类网关均可）。模型配置以数据库为准——管理员在 Config 管理台登记「模型供应商」，再把供应商绑定到「角色」（主推理、摘要、向量化等），全链路经 `ModelConfigService` 校验数据库版本后使用配置快照，改配置无需重启。`MODEL_URL` / `API_KEY` / `BASE_MODEL_NAME` 等环境变量保留为兼容兜底与 MCP 子进程注入用途。
+
+
+在 Config → 模型管理（商业版 EE）的供应商列表中，直接点击「状态」列的启用／停用开关即可保存状态，无需打开编辑弹窗。状态切换不测试上游连接，因此模型离线时仍可停用；保存失败会保持原状态。编辑弹窗不再提供启用开关，保存其他配置也不会改变启用状态。新建模型默认启用。
 
 ## 配置模型：供应商 + 角色
 
-两张表（`core/db/models.py`）：`model_providers`（base_url / api_key / model_name / extra_config / is_active）与 `model_role_assignments`（role_key → provider_id）。角色定义在 `core/db/model_repository.py::ROLE_DEFINITIONS`：
+两张表（`core/db/models/`）：`model_providers`（base_url / api_key / model_name / extra_config / is_active）与 `model_role_assignments`（role_key → provider_id）。角色定义在 `core/models/repository.py::ROLE_DEFINITIONS`：
 
 | role_key | 用途 | 类型 |
 |---|---|---|
 | `main_agent` | 主智能体推理（必配，缺失时聊天接口直接 503） | chat |
+| `subagent` | 子智能体统一模型（可选，默认跟随用户选择） | chat |
 | `summarizer` | 会话标题摘要 + 分类 | chat |
 | `followup` | 追问问题生成 | chat |
 | `memory` | 记忆抽取（mem0） | chat |
 | `embedding` | 文本向量化（KB / 记忆） | embedding |
 | `reranker` | 检索结果重排序 | reranker |
-| `chart` | 图表代码生成 | chat |
 | `plan_agent` | 计划模式推理（未配置降级 main_agent） | chat |
 | `code_exec` | 代码执行推理（可选运维覆盖，默认不引用） | chat |
 | `loop_reviewer` | 自主循环的评审与规划（未配置降级 main_agent） | chat |
 | `kb_wiki` | 知识库 Wiki 实体抽取（离线批处理，建议单配便宜模型） | chat |
 | `vision` | 图像理解（视觉桥）——见下节 | chat |
 
-`extra_config` 支持 `temperature` / `max_tokens` / `timeout` / `context_length`（上下文窗口，供压缩阈值计算）/ `supports_reasoning_effort`（是否支持思考档位）/ `supports_vision`（是否原生支持读图）等键。
+`extra_config` 支持 `temperature` / `max_tokens` / `timeout` / `context_length`（上下文窗口，供压缩阈值计算）/ `supports_reasoning_effort`（是否支持思考档位）/ `supports_vision`（是否原生支持读图）/ `api_protocol`（接口协议，见下节）等键。
+
+### 子智能体统一模型
+
+在 **Config → 模型管理 → 角色分配 → 子智能体** 选择一个对话模型供应商，即可统一用于所有内置和自建子智能体（商业版 EE 配置入口；社区版在「设置 → 模型服务」使用同一角色）。配置对下一次子智能体创建生效，运行中的任务保持原模型。
+
+优先级为：**子智能体统一模型 → 单个智能体已有的独立模型 → 用户当前选择的模型 → 主智能体默认模型**。默认不分配统一模型；没有独立配置的子智能体会跟随用户选择。清除分配或停用供应商后恢复上述回退规则。统一配置使用供应商自己的参数；未使用统一配置时，单个智能体已有的参数覆盖仍然有效。子智能体继承当前思考档位，执行过程中不会被动态模型切换还原为系统默认模型。独立参数也应用于故障切换候选。取消父任务时，排队中的子调用被撤销，运行中的子协程收到取消并完成资源清理，然后写入取消终态并结束前端子步骤。
+
+### 接口协议：默认 Responses，不支持才回退
+
+Responses 的思考原文和摘要事件由当前锁定的 AgentScope 原生解析。平台原样保留事件的 `item_id` 与分段索引，避免流式发送失败，以及不同思考条目或分段被错误合并。
+
+OpenAI 兼容上游有两套接口：较老的 `POST /chat/completions` 和较新的 `POST /responses`。平台**默认走 Responses**，因为它把模型的思考做成独立的 `reasoning` 条目，下一轮可原样回传；`/chat/completions` 没有放思考的位置，只能把思考夹带进 `reasoning_content` 字段。只有确实没有 `/responses` 路由的上游（常见于只做转发的中转网关）才使用 Chat Completions。
+
+走哪套由 `extra_config.api_protocol` 决定，取值 `responses` / `chat_completions`。该值不靠厂商名推断，而是保存供应商时向上游探测后写入。探测分两步，两步都过才判为 Responses 可用：
+
+1. **路由在不在**——向 `{base_url}/responses` 发一个**故意不带 `input`** 的请求。路由存在的上游会在参数校验阶段拒绝（不触发推理、不产生费用），返回 404 则说明没有该路由。
+2. **工具结果吃不吃**——回放一段「调用了一次工具、并带回结果」的历史，结果里放一个模型不可能提前知道的口令，看它是复述口令还是把同一个工具再调一遍。这一步会真跑一次推理，上限几百 token，只在配置时发生，绝不在请求路径上。
+
+第二步不是多余的：**路由存在不等于协议可用**。实测自建 Qwen3.6 的 `/responses` 能正常应答，却完全不消费 `function_call_output`——模型永远看不到工具结果，于是把同一个工具反复调用，智能体循环直接卡死。这种上游比"不支持 Responses"更糟，必须判回 Chat Completions。
+
+凭据被拒、上游不可达或第二步没有明确结论时，不写入任何结论，下次保存或重启时再试。升级前已存在的模型由后端启动时一次性补齐；判据变严时会记录版本号（`api_protocol_probe_version`），旧判据得出的结论在下次启动时自动重验，人工设定的值永远不动。
+
+人工在模型配置表单的「接口协议」里选定后，该选择永远优先，探测不再覆盖。Azure OpenAI 按部署寻址 Responses，与通用客户端的 URL 结构不同，始终使用 Chat Completions。
 
 ### 上下文窗口自动探测
 
@@ -67,10 +93,10 @@ DeepSeek、GLM、Qwen 文本版这类主力模型看不见图片。视觉桥的�
 | 场景 | 行为 |
 |---|---|
 | 用户在对话里上传图片，或把剪贴板图片直接粘贴到输入框 | 每轮开头自动转写并注入 |
-| 智能体读沙箱 / 「我的空间」里的图片 | `Read` 返回 `type=image_evidence` 而非 `type=binary` |
+| 智能体读沙箱 / 「我的空间」里的图片 | 主模型多模态时 `Read` 直接返回原图；否则返回 `type=image_evidence` 而非 `type=binary` |
 | 工具返回图片（如图表生成） | 转写后回填，智能体因此能自检自己画的图 |
-| 群聊机器人收到图片附件 | `channel_read_attachment` 取回后指向 `view_image` |
-| 智能体需要追问图中细节 | 用 `view_image(file_path/file_id, focus="…")` 带着具体问题二次看图 |
+| 群聊机器人收到图片附件 | `channel_read_attachment` 取回后指向 `read_image` |
+| 智能体需要自己看一张图（核对刚渲染的截图 / 图表 / 幻灯片） | `read_image(file_path/file_id)`：多模态主模型直接看原图；视觉桥模式转成文字证据，可带 `focus="…"` 针对细节追问。同一个工具名，按主模型能力注册对应版本 |
 
 **成本与限制**：每张新图一次多模态调用（首字延迟增加数秒）。相同图片 + 相同模型 + 相同 focus 的证据会缓存（默认 7 天），重复查看不再计费。单图上限、缓存时长、并发数、超时见 `VISION_*` 环境变量。
 
@@ -83,16 +109,16 @@ DeepSeek、GLM、Qwen 文本版这类主力模型看不见图片。视觉桥的�
 | `GET/POST/PUT/DELETE /v1/models/providers...` | 供应商 CRUD；保存前做**真实连通性预校验**（按类型分别打 `/chat/completions`、`/embeddings`、`/rerank`），失败返回 400；base_url 自动规范为 `…/v1`；响应中 api_key 脱敏 |
 | `POST /v1/models/providers/{id}/test`、`POST /v1/models/providers/test` | 已保存 / 未保存配置的连通性测试 |
 | `GET /v1/models/roles`、`PUT/DELETE /v1/models/roles/{role_key}` | 角色分配（校验供应商类型与角色匹配；被引用的供应商禁删） |
-| `GET /v1/models/export`、`POST /v1/models/import` | 模型配置跨环境迁移 |
-| `GET /v1/models/capabilities` | **公开端点**：仅暴露 `main_agent.supports_reasoning_effort` 布尔，前端据此显示「思考·中/高/超高」档位 |
+| `GET /v1/models/export`、`POST /v1/models/import` | 模型配置跨环境迁移；导出不包含 api_key 或供应商密钥。导入缺少密钥的配置时保留已有密钥；新增供应商的密钥为空，需另行配置 |
+| `GET /v1/models/capabilities` | **公开端点**：暴露主模型与可选模型的非敏感能力，包括思考档位、默认档位和上下文窗口 |
 
-所有写操作后调 `ModelConfigService.invalidate_cache()`，30 秒内全进程生效。
+所有模型配置写操作与数据库版本号在同一事务提交。各进程下一次解析时检查版本，重新装载同一快照中的角色、供应商与故障切换候选；无需等待 TTL 或重启。模型实例按事件循环隔离，已运行任务继续使用启动时的模型。
 
 ## JxOpenAIChatModel（core/llm/chat_models.py）
 
 运行时模型实例统一由 `make_chat_model()` 构造，返回 `JxOpenAIChatModel`——AgentScope 2.0 `OpenAIChatModel` 的子类，解决三件原生类做不到的事：
 
-1. **流式读超时**：长 tool_call 参数生成时单 chunk 可静默 130–160 秒，注入自定义 `httpx.AsyncClient` 把 read 超时抬到 600 秒（`STREAM_READ_TIMEOUT_S`），connect/write/pool 仍用供应商配置的 timeout。
+1. **请求与流式读超时**：OpenAI 兼容、原生供应商和 LiteLLM 均遵守配置的 timeout，不再强制抬高至 600 秒。它限制一次请求/一次流读取的等待，不是多轮任务总时长；慢模型需要显式配置足够的超时。重试与故障切换仍可能增加总等待时间。
 2. **思考链开关**：Qwen / MiniMax 等 OpenAI 兼容端点的思考开关走 `extra_body.chat_template_kwargs`（`enable_thinking` / `thinking` / `reasoning_effort`），每次调用注入。
 3. **结构化输出兜底（L3）**：上下文压缩走 `generate_structured_output()`，个别模型返回 malformed JSON 会导致整轮 `reply()` 崩溃——子类捕获异常并返回 `L3_SYNTHETIC_METADATA` 占位摘要，压缩照常落盘、对话继续。
 
@@ -100,30 +126,30 @@ DeepSeek、GLM、Qwen 文本版这类主力模型看不见图片。视觉桥的�
 
 ## 动态模型切换（chat_mode）
 
-前端每条消息可带 `chat_mode`（`turbo / fast / medium / high / max`），在 reply 开始前由 `core/llm/middlewares.py::DynamicModelMiddleware`（`on_reply`）热切 `agent.model`：
+前端每条消息可带 `chat_mode`（`turbo / fast / medium / high / max`），在 reply 开始前由 `core/llm/runtime/`（`on_reply`）热切 `agent.model`：
 
 ```
 chat_mode → hooks._resolve_chat_mode(agent.state)
-          → hooks._get_main_model(mode)        # 进程级实例缓存，随 ModelConfigService.version 失效
+          → hooks._get_main_model(mode)        # 事件循环隔离的实例缓存，随数据库配置版本失效
    turbo/fast → disable_thinking=True（turbo 另在 agent 装配层裁剪为仅检索工具，见提示词/对话文档）
    medium → 思考开（supports_reasoning_effort 时带 effort=medium）
    high/max → reasoning_effort=high/max（端点须声明支持）
 ```
 
-旧客户端只传 `enable_thinking` 时回退映射为 medium / fast。这就是 1.x「pre_reply 动态模型 hook」在 AgentScope 2.0 下的形态——hook 工厂已重构为中间件，`core/llm/hooks.py` 仅保留纯函数 helper。
+旧客户端只传 `enable_thinking` 时回退映射为 medium / fast。这就是 1.x「pre_reply 动态模型 hook」在 AgentScope 2.0 下的形态——hook 工厂已重构为中间件，`core/harness/hooks.py` 仅保留纯函数 helper。
 
 ## 环境变量与 MCP 子进程注入
 
 | 变量 | 现状 |
 |---|---|
-| `MODEL_URL` / `API_KEY` / `BASE_MODEL_NAME` | 不再被主链路直接读取；保留在 `core/config/settings.py` 与个别旧路径（如 `internal_batch.py`、`kb_processing.py`）作兜底 |
-| MCP 子进程 | `ModelConfigService.get_mcp_env_overlay()` 把 `main_agent` / `chart` / `embedding` / `reranker` 角色映射回 `MODEL_URL`、`OPENAI_API_KEY`、`MEM0_EMBED_*`、`RERANKER_*` 等旧变量名注入；常驻 MCP 容器内则用 `core/config/runtime_env.py::get_runtime_value()` 先查 DB 再回退 env，保证后台改模型对 MCP 即时生效 |
+| `MODEL_URL` / `API_KEY` / `BASE_MODEL_NAME` | 不再被主链路直接读取；保留在 `core/config/settings.py` 与个别旧路径（如 `kb_processing.py`）作兜底 |
+| MCP 子进程 | `ModelConfigService.get_mcp_env_overlay()` 把 `main_agent` / `embedding` / `reranker` 角色映射回 `MODEL_URL`、`OPENAI_API_KEY`、`MEM0_EMBED_*`、`RERANKER_*` 等旧变量名注入；常驻 MCP 容器内则用 `core/config/runtime_env.py::get_runtime_value()` 先查 DB 再回退 env，保证后台改模型对 MCP 即时生效 |
 
 完整变量清单见 [环境变量](../deployment/environment-variables.md)。
 
 ## 个人 API-Key
 
-用户可签发个人密钥以编程方式调用平台 API（`api/routes/v1/api_keys.py` + `core/services/api_key_service.py`）：
+用户可签发个人密钥以编程方式调用平台 API（`api/routes/v1/api_keys.py` + `core/auth/api_keys.py`）：
 
 - 明文形如 `sk-jx-<random>`，**仅创建时返回一次**，DB 只存 SHA256 哈希 + 前缀；支持 7/30/90/180/365 天有效期或永不过期、启停与撤销。
 - 调用方式 `Authorization: Bearer sk-jx-...`，鉴权层（`core/auth/backend.py`）识别 key 前缀后经 `resolve_api_key` 解析为用户上下文，校验启用/未撤销/未过期。
@@ -133,7 +159,7 @@ chat_mode → hooks._resolve_chat_mode(agent.state)
 
 ## 计费与用量
 
-token 用量在流式收尾的 `meta.usage` 中统计（`orchestration/streaming.py` 从 `ModelCallEndEvent` 累计）并随消息持久化，之上有两组管理台报表（`CONFIG_TOKEN`）：
+token 用量在流式收尾的 `meta.usage` 中统计（`core/llm/runtime/streaming.py` 从 `ModelCallEndEvent` 累计）并随消息持久化，之上有两组管理台报表（`CONFIG_TOKEN`）：
 
 - **用量日志** `api/routes/v1/admin_usage_logs.py`：`GET /v1/admin/usage-logs`（明细）、`/summary`（汇总）、`/models`（去重模型名）。
 - **计费报表** `api/routes/v1/admin_billing.py`（**商业版 EE**——完整管理台能力）：`GET /v1/admin/billing/summary`（按用户/模型聚合成本）、模型定价 CRUD（`/pricing`，输入/输出单价、币种）、`GET /v1/admin/billing/export`（CSV 成本导出）。
@@ -142,19 +168,48 @@ token 用量在流式收尾的 `meta.usage` 中统计（`orchestration/streaming
 
 ## 路由策略（ROUTER_STRATEGY）
 
-`orchestration/strategy.py`：`ROUTER_STRATEGY=main_only`（默认）恒路由到主智能体；`llm_router` 为预留占位，当前实现同样回落 `MainOnlyStrategy`（safe-by-default）。实际的多智能体分流由 `@提及` + `call_subagent` 工具完成，见 [对话与智能体编排](chat.md)。
+`core/agent_runtime/strategy.py`：`ROUTER_STRATEGY=main_only`（默认）恒路由到主智能体；`llm_router` 为预留占位，当前实现同样回落 `MainOnlyStrategy`（safe-by-default）。实际的多智能体分流由 `@提及` + `call_subagent` 工具完成，见 [对话与智能体编排](chat.md)。
 
 ## 相关源码
 
 | 主题 | 路径 |
 |---|---|
-| 模型工厂 / JxOpenAIChatModel | `src/backend/core/llm/chat_models.py` |
-| 角色解析服务（DB + 缓存） | `src/backend/core/services/model_config.py` |
-| 角色定义 / 供应商仓储 | `src/backend/core/db/model_repository.py` |
+| 模型工厂 / JxOpenAIChatModel | `src/backend/core/models/chat_models.py` |
+| 角色解析服务（DB + 缓存） | `src/backend/core/models/config.py` |
+| 角色定义 / 供应商仓储 | `src/backend/core/models/repository.py` |
 | 管理 API | `src/backend/api/routes/v1/models.py` |
-| 动态模型中间件 | `src/backend/core/llm/middlewares.py::DynamicModelMiddleware`，helper 在 `core/llm/hooks.py` |
-| MCP env 注入 | `src/backend/core/services/model_config.py::get_mcp_env_overlay`，`core/config/runtime_env.py` |
-| 个人 API-Key | `src/backend/api/routes/v1/api_keys.py`，`core/services/api_key_service.py`，`core/auth/backend.py` |
+| 动态模型中间件 | `src/backend/core/llm/runtime/`，helper 在 `core/harness/hooks.py` |
+| MCP env 注入 | `src/backend/core/models/config.py::get_mcp_env_overlay`，`core/config/runtime_env.py` |
+| 个人 API-Key | `src/backend/api/routes/v1/api_keys.py`，`core/auth/api_keys.py`，`core/auth/backend.py` |
 | 用量日志 / 计费 | `src/backend/api/routes/v1/admin_usage_logs.py`，`api/routes/v1/admin_billing.py` |
-| 路由策略 | `src/backend/orchestration/strategy.py` |
-| 主模型缺失快速失败 | `src/backend/api/routes/v1/chats.py::_ensure_main_model_configured` |
+| 路由策略 | `src/backend/core/agent_runtime/strategy.py` |
+| 主模型缺失快速失败 | `src/backend/api/routes/v1/chats/__init__.py::_ensure_main_model_configured` |
+
+## 模型专属思考档位
+
+在 Config 或「设置 → 模型服务」开启多档思考后，选择模型支持的低、中、高、超高、最高档位，逐档填写上游参数，并从启用档位中选择默认值。参数接受非空字符串或正整数；整数按 JSON 数值发送。名称与上游参数独立：例如「最高」可以映射到 `max` 或 `100`。新表单提供中、高、超高模板，但须按供应商支持情况核对。当前自定义映射适用于 OpenAI 兼容引擎。
+
+配置保存在 `extra_config.reasoning_effort_levels`（`[{key, value}]`）和 `default_reasoning_effort`。聊天只展示所选模型启用的档位；切换模型后不再支持原档位时使用新模型的默认档位。后端也执行该检查，保护旧客户端、子智能体与故障切换。快速和极速仍关闭思考。未编辑的历史模型保留原来的中、高、超高行为及 Responses 的历史 `max → xhigh` 映射；显式配置的参数原样发送。
+
+点击「自动探测思考档位」先读取上游模型声明，没有声明再发送最多五个小请求（每个请求最多 32 个输出 token、12 秒超时），可能产生少量模型用量。明确的参数错误可直接给出完整档位列表及整数范围。结果只回填表单，核对后保存；认证、限流、网络失败等不代表某档不支持，也不会清空现有设置。HTTP 成功只说明参数被接受，上游可能忽略它，不能据此保证真实推理强度。
+
+`POST /v1/models/providers/detect-reasoning` 仅供有模型管理权限的管理员使用，不落库；返回 `levels`、`default`、`source`、`notes` 和可选 `numeric_range`。检测结果来源区分模型元数据、参数校验声明与测试请求接受。
+
+
+## 语音输入与音频模型
+
+聊天输入框提供麦克风按钮。点击后录音，点击确认结束并转成文字。文字插入录音开始时的光标位置，用户检查后按原有方式发送。录音或转写期间不会发送未完成的文字。取消或按 Esc 会释放麦克风；转写失败可重试。输入内容发生变化时，结果单独保留，用户可选择插入或复制。切换会话或账号会取消本次操作。
+
+管理员可以在设置的「模型服务」中，或 Config 模型管理（商业版 EE）中新增 **音频模型**（`provider_type=audio`），选择「音频转写（OpenAI 兼容）」协议，并分配给 **语音转文字**（`audio_transcription`）角色。地址为空时可以保存待配置项；系统默认不创建模型、不填入服务器地址或密钥，也不回退到聊天模型。音频模型不出现在用户聊天模型选择器中。
+
+部署模型服务后，填写包含版本路径的 Base URL，例如 `https://asr.example.com/v1`，以及实际模型名。服务应实现 `POST {base_url}/audio/transcriptions`：接收 multipart 的 `file`、`model` 和 `response_format=json`，返回 `{ "text": "识别文字" }`。API Key 可选；设置时由后端加 Bearer 头。测试连接会发送半秒静音 WAV，因此允许空文字响应。此测试确认接口可调用，不代表识别准确率已通过验收。Qwen3-ASR、SenseVoice 等原生服务若不提供此协议，需要先添加兼容适配层。
+
+应用端 `GET /v1/audio/status` 返回是否已配置及最长时长。`POST /v1/audio/transcriptions` 接收 `Content-Type: audio/wav` 的原始录音体。浏览器通过 AudioWorklet 采集，转成 16kHz、单声道、16 位 PCM WAV，最长 120 秒。后端校验真实格式、字节数、时长和并发，临时处理后直接返回文字，不保存音频为附件，不记录音频或识别文字日志。普通登录用户及持有有效独立会话凭据的公共对话访客可调用。
+
+网页需要 HTTPS，或本机 localhost/回环地址的安全上下文。未配置模型、无设备、授权拒绝和连接超时均显示提示。桌面远程/双端模式的录音转写请求沿用云端模型配置；纯本机模式使用本机配置。音频模型不通过现有仅支持 JSON 的桌面模型代理或对外 LiteLLM 模型同步。macOS 安装包携带麦克风用途说明和音频输入 entitlement；仍须在各平台实际授权验收。
+
+已有服务器使用 Alembic `voiceaudio01` 扩展模型类型约束；旧版桌面 SQLite 在启动时使用同一升级逻辑。升级保留模型与角色。若仍存在音频供应商，降级会明确拒绝，不自动删除配置。上线需更新前后端；桌面内置前端需要随客户端更新。
+
+### 语音输入的用户权限
+
+在「系统配置 → 用户管理 → 权限配置」中开启「语音输入」后，该用户才可看到麦克风并调用转写。默认关闭，可按角色或团队授予，个人显式关闭优先。公开访客不继承分享者的语音权限。配置语音模型本身不会给全部用户授权。添加模型时选择第四种类型「语音模型」，并指派到「语音转文字」角色。

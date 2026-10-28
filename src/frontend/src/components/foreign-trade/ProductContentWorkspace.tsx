@@ -3,11 +3,13 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Button, Checkbox, Empty, Input, InputNumber, Select, Tag } from 'antd';
 import { CopyOutlined, DownloadOutlined, FileImageOutlined, PlusOutlined, ReloadOutlined, SearchOutlined, UploadOutlined } from '@ant-design/icons';
 import { t } from '../../i18n';
+import { useCatalogStore } from '../../stores/catalogStore';
+import { useRouteSubs } from '../../routing/usePanel';
 import { ApiResponseError } from '../../utils/apiError';
 import { createInquiry, searchInquiryProducts, type InquiryProduct } from '../../utils/foreignTradeInquiryApi';
 import { createContentPack, downloadContentAsset, downloadContentDemo, generateContentPack, getContentPack, listContentPacks,
   previewContentAsset, previewContentFile, updateContentPack, uploadContentPackFile,
-  type ContentAssetKind, type ContentDownloadKind, type ContentPackInput, type ContentPackRecord, type DemoFileKind,
+  type ContentGenerationMode, type ContentAssetKind, type ContentDownloadKind, type ContentPackInput, type ContentPackRecord, type DemoFileKind,
 } from '../../utils/foreignTradeContentApi';
 import './ProductContentWorkspace.css';
 
@@ -33,7 +35,9 @@ function assetLabel(kind: ContentAssetKind): string {
   return { square: t('方形商品图'), landscape: t('横版展示图'), spec: t('规格信息图') }[kind];
 }
 
-export function ProductContentWorkspace({ onOpenInquiries }: { onOpenInquiries?: () => void }) {
+export function ProductContentWorkspace() {
+  const [routeId] = useRouteSubs();
+  const onOpenInquiries = () => useCatalogStore.getState().setPanel('trade_inquiries');
   const [records, setRecords] = useState<ContentPackRecord[]>([]);
   const [record, setRecord] = useState<ContentPackRecord | null>(null);
   const [form, setForm] = useState<ContentPackInput>(emptyPack);
@@ -41,6 +45,7 @@ export function ProductContentWorkspace({ onOpenInquiries }: { onOpenInquiries?:
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [confirmed, setConfirmed] = useState(false);
+  const [generationMode, setGenerationMode] = useState<ContentGenerationMode>('ai');
   const [sourcePreview, setSourcePreview] = useState('');
   const [assetPreviews, setAssetPreviews] = useState<Partial<Record<ContentAssetKind, string>>>({});
   const [assetErrors, setAssetErrors] = useState<string[]>([]);
@@ -63,11 +68,11 @@ export function ProductContentWorkspace({ onOpenInquiries }: { onOpenInquiries?:
     return next;
   };
   useEffect(() => {
-    let active = true;
-    listContentPacks().then((items) => { if (active) { setRecords(items); if (items[0]) { setRecord(items[0]); setForm(packInput(items[0])); } } })
+    let active = true; setBusy('loading'); setRecord(null); setForm(emptyPack()); setConfirmed(false);
+    Promise.all([listContentPacks(), routeId ? getContentPack(routeId) : Promise.resolve(null)]).then(([items, selected]) => { if (active) { setRecords(items); const initial = selected || items[0]; if (initial) { setRecord(initial); setForm(packInput(initial)); } } })
       .catch((err) => { if (active) setError(contentError(err)); }).finally(() => { if (active) setBusy(''); });
     return () => { active = false; };
-  }, []);
+  }, [routeId]);
   useEffect(() => {
     let active = true; let objectUrl = ''; setSourcePreview('');
     if (record && lastImage) void previewContentFile(record.pack_id, lastImage.file_id).then((blob) => {
@@ -164,14 +169,21 @@ export function ProductContentWorkspace({ onOpenInquiries }: { onOpenInquiries?:
           </div>)}</div>
           {!form.facts.length && <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('尚无已核对事实。可从上传资料加入，或手工填写。')} />}
           <Button type="dashed" icon={<PlusOutlined />} disabled={locked || form.facts.length >= 20} onClick={() => change({ facts: [...form.facts, { label: '', value: '', source_url: form.source_url }] })}>{t('添加产品事实')}</Button>
+          <label className="jx-contentField">{t('生成方式')}
+            <Select aria-label={t('生成方式')} value={generationMode} disabled={locked} onChange={setGenerationMode} options={[
+              { value: 'ai', label: t('AI翻译与生成') },
+              { value: 'template', label: t('本地原文模板（不调用模型）') },
+            ]} />
+          </label>
+          {generationMode === 'template' && <Alert type="info" showIcon title={t('模板模式只排版已确认的原文，不调用模型，也不翻译。需要英文文案和图片时，请先核对产品事实已为英文。')} />}
           <div className="jx-contentConfirm"><Checkbox checked={confirmed} disabled={locked} onChange={(e) => setConfirmed(e.target.checked)}>{t('我已对照来源逐项核对产品事实，并确认图片可用于本次制作。')}</Checkbox><p>{t('每次修改资料或上传文件后，都需要重新核对。生成结果仍需人工审阅。')}</p></div>
-          <div className="jx-contentActions"><Button type="primary" icon={<FileImageOutlined />} loading={busy === 'generate'} disabled={locked || !canGenerate} onClick={() => void run('generate', async () => { const saved = await save(); accept(await generateContentPack(saved.pack_id, saved.revision)); setNotice(t('资料包已生成，请核对文案、图片和事实引用后使用。')); })}>{t('生成上品文案、FAQ 与图片')}</Button>
+          <div className="jx-contentActions"><Button type="primary" icon={<FileImageOutlined />} loading={busy === 'generate'} disabled={locked || !canGenerate} onClick={() => void run('generate', async () => { const saved = await save(); const generated = await generateContentPack(saved.pack_id, saved.revision, generationMode); accept(generated); setNotice(generated.outputs?.generation_mode === 'template' ? t('本地模板已整理，未调用模型。请核对原文、图片和事实引用后使用。') : t('资料包已生成，请核对文案、图片和事实引用后使用。')); })}>{generationMode === 'template' ? t('按原文模板整理资料') : t('生成上品文案、FAQ 与图片')}</Button>
             {!lastImage && <span className="jx-contentMuted">{t('尚未上传原图，本次只生成文字资料。')}</span>}{lastImage && !form.image_credit.trim() && <span className="jx-contentMuted">{t('请先填写图片来源与授权署名。')}</span>}</div>
         </section>
         <section className="jx-contentSection">
           <div className="jx-contentSectionTitle"><span>03</span><div><h3>{t('审阅并下载商品资料包')}</h3><p>{t('所有结果均为待审阅草稿，不会自动上架或发送给客户。')}</p></div></div>
           {!outputs ? <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={t('核对产品事实后，生成结果会显示在这里。')} /> : <>
-            <div className="jx-contentResultHeader"><div><Tag>{outputs.method === 'ai_grounded' ? t('AI 根据事实生成') : t('模板整理')}</Tag><Tag>{t('尚未发布')}</Tag><span>{dateText(outputs.generated_at)}</span></div><Button type="primary" icon={<DownloadOutlined />} loading={busy === 'download-zip'} disabled={locked} onClick={() => download('zip')}>{t('下载全部资料 ZIP')}</Button></div>
+            <div className="jx-contentResultHeader"><div><Tag>{outputs.method === 'ai_grounded' ? t('AI 根据事实生成') : outputs.generation_mode === 'template' ? t('本地原文模板（未调用模型）') : t('模板整理')}</Tag><Tag>{t('尚未发布')}</Tag><span>{dateText(outputs.generated_at)}</span></div><Button type="primary" icon={<DownloadOutlined />} loading={busy === 'download-zip'} disabled={locked} onClick={() => download('zip')}>{t('下载全部资料 ZIP')}</Button></div>
             {outputs.method === 'template' && <Alert type="warning" showIcon title={t('本次使用模板整理；未翻译的原文会保留，请补充审阅。')} />}
             {!!outputs.warnings.length && <ul className="jx-contentWarnings">{outputs.warnings.map((warning, index) => <li key={index}>{warning}</li>)}</ul>}
             <div className="jx-contentOutputCard"><div className="jx-contentCardTitle"><h4>{t('上品文案草稿')}</h4><div className="jx-contentActions"><Button size="small" icon={<CopyOutlined />} disabled={locked} onClick={() => void run('copy-listing', async () => { await navigator.clipboard.writeText(listingText); setNotice(t('文案已复制。')); })}>{t('复制文案')}</Button><Button size="small" icon={<DownloadOutlined />} disabled={locked} onClick={() => download('listing')}>{t('下载文案')}</Button></div></div>

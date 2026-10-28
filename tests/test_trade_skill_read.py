@@ -2,7 +2,7 @@
 from types import SimpleNamespace
 
 import pytest
-from core.llm.tool_collector import ToolCollector
+from core.llm.factory.tools.definitions import ToolAssembly as ToolCollector
 from core.llm.tools import skill_tool
 
 
@@ -14,11 +14,11 @@ async def test_only_complete_skill_read_marks_full_state(tmp_path, monkeypatch, 
     path.write_text("---\nname: product-content\ndescription: product workflow\n---\nConfirm facts first.\nThen generate.\n")
     monkeypatch.setattr(skill_tool, "_build_skill_bash_hint", lambda *args: None)
     loader = SimpleNamespace(load_skill_full=lambda sid: None, get_skill_source=lambda sid: "local")
-    from core.services import log_service
+    from core.harness import log_writer as log_service
     monkeypatch.setattr(log_service, "schedule_skill_call_write", lambda value: None)
     collector, loaded, complete = ToolCollector(), set(), set()
     skill_tool.register_sandboxed_view_text_file(collector, [str(directory)], loader,
         loaded_skill_ids=loaded, fully_loaded_skill_ids=complete)
-    await collector.get_tool("view_text_file")._func(file_path=str(path), ranges=ranges)
+    await next(tool for tool in collector if tool.name == "view_text_file")._func(file_path=str(path), ranges=ranges)
     assert directory.name in loaded
     assert (directory.name in complete) is full

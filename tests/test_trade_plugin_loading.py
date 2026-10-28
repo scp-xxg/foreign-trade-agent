@@ -3,28 +3,39 @@ from types import SimpleNamespace
 
 import pytest
 from core.llm import foreign_trade_plugin as bridge
-from core.llm import plugin_loader
-from core.llm.tool_collector import ToolCollector
-from core.ontology.toolkit import OntologyFilteredToolkit
+from core.capabilities.plugins.runtime import models as plugin_models
+from core.llm.tools import plugin_activation as plugin_loader
+from core.llm.factory.tools.definitions import ToolAssembly as ToolCollector
+from core.llm.tools.ontology_toolkit import OntologyFilteredToolkit
 
 NAMES = set(bridge.TRADE_TOOL_NAMES)
 
 
 @pytest.fixture
 def installed(monkeypatch):
-    from core.capabilities import registry, skills, paths
-    row = SimpleNamespace(install_id="plugin:local:foreign-trade-demo", kind="plugin", key="foreign-trade-demo",
-        profile_id="local", ready=True, enabled=True, version="0.2.0", payload={"owner_user_id": "alice"})
-    monkeypatch.setattr(paths, "capabilities_enabled", lambda: True)
-    monkeypatch.setattr(registry, "get", lambda ident: row if ident == row.install_id else None)
-    monkeypatch.setattr(registry, "list_installations", lambda **kw: [row])
-    monkeypatch.setattr(registry, "components_of", lambda ident: {"skill:local:trade-content": True})
-    monkeypatch.setattr(skills, "account_authorized_for", lambda user: False)
+    from core.harness.registry import device_catalog, execution_account
+    row = SimpleNamespace(
+        install_id="plugin:local:foreign-trade-demo", kind="plugin", key="foreign-trade-demo",
+        profile_id="local", ready=True, enabled=True, version="0.2.0",
+        payload={"owner_user_id": "alice", "components": {"skills": ["skill:local:trade-content"]}},
+    )
+    monkeypatch.setattr(device_catalog, "installations", lambda *a, **kw: [row])
+    monkeypatch.setattr(device_catalog, "plugin_entries", lambda *a: [])
+    monkeypatch.setattr(device_catalog, "active", lambda: False)
+    monkeypatch.setattr(execution_account, "account_authorized_for", lambda user: False)
+    monkeypatch.setattr(bridge, "_legacy_available", lambda *a: False)
+    from core.capabilities.plugins import management
+    from core.db import engine as dbe
+    class Session:
+        def __enter__(self): return self
+        def __exit__(self, *a): return False
+    monkeypatch.setattr(dbe, "SessionLocal", Session)
+    monkeypatch.setattr(management, "list_installed", lambda *a, **kw: [])
     return row
 
 
 def target():
-    return plugin_loader.DeferredPlugin("plugin:local:foreign-trade-demo", "foreign-trade-demo", "Trade", "Trade workflows")
+    return plugin_models.DeferredPlugin("plugin:local:foreign-trade-demo", "foreign-trade-demo", "Trade", "Trade workflows")
 
 
 @pytest.mark.parametrize("change", [
@@ -39,7 +50,7 @@ def test_foreign_or_revoked_install_never_grants_write_tools(installed, change):
         bridge.assert_trade_plugin_available("alice", installed.install_id)
     collector = ToolCollector()
     assert bridge.register_trade_plugin_target(collector, target(), user_id="alice", chat_id="chat") == []
-    assert collector.function_tools == []
+    assert collector == []
 
 
 def test_authenticated_actor_and_exact_installation_required(installed):
@@ -82,14 +93,14 @@ def test_business_skill_gate_uses_the_current_run_read_state(installed, monkeypa
 
 def test_deferred_tools_hidden_then_restored_on_followup(installed):
     plugin = target()
-    resolution = plugin_loader.ProgressiveResolution(directory=[plugin], deferred=[plugin])
+    resolution = plugin_models.ProgressiveResolution(directory=[plugin], deferred=[plugin])
     collector = ToolCollector()
     assert bridge.register_initial_trade_tools(collector, user_id="alice", chat_id="chat", progressive=resolution) == []
-    assert collector.function_tools == []
+    assert collector == []
     resolution.deferred = []
     names = bridge.register_initial_trade_tools(collector, user_id="alice", chat_id="chat", progressive=resolution)
     assert set(names) == NAMES
-    assert {tool.name for tool in collector.function_tools} == NAMES
+    assert {tool.name for tool in collector} == NAMES
     # Each later turn builds a fresh set of closures bound to its current user.
     other = ToolCollector()
     assert bridge.register_initial_trade_tools(other, user_id="bob", chat_id="chat", progressive=resolution) == []
@@ -102,12 +113,12 @@ def test_eager_mode_needs_selected_plugin_component(installed):
 
 
 async def test_real_toolkit_activation_updates_surface_and_deduplicates(installed):
-    collector, toolkit = ToolCollector(), OntologyFilteredToolkit(tools=[], mcps=[])
+    collector, toolkit = ToolCollector(), OntologyFilteredToolkit(tools=[])
     before = await toolkit.freeze_execution_surface()
-    runtime = {"toolkit": toolkit, "user_id": "alice", "chat_id": "chat", "persist": False,
+    runtime = {"toolkit": toolkit, "user_id": "alice", "chat_id": "chat", "persist": False, "trade_tools_allowed": True,
                "permission_context": SimpleNamespace(allow_rules={}), "loader": None}
     plugin_loader.register_load_plugin(collector, {"foreign-trade-demo": target()}, runtime)
-    response = await collector.get_tool("load_plugin")._func(plugin="foreign-trade-demo")
+    response = await next(tool for tool in collector if tool.name == "load_plugin")._func(plugin="foreign-trade-demo")
     text = "".join(b.get("text", "") if isinstance(b, dict) else b.text for b in response.content)
     assert "trade_product_content" in text
     after = await toolkit.freeze_execution_surface()
@@ -118,12 +129,12 @@ async def test_real_toolkit_activation_updates_surface_and_deduplicates(installe
         if row["function"]["name"] in NAMES:
             assert not {"user_id", "chat_id", "install_id"} & set(row["function"]["parameters"]["properties"])
     assert NAMES <= set(runtime["permission_context"].allow_rules)
-    await collector.get_tool("load_plugin")._func(plugin="foreign-trade-demo")
+    await next(tool for tool in collector if tool.name == "load_plugin")._func(plugin="foreign-trade-demo")
     assert len(toolkit.tool_groups[0].tools) == len(NAMES)
 
 
 async def test_staged_native_tools_not_committed_after_failed_checkpoint(monkeypatch):
-    from core.capabilities import runtime as capability_runtime
+    from core.harness.registry import capability_runtime
     async_calls = []
     def invalid(prepared):
         async_calls.append(prepared)
@@ -138,9 +149,8 @@ async def test_staged_native_tools_not_committed_after_failed_checkpoint(monkeyp
 
 
 async def test_read_only_run_never_activates_business_tools(installed):
-    collector, toolkit = ToolCollector(), OntologyFilteredToolkit(tools=[], mcps=[])
-    runtime = {"toolkit": toolkit, "user_id": "alice", "chat_id": "chat", "persist": False,
-               "trade_tools_allowed": False, "permission_context": SimpleNamespace(allow_rules={}), "loader": None}
+    collector, toolkit = ToolCollector(), OntologyFilteredToolkit(tools=[])
+    runtime = {"toolkit": toolkit, "user_id": "alice", "chat_id": "chat", "persist": False, "trade_tools_allowed": False, "permission_context": SimpleNamespace(allow_rules={}), "loader": None}
     plugin_loader.register_load_plugin(collector, {"foreign-trade-demo": target()}, runtime)
-    await collector.get_tool("load_plugin")._func(plugin="foreign-trade-demo")
+    await next(tool for tool in collector if tool.name == "load_plugin")._func(plugin="foreign-trade-demo")
     assert not NAMES.intersection(tool.name for tool in toolkit.tool_groups[0].tools)

@@ -1,29 +1,21 @@
 """SQLAlchemy ORM models — artifacts / content blocks."""
+from core.db.utc_datetime import UTCDateTime
+from core.infra.time import utc_now
 
-from datetime import datetime, timezone
 
 from core.db.engine import Base
-from core.db.model_extensions import ArtifactEditionFields, artifact_edition_table_args
+from core.db.edition import ArtifactEditionFields, artifact_edition_table_args
 from sqlalchemy import (
-    JSON,
-    TIMESTAMP,
     BigInteger,
-    Boolean,
     CheckConstraint,
     Column,
     ForeignKey,
     Index,
-    Integer,
-    Numeric,
     String,
     Text,
-    UniqueConstraint,
 )
-from sqlalchemy.dialects.postgresql import INET, JSONB
-from sqlalchemy.orm import mapped_column, relationship
-
-JSONType = JSON().with_variant(JSONB(), "postgresql")
-INETType = String(45).with_variant(INET(), "postgresql")
+from sqlalchemy.orm import relationship
+from core.db.models.column_types import JSONType
 
 
 class Artifact(ArtifactEditionFields, Base):
@@ -49,14 +41,14 @@ class Artifact(ArtifactEditionFields, Base):
     storage_key = Column(Text, nullable=False)
     storage_url = Column(Text)
     extra_data = Column("metadata", JSONType, default={})
-    # Lazy caches for cross-turn file reading (populated by core/content/artifact_reader.py)
+    # Lazy caches for cross-turn file reading (populated by core/files/artifacts/reader.py)
     parsed_text = Column(Text, nullable=True)
     summary = Column(Text, nullable=True)
-    parsed_at = Column(TIMESTAMP(timezone=True), nullable=True)
+    parsed_at = Column(UTCDateTime(timezone=True), nullable=True)
     parse_error = Column(Text, nullable=True)
-    created_at = Column(TIMESTAMP(timezone=True), default=datetime.utcnow)
-    updated_at = Column(TIMESTAMP(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)
-    deleted_at = Column(TIMESTAMP(timezone=True))
+    created_at = Column(UTCDateTime(timezone=True), default=utc_now)
+    updated_at = Column(UTCDateTime(timezone=True), default=utc_now, onupdate=utc_now)
+    deleted_at = Column(UTCDateTime(timezone=True))
 
     # Relationships
     user = relationship("UserShadow", back_populates="artifacts")
@@ -64,7 +56,7 @@ class Artifact(ArtifactEditionFields, Base):
 
     __table_args__ = (
         *artifact_edition_table_args(),
-        CheckConstraint("size_bytes > 0", name="artifacts_size_check"),
+        CheckConstraint("size_bytes >= 0", name="artifacts_size_check"),
         CheckConstraint(
             "type IN ('report', 'chart', 'document', 'code', 'other')", name="artifacts_type_check"
         ),
@@ -86,7 +78,8 @@ class ContentBlock(Base):
 
     __tablename__ = "content_blocks"
 
-    id = Column(String(64), primary_key=True)  # e.g. 'docs_updates', 'docs_capabilities'
+    # Capability snapshots and receipts use a namespace plus a full SHA-256 digest.
+    id = Column(String(128), primary_key=True)
     payload = Column(JSONType, nullable=False, default=[])
-    updated_at = Column(TIMESTAMP(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)
+    updated_at = Column(UTCDateTime(timezone=True), default=utc_now, onupdate=utc_now)
     updated_by = Column(String(64), nullable=True)

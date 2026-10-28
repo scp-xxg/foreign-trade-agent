@@ -5,6 +5,8 @@ alternative prompt builders or tool routers.
 """
 
 from __future__ import annotations
+from core.llm import prompt_storage as prompt_storage_module
+from core.llm import prompt_versions as prompt_versions_module
 
 from datetime import datetime
 import os
@@ -13,7 +15,7 @@ from threading import Lock
 from time import monotonic
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
-from core.llm.execution_manifest import PromptManifestBuilder, stable_hash
+from core.harness.execution_manifest import PromptManifestBuilder, stable_hash
 from prompts.prompt_config import PromptConfig
 from prompts.provider import (
     FilesystemPromptProvider,
@@ -141,10 +143,6 @@ def warmup_prompt_cache() -> None:
     # run before _fetch, otherwise on first startup the cache lacks this entry and
     # project_id chats fall back to the Python default instead of the DB template.
     ensure_project_mode_part_seeded()
-    # System-reminder convention section: insert the default if missing in the DB
-    # (idempotent). Teaches the model that out-of-band <system-reminder> markers exist
-    # and how to handle them.
-    ensure_system_reminder_convention_seeded()
 
     parts = _fetch_db_prompt_parts()
     with _db_parts_preloaded_lock:
@@ -175,9 +173,9 @@ def invalidate_prompt_cache() -> None:
 
     # Also drop prompt_version_service cached payload
     try:
-        from core.services import prompt_version_service as pvs
+        from core.llm import prompt_versions as pvs
 
-        pvs.invalidate_cache()
+        prompt_storage_module.invalidate_cache()
     except Exception:
         pass
 
@@ -204,22 +202,7 @@ _TOOLS_AND_SKILLS_NOTICE = (
     "处理请求时先匹配技能描述；没有匹配技能时，再直接调用最合适的 MCP 工具。"
 )
 
-# Authoritative override appended on the desktop LOCAL backend. "My Space" is a
-# cloud concept and does not exist locally; this cancels all the /myspace/ +
-# artifact-net-disk guidance from the base prompt so the model works on the
-# user's real local files instead.
-_LOCAL_MODE_OVERRIDE = (
-    "## 【本机模式 · 最高优先级，覆盖上文】\n"
-    "你现在运行在**用户本机电脑**上（桌面本地模式），沙盒就是用户电脑的**真实文件系统**。\n"
-    "**用真实的本机绝对路径直接读写/运行文件**（例如 `/Users/xxx/Desktop/a.txt`、"
-    "`/Users/xxx/project/main.py`）——`Read`/`Write`/`Edit`/`Glob`/`Grep`/`bash` 在本机模式下"
-    "**都接受并推荐使用真实路径**。当前本地项目关联的真实文件夹路径已在项目上下文里给出，直接在它下面操作。\n"
-    "**本机没有「我的空间」**（那是云端概念）：上文所有关于 `/myspace/`、`pin_to_workspace`、"
-    "`list_myspace_files`、`CreateFolder`/`Move`/`Delete` 我的空间、「存到我的空间/留档」的说明，"
-    "在本机模式下**一律不适用，请忽略**，也**不要**往 `/myspace/` 写。\n"
-    "- 交付产物：直接写进用户的真实文件夹即可，他在本机就能看到；不需要 pin 到我的空间。\n"
-    "- 越权目录与危险命令受本机权限策略约束，可能被拦截或需用户确认；改本机文件前系统会自动快照、可回滚。"
-)
+from prompts.desktop_workspace import build_local_mode_guidance, build_environment_context, desktop_prompt_text
 
 
 def build_subagent_system_prompt(
@@ -254,9 +237,9 @@ def build_subagent_system_prompt(
     # Prefer active version's parts when available (map by part_id suffix)
     _active_parts: Dict[str, str] = {}
     try:
-        from core.services import prompt_version_service as pvs
+        from core.llm import prompt_versions as pvs
 
-        _av = pvs.get_active_version("system")
+        _av = prompt_versions_module.get_active_version("system")
         if _av:
             for p in _av.get("parts") or []:
                 if not p.get("is_enabled", True):
@@ -379,101 +362,15 @@ def _prompt_cache_context_hash(ctx: Dict[str, Any]) -> str:
 
 # Project-mode section moved to prompts.project_section; re-export for compat
 from prompts.project_section import (  # noqa: E402
-    _format_size,
-    _PROJECT_FILE_LIST_CAP,
     PROJECT_MODE_PART_ID,
     PROJECT_MODE_DISPLAY_NAME,
     _PROJECT_MODE_DEFAULT_TEMPLATE,
-    _render_file_list_block,
     _render_folder_scope_block,
     _render_instructions_block,
     _collapse_blanks,
     _get_project_mode_template,
     _build_project_section,
 )
-
-SYSTEM_REMINDER_CONVENTION_PART_ID = "system/05_system_reminder_convention"
-SYSTEM_REMINDER_CONVENTION_DISPLAY_NAME = "05_system_reminder_convention"
-_SYSTEM_REMINDER_CONVENTION_DEFAULT = """## 系统消息中的 <system-reminder> 标记
-
-对话中你会看到 `<system-reminder>...</system-reminder>` 包裹的系统提醒。这些是
-**带外信号**，由系统自动注入，**与具体的工具结果或用户消息没有直接关系**。它们
-用来：
-- 同步当前任务进度
-- 提示你被遗忘的约束（原始用户目标、未完成的待办、未交付的文件）
-- 在你即将做某个动作前给出额外的轻量提示
-
-**处理原则（重要）：**
-- system-reminder 的优先级**高于一般对话上下文**，但**低于用户原始请求**
-- **绝不**在回复正文里向用户提及收到了 system-reminder（如"我注意到系统提醒……"
-  "根据系统提示……"这类表述一律禁止）
-- **绝不**因为收到 system-reminder 就中止当前 reply turn，也**不要**回复用户
-  征求确认（如"是否继续？""您看这样可以吗？"）。reminder 的作用是辅助你做
-  **下一次工具调用**的决策，而不是中断当前任务
-- 如果 reminder 提示你已偏离原始目标，**调整下一次工具调用的参数或换用更合适
-  的工具**纠正方向；不要把已经跑了一半的错方向硬走完，也不要中止本轮回复
-"""
-
-
-def ensure_system_reminder_convention_seeded() -> None:
-    """Called once at startup: if the active 'system' version's parts lack
-    ``system/05_system_reminder_convention``, insert the default.
-
-    Same pattern as ``ensure_project_mode_part_seeded``: if it already exists in the
-    DB (regardless of enabled state) leave it alone; if an admin deletes it via the
-    UI, the next startup re-seeds it (treated as restoring the default).
-
-    sort_order=5: placed after ``system/00_role`` and before ``system/10_constraints``,
-    so the model sees the "system conventions" before the anti-hallucination constraints.
-    """
-    import logging
-
-    log = logging.getLogger(__name__)
-    try:
-        from core.services import prompt_version_service as pvs
-
-        try:
-            pvs.seed_from_filesystem()
-        except Exception:
-            pass
-        active = pvs.get_active_version("system")
-        if not active or not active.get("id"):
-            log.warning(
-                "[prompt_seed] no active system version; skipped %s seed",
-                SYSTEM_REMINDER_CONVENTION_PART_ID,
-            )
-            return
-        parts = list(active.get("parts") or [])
-        if any(
-            (p.get("part_id") or "").strip() == SYSTEM_REMINDER_CONVENTION_PART_ID for p in parts
-        ):
-            return  # already present, idempotent return
-        parts.append(
-            {
-                "part_id": SYSTEM_REMINDER_CONVENTION_PART_ID,
-                "content": _SYSTEM_REMINDER_CONVENTION_DEFAULT,
-                "display_name": SYSTEM_REMINDER_CONVENTION_DISPLAY_NAME,
-                "sort_order": 5,
-                "is_enabled": True,
-            }
-        )
-        pvs.upsert_version(
-            "system",
-            active["id"],
-            name=active.get("name"),
-            description=active.get("description"),
-            parts=parts,
-        )
-        log.info(
-            "[prompt_seed] seeded %s into active system version=%s",
-            SYSTEM_REMINDER_CONVENTION_PART_ID,
-            active["id"],
-        )
-    except Exception as exc:  # noqa: BLE001
-        log.warning(
-            "[prompt_seed] ensure_system_reminder_convention_seeded skipped: %s",
-            exc,
-        )
 
 
 def ensure_project_mode_part_seeded() -> None:
@@ -488,14 +385,14 @@ def ensure_project_mode_part_seeded() -> None:
 
     log = logging.getLogger(__name__)
     try:
-        from core.services import prompt_version_service as pvs
+        from core.llm import prompt_versions as pvs
 
         # First make sure the active version exists (first cold start seeds from filesystem md)
         try:
-            pvs.seed_from_filesystem()
+            prompt_versions_module.seed_from_filesystem()
         except Exception:
             pass
-        active = pvs.get_active_version("system")
+        active = prompt_versions_module.get_active_version("system")
         if not active or not active.get("id"):
             log.warning("[prompt_seed] no active system version; skipped project_mode seed")
             return
@@ -513,7 +410,7 @@ def ensure_project_mode_part_seeded() -> None:
                 "is_enabled": True,
             }
         )
-        pvs.upsert_version(
+        prompt_versions_module.upsert_version(
             "system",
             active["id"],
             name=active.get("name"),
@@ -529,462 +426,7 @@ def ensure_project_mode_part_seeded() -> None:
         log.warning("[prompt_seed] ensure_project_mode_part_seeded skipped: %s", exc)
 
 
-def build_system_prompt(
-    config: PromptConfig,
-    ctx: Dict[str, Any] | None = None,
-    *,
-    manifest_builder: Optional[PromptManifestBuilder] = None,
-) -> str:
-    """Build the system prompt from config + runtime context.
-
-    Results are cached with a 300s TTL. The {now} placeholder is replaced
-    at render time so the cache isn't invalidated every second.
-
-    Adds a *dynamic* appendix describing currently-available tools (name + short description)
-    so tools remain pluggable without hardcoding tool names in the static prompt.
-
-    Fallback order:
-      1) Filesystem prompt (config.system_prompt.prompt_dir / env PROMPT_DIR)
-      2) Inline template (config.system_prompt.inline_template or env PROMPT_INLINE_TEMPLATE)
-      3) Minimal hardcoded fallback (guarantee non-empty)
-
-    Args:
-        config: Loaded PromptConfig.
-        ctx: Runtime context (optional). Recognized keys:
-            - now: override timestamp
-            - tools: optional iterable of tool objects (each with `.name` and `.description`)
-            - mcp_servers: list of enabled MCP server keys
-    Returns:
-        A non-empty system prompt string.
-    """
-
-    ctx = ctx or {}
-    # Day granularity only: the date is constant within a day → the system prompt is
-    # byte-stable all day → LLM prefix cache hits all day (a second-level timestamp
-    # would change every request and bust the cache).
-    now = ctx.get("now") or datetime.now().strftime("%Y-%m-%d")
-
-    # Build cache key from stable inputs (excluding {now})
-    prompt_dir_cfg = (
-        getattr(config.system_prompt, "prompt_dir", None) or "./prompts/prompt_text/default"
-    )
-    parts_key = tuple(config.system_prompt.parts) if config.system_prompt.parts else ()
-    tool_names = _extract_tool_names(ctx.get("tools"))
-    mcp_keys = tuple(sorted(ctx.get("mcp_servers") or []))
-    provider_key = (getattr(config.system_prompt, "provider", None) or "filesystem").strip().lower()
-    enabled_kbs_key = tuple(sorted(ctx.get("enabled_kbs") or []))
-    # Full canonical hash, not plaintext/truncated signatures. This covers the
-    # complete project instructions, complete files manifest, tool definitions
-    # and any future dynamic template variable without expanding the cache key
-    # into a sensitive in-memory tuple.
-    prompt_context_hash = _prompt_cache_context_hash(ctx)
-
-    # Active pool version (preferred source) — bust cache on change
-    active_version_key: tuple[str, str] = ("", "")
-    try:
-        from core.services import prompt_version_service as pvs
-
-        _av = pvs.get_active_version("system")
-        if _av:
-            active_version_key = (str(_av.get("id") or ""), str(_av.get("updated_at") or ""))
-    except Exception:
-        pass
-
-    # Include DB prompt parts version in cache key for invalidation
-    db_version = _get_db_prompt_version()
-    cache_key = (
-        provider_key,
-        str(prompt_dir_cfg),
-        parts_key,
-        tool_names,
-        mcp_keys,
-        db_version,
-        enabled_kbs_key,
-        active_version_key,
-        prompt_context_hash,
-    )
-
-    # Check cache
-    with _prompt_cache_lock:
-        cached = _prompt_cache.get(cache_key)
-        if cached is not None:
-            expires_at, template, cached_sections = cached
-            if monotonic() < expires_at:
-                if manifest_builder is not None:
-                    for spec in cached_sections:
-                        manifest_builder.add_prompt_section(
-                            spec["id"],
-                            str(spec["content_template"]).replace(_PROMPT_NOW_SENTINEL, now),
-                            origin=spec["origin"],
-                            trust=spec["trust"],
-                            priority=spec["priority"],
-                            cache_class=spec["cache_class"],
-                            budget=spec["budget"],
-                            version=spec["version"],
-                            reference=spec.get("reference"),
-                            sensitive=spec.get("sensitive", False),
-                        )
-                return template.replace(_PROMPT_NOW_SENTINEL, now)
-            else:
-                _prompt_cache.pop(cache_key, None)
-
-    # Cache miss — build the prompt
-    strict_vars = _env_bool("PROMPT_STRICT_VARS", True)
-
-    section_specs: List[Dict[str, Any]] = []
-
-    def _record_section(
-        section_id: str,
-        content: str,
-        *,
-        origin: str,
-        trust: str,
-        priority: int,
-        cache_class: str,
-        version: str = "1",
-        reference: Optional[str] = None,
-        sensitive: bool = False,
-        budget: Optional[int] = None,
-    ) -> None:
-        if not str(content or "").strip():
-            return
-        estimated_budget = max(1, (len(str(content).encode("utf-8")) + 3) // 4)
-        section_specs.append(
-            {
-                "id": str(section_id),
-                "content_template": str(content),
-                "origin": str(origin),
-                "trust": str(trust),
-                "priority": int(priority),
-                "cache_class": str(cache_class),
-                "budget": int(budget if budget is not None else estimated_budget),
-                "version": str(version or "1"),
-                "reference": reference,
-                "sensitive": bool(sensitive),
-            }
-        )
-
-    provider = provider_key
-    base = ""
-
-    # ── Try DB-backed prompt parts first ──────────────────────────────
-    db_parts = _load_db_prompt_parts()
-
-    # ── Preferred source: active version in prompt_version_service ────
-    # When a version is active in ContentBlock(id=prompt_versions), its parts
-    # are the source of truth. AdminPromptPart overlay still wins on part_id
-    # collision for backward compatibility with rows created by the old admin UI.
-    active_system_version: Optional[Dict[str, Any]] = None
-    try:
-        from core.services import prompt_version_service as pvs
-
-        active_system_version = pvs.get_active_version("system")
-    except Exception:
-        active_system_version = None
-
-    if active_system_version and active_system_version.get("parts"):
-        from prompts.provider import render_template
-
-        chunks: List[str] = []
-        seen_ids: set[str] = set()
-        for p in active_system_version["parts"]:
-            pid = (p.get("part_id") or "").strip()
-            if not pid or pid in seen_ids:
-                continue
-            seen_ids.add(pid)
-            # project_mode is a dynamic appendix section (injected only for project chats); never enters the base prompt
-            if pid == PROJECT_MODE_PART_ID:
-                continue
-            # DB override wins if present
-            db_row = db_parts.get(pid)
-            if db_row:
-                if not db_row.get("is_enabled", True):
-                    continue
-                content = db_row["content"]
-            else:
-                if not p.get("is_enabled", True):
-                    continue
-                content = p.get("content") or ""
-            txt = render_template(content, vars={**ctx, "now": _PROMPT_NOW_SENTINEL}, strict=False)
-            if txt.strip():
-                chunks.append(txt.strip())
-                _record_section(
-                    pid,
-                    txt.strip(),
-                    origin=(
-                        "database:admin_prompt_parts"
-                        if db_row
-                        else f"prompt-version:{active_system_version.get('id') or 'system'}"
-                    ),
-                    trust="admin",
-                    priority=int(p.get("sort_order") or len(chunks) * 10),
-                    cache_class="stable_prefix",
-                    version=(db_version if db_row else str(active_system_version.get("id") or "1")),
-                )
-        # Include any DB-only parts not listed in the active version
-        for pid, db_row in db_parts.items():
-            if pid in seen_ids or not db_row.get("is_enabled", True):
-                continue
-            if pid == PROJECT_MODE_PART_ID:
-                continue  # same as above: the dynamic appendix section never enters base
-            txt = render_template(
-                db_row["content"], vars={**ctx, "now": _PROMPT_NOW_SENTINEL}, strict=False
-            )
-            if txt.strip():
-                chunks.append(txt.strip())
-                _record_section(
-                    pid,
-                    txt.strip(),
-                    origin="database:admin_prompt_parts",
-                    trust="admin",
-                    priority=int(db_row.get("sort_order") or len(chunks) * 10),
-                    cache_class="stable_prefix",
-                    version=db_version or "1",
-                )
-        base = "\n\n".join(chunks).strip()
-
-    # 1) Filesystem prompt: config-driven prompt pack.
-    if (not base.strip()) and provider == "filesystem":
-        prompt_dir = _resolve_prompt_dir(str(prompt_dir_cfg))
-        fs_provider = FilesystemPromptProvider(prompt_dir=prompt_dir, strict_vars=strict_vars)
-
-        parts = getattr(config.system_prompt, "parts", None)
-        if isinstance(parts, list) and parts:
-            # Build merged parts list: filesystem + DB-only parts
-            all_part_ids = list(parts)
-            for pid in db_parts:
-                if pid not in all_part_ids:
-                    all_part_ids.append(pid)
-
-            # Sort by DB sort_order if available, else filesystem index * 10
-            def _sort_key(pid: str) -> int:
-                if pid in db_parts:
-                    return db_parts[pid]["sort_order"]
-                try:
-                    return parts.index(pid) * 10
-                except ValueError:
-                    return 9999
-
-            sorted_ids = sorted(all_part_ids, key=_sort_key) if db_parts else parts
-
-            chunks: List[str] = []
-            for part_id in sorted_ids:
-                part_id_str = part_id.strip() if isinstance(part_id, str) else ""
-                if not part_id_str:
-                    continue
-                # Dynamic appendix section: only injected for project chats by _build_project_section; never enters base
-                if part_id_str == PROJECT_MODE_PART_ID:
-                    continue
-
-                db_row = db_parts.get(part_id_str)
-                if db_row:
-                    # DB override: check is_enabled
-                    if not db_row["is_enabled"]:
-                        continue
-                    txt = db_row["content"]
-                    # Apply variable substitution
-                    from prompts.provider import render_template
-
-                    txt = render_template(
-                        txt, vars={**ctx, "now": _PROMPT_NOW_SENTINEL}, strict=False
-                    )
-                else:
-                    txt = fs_provider.get_prompt(
-                        part_id_str, "system", vars={**ctx, "now": _PROMPT_NOW_SENTINEL}
-                    )
-
-                if txt.strip():
-                    chunks.append(txt.strip())
-                    _record_section(
-                        part_id_str,
-                        txt.strip(),
-                        origin=(
-                            "database:admin_prompt_parts" if db_row else f"filesystem:{prompt_dir}"
-                        ),
-                        trust="admin" if db_row else "platform",
-                        priority=int((db_row or {}).get("sort_order") or _sort_key(part_id_str)),
-                        cache_class="stable_prefix",
-                        version=db_version if db_row else str(config.version),
-                    )
-            base = "\n\n".join(chunks).strip()
-        else:
-            # Backward compatible single-file convention: system.system.md
-            base = fs_provider.get_prompt(
-                "system", "system", vars={**ctx, "now": _PROMPT_NOW_SENTINEL}
-            )
-            _record_section(
-                "system",
-                base,
-                origin=f"filesystem:{prompt_dir}",
-                trust="platform",
-                priority=10,
-                cache_class="stable_prefix",
-                version=str(config.version),
-            )
-
-    # 2) Inline prompt.
-    if (not base.strip()) and provider == "inline":
-        inline_provider = InlinePromptProvider(
-            template=(
-                getattr(config.system_prompt, "inline_template", "")
-                or os.getenv("PROMPT_INLINE_TEMPLATE", "")
-            ),
-            strict_vars=strict_vars,
-        )
-        base = inline_provider.get_prompt(
-            "system", "system", vars={**ctx, "now": _PROMPT_NOW_SENTINEL}
-        )
-        _record_section(
-            "system/inline",
-            base,
-            origin="config:inline",
-            trust="admin",
-            priority=10,
-            cache_class="stable_prefix",
-            version=str(config.version),
-        )
-
-    # 3) Absolute minimal fallback (guarantee non-empty).
-    if not base.strip():
-        base = hardcoded_minimal_system_prompt().strip()
-        _record_section(
-            "system/fallback",
-            base,
-            origin="builtin:fallback",
-            trust="platform",
-            priority=10,
-            cache_class="stable_prefix",
-            version="1",
-        )
-
-    tools = ctx.get("tools")
-
-    if tools:
-        base = (base + "\n\n" + _TOOLS_AND_SKILLS_NOTICE).strip()
-        _record_section(
-            "runtime/tools_notice",
-            _TOOLS_AND_SKILLS_NOTICE,
-            origin="builtin:agent_factory",
-            trust="platform",
-            priority=700,
-            cache_class="toolset",
-            version="1",
-        )
-
-    # ── Lightweight KB catalog (name + description only) ──
-    enabled_kbs = ctx.get("enabled_kbs")
-    if enabled_kbs:
-        kb_section = _build_kb_lite_section(enabled_kbs)
-        if kb_section:
-            base = (base + "\n\n" + kb_section).strip()
-            _record_section(
-                "runtime/kb_catalog",
-                kb_section,
-                origin="knowledge-base:catalog",
-                trust="configured_service",
-                priority=800,
-                cache_class="capability_set",
-                version="1",
-                sensitive=True,
-            )
-
-    # ── Project mode (when mounted in a Claude-style workspace) ──
-    project_id = ctx.get("project_id")
-    if project_id:
-        if ctx.get("project_is_local"):
-            # Desktop local project: real host folder, not a MySpace view (#05).
-            from prompts.project_section import _build_local_project_section
-
-            proj_section = _build_local_project_section(
-                project_name=ctx.get("project_name") or "",
-                project_instructions=ctx.get("project_instructions") or "",
-                local_path=ctx.get("project_local_path") or "",
-                local_slug=ctx.get("project_local_slug") or "",
-            )
-        else:
-            proj_section = _build_project_section(
-                project_name=ctx.get("project_name") or "",
-                project_instructions=ctx.get("project_instructions") or "",
-                folder_name=ctx.get("project_folder_name") or "",
-                folder_kind=ctx.get("project_folder_kind") or "",
-                project_files=ctx.get("project_files") or [],
-            )
-        if proj_section:
-            if ctx.get("project_is_local") and ctx.get("local_site_edit"):
-                proj_section += "\n\n" + str(ctx["local_site_edit"])
-            base = (base + "\n\n" + proj_section).strip()
-            _record_section(
-                "runtime/project",
-                proj_section,
-                origin=f"workspace:{project_id}",
-                trust="workspace",
-                priority=900,
-                cache_class="workspace",
-                version=prompt_context_hash,
-                reference=f"project:{project_id}",
-                sensitive=True,
-            )
-
-    # ── Local desktop mode override ──
-    # On the local backend there is no "My Space" (artifact net-disk) — it is a
-    # cloud/server concept. Append an authoritative override (last = strongest)
-    # so the model ignores all the /myspace/ + pin_to_workspace + folder-op
-    # guidance above and works directly in the local folder instead. Covers every
-    # local-mode chat, project-bound or not.
-    try:
-        from core.config.local_mode import local_mode_enabled
-
-        if local_mode_enabled():
-            base = (base + "\n\n" + _LOCAL_MODE_OVERRIDE).strip()
-            _record_section(
-                "runtime/local_mode_override",
-                _LOCAL_MODE_OVERRIDE,
-                origin="builtin:local_mode",
-                trust="platform",
-                priority=950,
-                cache_class="deployment",
-                version="1",
-            )
-    except Exception:
-        pass
-
-    # Store template in cache (with placeholder instead of real time)
-    # Only the renderer-owned sentinel is dynamic. Replacing every occurrence
-    # of today's date would corrupt project instructions that intentionally
-    # contain that literal date when the cache is reused tomorrow.
-    template = base
-
-    cached_section_specs = tuple(
-        {
-            **spec,
-            "content_template": str(spec["content_template"]),
-        }
-        for spec in section_specs
-    )
-    with _prompt_cache_lock:
-        _prompt_cache[cache_key] = (
-            monotonic() + _PROMPT_CACHE_TTL,
-            template,
-            cached_section_specs,
-        )
-
-    if manifest_builder is not None:
-        for spec in cached_section_specs:
-            manifest_builder.add_prompt_section(
-                spec["id"],
-                str(spec["content_template"]).replace(_PROMPT_NOW_SENTINEL, now),
-                origin=spec["origin"],
-                trust=spec["trust"],
-                priority=spec["priority"],
-                cache_class=spec["cache_class"],
-                budget=spec["budget"],
-                version=spec["version"],
-                reference=spec.get("reference"),
-                sensitive=spec.get("sensitive", False),
-            )
-
-    # Return with real time
-    return template.replace(_PROMPT_NOW_SENTINEL, now)
+from prompts.system_builder import build_system_prompt  # noqa: E402
 
 
 def select_tools(

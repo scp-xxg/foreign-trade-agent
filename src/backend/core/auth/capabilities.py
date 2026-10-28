@@ -13,6 +13,7 @@ console's user, team, and role management panels:
 | ``can_add_agent``   | bool | ``False``      | Build own sub-agents / install & publish on sub-agent marketplace |
 | ``can_switch_model`` | bool | ``False``     | User-side chat model switching                 |
 | ``can_use_ontology_validation`` | bool | ``False`` | Configure and use personal ontology validation |
+| ``can_use_personal_agent`` | bool | ``False`` | EE account permission for the shared Personal Agent module |
 | ``allowed_apps``    | list/None | ``None``  | App visibility whitelist (``None`` = all enabled apps) |
 
 **Teams act only as defaults** (set centrally in Config "Team Management →
@@ -53,10 +54,13 @@ BOOL_CAPABILITY_DEFAULTS: Dict[str, bool] = {
     "can_create_public_kb": False,
     "can_create_channel_bot": False,
     "can_switch_model": False,
+    "can_use_voice": False,  # Dictation is opt-in, including for administrators.
     "can_use_ontology_validation": False,
     "can_run_autonomous_loop": True,  # long-running autonomous loop (open in CE, enabled by default, can be disabled per user/team)
     # 自定义对话模式：授予后「设置 → 模式选择」出现，可自建仅本人可见的模式
     "can_manage_chat_modes": False,
+    # EE account policy for Personal Agent; CE admits existing users when enabled.
+    "can_use_personal_agent": False,
     "can_system_config": False,
     "can_content_manage": False,
     # Security management plugin (security-manager): authorization flag for the agent side
@@ -168,7 +172,7 @@ def user_has_capability(db: Session, user_id: str, flag: str) -> bool:
     meta = shadow.extra_data if isinstance(shadow.extra_data, dict) else {}
     if meta.get("role") == "super_admin":
         return True
-    from core.auth.edition_capabilities import default_capability_layers_for_user
+    from core.auth.edition import default_capability_layers_for_user
 
     caps = resolve_capabilities(
         meta,
@@ -186,7 +190,7 @@ def resolve_user_capabilities(db: Session, user_id: str) -> Dict[str, Any]:
     chain is "personal → role → team → system" (both role and team degrade
     defensively to ``{}``).
     """
-    from core.auth.edition_capabilities import default_capability_layers_for_user
+    from core.auth.edition import default_capability_layers_for_user
     from core.db.models import UserShadow
 
     shadow = db.query(UserShadow).filter(UserShadow.user_id == user_id).first()

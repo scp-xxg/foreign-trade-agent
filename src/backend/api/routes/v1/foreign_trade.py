@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 from core.auth.backend import UserContext, get_current_user
 from core.db.engine import get_db
 from core.infra.responses import success_response, created_response
-from core.services.foreign_trade_inquiry import InquiryError, InquiryService, search_products
+from core.foreign_trade.inquiry import InquiryError, InquiryService, search_products
 
 router = APIRouter(prefix="/v1/foreign-trade", tags=["Foreign trade inquiries"])
 
@@ -165,7 +165,7 @@ def resume_followups(inquiry_id: str, req: RevisionRequest, user: UserContext = 
 @router.post("/inquiries/{inquiry_id}/interpret")
 async def interpret_inquiry(inquiry_id: str, req: RevisionRequest,
                             user: UserContext = Depends(get_current_user), db: Session = Depends(get_db)):
-    from core.services.foreign_trade_ai import interpret_inquiry as interpret
+    from core.foreign_trade.ai import interpret_inquiry as interpret
     record = _call(_svc(db).get, user.user_id, inquiry_id)
     if record["revision"] != req.revision:
         raise HTTPException(409, detail={"message": "询盘已更新，请刷新后重新提取"})

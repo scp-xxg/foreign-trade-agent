@@ -11,19 +11,12 @@ from __future__ import annotations
 from unittest.mock import patch
 
 import pytest
-from core.llm.tool_permissions import (
-    APPROVAL_ASK,
-    APPROVAL_AUTO,
-    APPROVAL_FULL,
-    FAIL_CLOSED_MODE,
-    UNCONFINED_APPROVAL_MODES,
-    LocalCommandAuthorization,
-    LocalConfinementUnavailableError,
-)
-from core.sandbox.os_sandbox import LocalAccessDecision
+from core.sandbox.permissions.approval import APPROVAL_ASK, APPROVAL_AUTO, APPROVAL_FULL
+from core.sandbox.permissions.dispatch_models import FAIL_CLOSED_MODE, UNCONFINED_APPROVAL_MODES, LocalCommandAuthorization, LocalConfinementUnavailableError
+from core.sandbox.permissions.os_gate import LocalAccessDecision
 from core.sandbox.oslayer import SandboxUnavailableError, SandboxUnenforceableError
 
-_CONFINE = "core.sandbox.os_sandbox.confine"
+_CONFINE = "core.sandbox.permissions.os_gate.confine"
 
 
 def _authorization(mode: str, workspace: str) -> LocalCommandAuthorization:
@@ -75,7 +68,7 @@ def test_a_missing_backend_refuses_the_command(mode, tmp_path):
 
 
 def test_a_policy_the_platform_cannot_enforce_refuses_too(tmp_path):
-    reason = "Windows 受限令牌沙箱无法限制读取范围，已拒绝执行"
+    reason = "Windows 低完整性沙箱无法限制读取范围，已拒绝执行"
     with patch(_CONFINE, side_effect=SandboxUnenforceableError(reason)):
         with pytest.raises(LocalConfinementUnavailableError) as excinfo:
             _authorization(APPROVAL_ASK, str(tmp_path)).confine()

@@ -1,202 +1,73 @@
-// Modified by foreign-trade-agent contributors, 2026-10-21; see CHANGES_FOREIGN_TRADE.md.
 import { create } from 'zustand';
-import type { AbilityTabKey, Catalog, KbTabKey, PanelKey } from '../types';
+import type { Catalog, KbTabKey, PanelKey } from '../types';
 import { getCatalog, updateCatalogItem } from '../api';
-import { loadCatalog, saveCatalog, removeLocal } from '../storage';
-import { loadActiveProjectId } from './projectSession';
-
-const PANEL_STORAGE_KEY = 'hugagent_active_panel';
-// Keep in sync with authStore.LOGIN_LANDING_KEY (inlined to avoid a circular import).
-const LOGIN_LANDING_KEY = 'hugagent_login_landing';
-
-// 可以从 localStorage 恢复的面板。'skills' / 'agents' / 'mcp' 已并入能力中心的二级导航、
-// 不再是独立面板，故不在此列——残留的旧值会退回 'chat'。
-const VALID_PANELS: readonly PanelKey[] = [
-  'chat', 'kb', 'docs',
-  'app_center', 'settings', 'share_records', 'my_space',
-  'ability_center', 'lab', 'projects', 'project_detail',
-  'automation', 'sites', 'trade_inquiries', 'trade_content',
-] as const;
+import { defaultCatalog } from '../storage';
+import { navigateTo, pathForPanel } from '../routing/navigation';
+import { useDeploymentModeStore } from './deploymentModeStore';
+import { pathForKbTab } from '../routing/subPages';
 
 /**
- * 「当前停在哪个面板」是**每个标签页各自的视图状态**，不是跨标签共享的用户偏好，
- * 所以存 sessionStorage 而不是 localStorage。
- *
- * 原来存 localStorage 会串台（问题 25）：A 窗口停在历史对话、B 窗口切到站点，
- * B 一写就把共享的 key 改成了 'sites'，此时刷新 A，A 也跳去站点——两个窗口互相干扰。
- * sessionStorage 同样能扛住「刷新页面后回到原面板」这个本来的诉求（它随标签页存活、
- * 刷新不丢），但每个标签页一份，互不影响。
- *
- * 顺带把能力中心停在哪个二级 Tab 也一并记住：以前只记面板不记 Tab，在「能力中心 →
- * 插件」按刷新会掉回智能体。
+ * 「当前停在哪个面板 / 哪个二级页」一律由地址栏决定（`/my-space/kb/public`、
+ * `/ability-center/connectors` …），store 与浏览器存储里都不再留第二份。
+ * 组件用 usePanel / useAbilityTab / useMySpaceTab / useKbTab 从地址实时算。
  */
-const ABILITY_TAB_STORAGE_KEY = 'hugagent_ability_tab';
-const VALID_ABILITY_TABS: readonly AbilityTabKey[] = ['agents', 'skills', 'mcp', 'plugins'];
-
-/** 知识库的公共/私有分档。原本是 CatalogPanel 内部的 Tab 状态，现在同一份状态还要被
- *  「我的空间」二级栏的两个二级项驱动，所以提到 store 里由两边共读。 */
-const KB_TAB_STORAGE_KEY = 'hugagent_kb_active_tab';
-
-function readSession(key: string): string | null {
-  if (typeof window === 'undefined') return null;
-  try { return window.sessionStorage.getItem(key); } catch { return null; }
-}
-
-function writeSession(key: string, value: string) {
-  if (typeof window === 'undefined') return;
-  try { window.sessionStorage.setItem(key, value); } catch { /* sessionStorage 不可用 */ }
-}
-
-/** project_detail 依赖当前项目 id；id 已不在（关过项目或换了标签页）就退回项目列表，
- *  否则主区域没有可渲染的内容。 */
-function normalizePanel(panel: PanelKey): PanelKey {
-  if (panel === 'project_detail' && !loadActiveProjectId()) return 'projects';
-  return panel;
-}
-
-function loadActivePanel(): PanelKey {
-  if (typeof window === 'undefined') return 'chat';
-  // On a fresh login (SSO ticket exchange), force the user to land on home.
-  // On a plain browser refresh the flag is absent, so we restore the last panel.
-  if (readSession(LOGIN_LANDING_KEY) === '1') return 'chat';
-  const saved = readSession(PANEL_STORAGE_KEY);
-  if (saved && (VALID_PANELS as readonly string[]).includes(saved)) {
-    return normalizePanel(saved as PanelKey);
-  }
-  // 迁移：老版本把它写在 localStorage 里，读一次让本次刷新不至于突然跳回首页，
-  // 读完就清掉，之后一律走 sessionStorage。
-  try {
-    const legacy = window.localStorage.getItem(PANEL_STORAGE_KEY);
-    removeLocal(PANEL_STORAGE_KEY);
-    if (legacy && (VALID_PANELS as readonly string[]).includes(legacy)) {
-      writeSession(PANEL_STORAGE_KEY, legacy);
-      return normalizePanel(legacy as PanelKey);
-    }
-  } catch { /* localStorage unavailable */ }
-  return 'chat';
-}
-
-function saveActivePanel(panel: PanelKey) {
-  writeSession(PANEL_STORAGE_KEY, panel);
-}
-
-function loadKbTab(): KbTabKey {
-  if (typeof window === 'undefined') return 'public';
-  try {
-    return window.localStorage.getItem(KB_TAB_STORAGE_KEY) === 'private' ? 'private' : 'public';
-  } catch { return 'public'; }
-}
-
-function loadAbilityTab(): AbilityTabKey {
-  const saved = readSession(ABILITY_TAB_STORAGE_KEY);
-  return saved && (VALID_ABILITY_TABS as readonly string[]).includes(saved)
-    ? (saved as AbilityTabKey)
-    : 'agents';
-}
 
 interface CatalogState {
   catalog: Catalog;
   catalogLoading: boolean;
-  /** Current panel view */
-  panel: PanelKey;
-  /** Incremented whenever a top-level panel is entered */
+  /** 每进入一次顶层面板 +1。它不是「当前在哪个面板」的副本，而是「又进了一次」这个动作，
+   *  各页据此重放入场动画 / 重新拉列表。 */
   panelEntryNonce: number;
   /** Search query within catalog management */
   manageQuery: string;
   /** Selected catalog item id */
   selectedId: string | null;
-  /** 能力中心当前展开的能力类别——由侧边栏的二级导航项驱动，页面本身不再有 Tab 栏 */
-  abilityTab: AbilityTabKey;
-  /** 本次会话中访问过的能力类别。能力中心据此只挂载访问过的 pane——四个 pane 各自会在挂载时
-   *  拉一份列表，全挂等于一次打出四份请求。累积在这里而不是页面内部：切换动作发生在侧边栏，
-   *  放在 setAbilityTab 里是唯一不需要靠 effect 追赶的位置。 */
-  visitedAbilityTabs: readonly AbilityTabKey[];
-  /** 知识库当前看的是公共库还是私有库 */
-  kbTab: KbTabKey;
 
   setCatalog: (catalog: Catalog) => void;
   setCatalogLoading: (v: boolean) => void;
-  setPanel: (panel: PanelKey) => void;
+  /** 切换面板 = 跳到该面板的地址；`sub` 是要直接落到的二级页（如能力中心的类别）。
+   *  二级页必须随这一次跳转一起给出——先跳类别再跳面板会把类别冲掉。 */
+  setPanel: (panel: PanelKey, sub?: string) => void;
   setManageQuery: (query: string) => void;
   setSelectedId: (id: string | null) => void;
-  setAbilityTab: (tab: AbilityTabKey) => void;
   setKbTab: (tab: KbTabKey) => void;
 
-  /** Fetch catalog from backend, merge with localStorage enabled state */
+  /** Fetch catalog from backend (the only source of enabled state). */
   fetchCatalog: () => Promise<void>;
   /** Toggle item enabled/disabled (optimistic update + backend sync) */
   toggleItem: (kind: 'skills' | 'agents' | 'mcp' | 'kb', itemId: string, enabled: boolean) => Promise<void>;
 }
 
 export const useCatalogStore = create<CatalogState>((set, get) => ({
-  catalog: loadCatalog(),
+  // 首屏占位：只有形状，没有启停状态。启停的真源是后端，浏览器里不留第二份——
+  // 留了就会出现「界面显示的和实际生效的不是同一份」。
+  catalog: structuredClone(defaultCatalog),
   catalogLoading: true,
-  panel: loadActivePanel(),
   panelEntryNonce: 0,
   manageQuery: '',
   selectedId: null,
-  abilityTab: loadAbilityTab(),
-  // 恢复出来的 Tab 也要算作「已访问」，否则刷新后能力中心不会挂载它对应的 pane、一片空白
-  visitedAbilityTabs: [loadAbilityTab()],
-  kbTab: loadKbTab(),
 
-  setCatalog: (catalog) => {
-    set({ catalog });
-    saveCatalog(catalog);
-  },
+  setCatalog: (catalog) => set({ catalog }),
   setCatalogLoading: (v) => set({ catalogLoading: v }),
-  setPanel: (panel) => {
-    saveActivePanel(panel);
+  setPanel: (panel, sub) => {
     set((state) => ({
-      panel,
       panelEntryNonce: state.panelEntryNonce + 1,
       selectedId: null,
       manageQuery: '',
     }));
+    navigateTo(pathForPanel(panel, sub));
   },
   setManageQuery: (query) => set({ manageQuery: query }),
   setSelectedId: (id) => set({ selectedId: id }),
-  setAbilityTab: (tab) => set((state) => {
-    // 记住当前 Tab，刷新后能回到同一个二级页（问题 25）
-    writeSession(ABILITY_TAB_STORAGE_KEY, tab);
-    return {
-      abilityTab: tab,
-      manageQuery: '',
-      visitedAbilityTabs: state.visitedAbilityTabs.includes(tab)
-        ? state.visitedAbilityTabs
-        : [...state.visitedAbilityTabs, tab],
-    };
-  }),
-
   setKbTab: (tab) => {
-    try { window.localStorage.setItem(KB_TAB_STORAGE_KEY, tab); } catch { /* localStorage 不可用 */ }
-    set({ kbTab: tab, manageQuery: '' });
+    set({ manageQuery: '' });
+    navigateTo(pathForKbTab(tab));
   },
 
   fetchCatalog: async () => {
     try {
       set({ catalogLoading: true });
-      const remote = await getCatalog();
-      // Merge local enabled states onto remote catalog
-      const local = loadCatalog();
-      const mergeEnabled = <T extends { id: string; enabled: boolean }>(
-        remoteItems: T[],
-        localItems: { id: string; enabled: boolean }[],
-      ): T[] => {
-        const localMap = new Map(localItems.map((i) => [i.id, i.enabled]));
-        return remoteItems.map((item) => ({
-          ...item,
-          enabled: localMap.has(item.id) ? localMap.get(item.id)! : item.enabled,
-        }));
-      };
-      const merged: Catalog = {
-        skills: mergeEnabled(remote.skills, local.skills),
-        agents: mergeEnabled(remote.agents, local.agents),
-        mcp: mergeEnabled(remote.mcp, local.mcp),
-        kb: mergeEnabled(remote.kb, local.kb),
-      };
-      set({ catalog: merged, catalogLoading: false });
-      saveCatalog(merged);
+      set({ catalog: await getCatalog(), catalogLoading: false });
     } catch (e) {
       console.error('Failed to fetch catalog:', e);
       set({ catalogLoading: false });
@@ -204,21 +75,27 @@ export const useCatalogStore = create<CatalogState>((set, get) => ({
   },
 
   toggleItem: async (kind, itemId, enabled) => {
-    const { catalog } = get();
-    // Optimistic update
-    const updated = {
-      ...catalog,
-      [kind]: catalog[kind].map((item) =>
-        item.id === itemId ? { ...item, enabled } : item,
+    const previous = get().catalog;
+    const apply = (value: boolean) => ({
+      ...get().catalog,
+      [kind]: get().catalog[kind].map((item) =>
+        item.id === itemId ? { ...item, enabled: value } : item,
       ),
-    };
-    set({ catalog: updated });
-    saveCatalog(updated);
-    // Sync to backend
+    });
+    set({ catalog: apply(enabled) });
     try {
       await updateCatalogItem(kind, itemId, enabled);
     } catch (e) {
+      // 后端没写成就把开关拨回去：开关显示的必须是真正生效的那个状态。
       console.error('Failed to sync catalog toggle:', e);
+      set({ catalog: previous });
+      throw e;
     }
   },
 }));
+
+// 首轮能力同步落完的那一刻，能力目录的来源从云端切到本机（见 api.ts 的
+// capabilityTargetHeaders）。重新拉一次，界面显示的才是真正生效的那份。
+useDeploymentModeStore.subscribe((next, previous) => {
+  if (next.capabilitiesReady && !previous.capabilitiesReady) void useCatalogStore.getState().fetchCatalog();
+});

@@ -3,13 +3,60 @@
    Based on UI design spec (img/设计规范/)
    ══════════════════════════════════════════ */
 :root{
+  --delivery-fill:#FAFAFA;
+  --delivery-hover:#F5F5F5;
+  --delivery-border:rgba(0,0,0,.04);
+  --delivery-control-border:rgba(0,0,0,.16);
+  --delivery-text:#0F1115;
+  --delivery-secondary:#61666B;
+  --delivery-tertiary:#81858C;
+  --delivery-control-hover:rgba(38,49,72,.06);
+  --delivery-error:#EC1313;
+  --delivery-focus:#4176E6;
+  --delivery-art-white:#FFFFFF;
+  --delivery-art-muted:#A2A4A6;
+  --delivery-icon-code:#4176E6;
+  --delivery-icon-excel:#22C55E;
+  --delivery-icon-folder:#F7AD31;
+  --delivery-icon-image:#8B76F6;
+  --delivery-icon-other:#CFD3D6;
+  --delivery-icon-pdf:#EC1313;
+  --delivery-icon-ppt:#F59E0B;
+  --delivery-icon-word:#5686FE;
+  /* Personal Agent: neutral conversation with blue outgoing messages. */
+  --color-personal-bg:#FCFCFC;
+  --color-personal-assistant:#EAEAEA;
+  --color-personal-user:#CBE5FF;
+  --color-personal-text:#191919;
+  --color-personal-link:#007AFF;
+  --shadow-personal-composer:0 2px 16px #0000000D;
+
+  /* Neutral secondary navigation balances the subtly tinted outer rail. */
+  --module-rail-bg:#EDF2FA;
+  --module-rail-gradient:linear-gradient(180deg,#EAF0F9 0%,#F0F2F9 55%,#EDF2FA 100%);
+  --module-rail-selected:#FAFCFF;
+  --module-sidebar-bg:#F7F7F8;
+  --module-nav-hover:#EFEFF1;
+  --module-nav-selected:#E8E9ED;
+  --module-nav-selected-text:#245AAA;
+  --module-border:#E6EBF2;
+
   /* ── 主色 (Primary Blue) ── */
   --color-primary:#126DFF;
   --color-primary-hover:#3C87FF;
   --color-primary-active:#0862F3;
+  /* 品牌火花点：只用在品牌标志里（含智能体标记），不当界面强调色 */
+  --color-brand-spark:#19D3A7;
   --color-primary-disabled:#A0C5FF;
   --color-primary-bg:#DBE9FF;
   --color-primary-light:#EBF2FF;
+  /* v2 floating layer (L2) and state overlays */
+  --color-primary-text:#0F62E6;
+  --state-hover:rgba(16,24,40,.04);
+  --state-press:rgba(16,24,40,.08);
+  --material:rgba(255,255,255,.82);
+  --shadow-floating:0 2px 8px rgba(16,24,40,.06), 0 20px 48px rgba(16,24,40,.14);
+  --shadow-drawer-edge:8px 0 24px -12px rgba(16,24,40,.16);
 
   /* ── 边框与填充 (Neutral Gray) ── */
   --color-fill-heavy:#8C94A2;
@@ -105,13 +152,11 @@
   --space-xl:40px;
 
   /* ── 字体 ── */
-  --font-family:-apple-system,BlinkMacSystemFont,"PingFang SC","Segoe UI","Microsoft YaHei UI","Microsoft YaHei",sans-serif;
-  /* 等宽栈里放一个中文字体：Consolas / SF Mono 没有汉字，不写的话 Windows 会按字回落到宋体 */
-  --font-family-mono:ui-monospace,"SF Mono",Menlo,Consolas,"Cascadia Mono","Liberation Mono","PingFang SC","Microsoft YaHei UI","Microsoft YaHei",monospace;
-  --font-family-number:"DingTalk Sans","PingFang SC","Microsoft YaHei",sans-serif;
-  --font-family-homepage:"Alibaba PuHuiTi 3.0","MiSans","HarmonyOS Sans SC","PingFang SC","Microsoft YaHei UI",sans-serif;
-
-  /* ── 字号 ── */
+  /* The platform is set before React mounts; keep all UI text on this token. */
+  --font-family-cjk:"Noto Sans CJK SC","Noto Sans SC","Source Han Sans SC";
+  --font-family:var(--font-family-cjk),system-ui,sans-serif;
+  --font-family-mono:ui-monospace,"SF Mono",Menlo,Consolas,"Cascadia Mono","Liberation Mono",var(--font-family-cjk),monospace;
+  --font-family-number:"DingTalk Sans",var(--font-family);
   --font-size-xs:12px;
   --font-size-sm:14px;
   --font-size-md:16px;
@@ -172,15 +217,50 @@
    只重定义颜色/阴影令牌，几何与 motion 令牌两个主题共用。
    ══════════════════════════════════════════ */
 :root[data-theme="dark"]{
+  --delivery-fill:#212123;
+  --delivery-hover:#292929;
+  --delivery-border:rgba(255,255,255,.06);
+  --delivery-control-border:rgba(255,255,255,.2);
+  --delivery-text:#F9FAFB;
+  --delivery-secondary:#CFD3D6;
+  --delivery-tertiary:#ADB2B8;
+  --delivery-control-hover:rgba(255,255,255,.08);
+  --delivery-error:#F25A5A;
+  --delivery-focus:#7AAAFF;
+  --color-personal-bg:var(--color-bg-container);
+  --color-personal-assistant:#2A3039;
+  --color-personal-user:#254766;
+  --color-personal-text:var(--color-text);
+  --color-personal-link:#80BFFF;
+  --shadow-personal-composer:var(--shadow-card);
+
+  --module-rail-bg:var(--color-bg-base);
+  --module-rail-gradient:none;
+  --module-rail-selected:#2B3749;
+  /* Match the sidebar surface used before modular navigation. */
+  --module-sidebar-bg:var(--color-bg-layout);
+  --module-nav-hover:#2B2C2F;
+  --module-nav-selected:#293B55;
+  --module-nav-selected-text:#A9CAFF;
+  --module-border:#34363A;
+
   color-scheme:dark;
 
   /* 主色在暗底上整体提亮一档，透明蓝替代浅蓝底 */
   --color-primary:#3E8BFF;
   --color-primary-hover:#5FA0FF;
   --color-primary-active:#2E7BF0;
+  --color-brand-spark:#19D3A7;
   --color-primary-disabled:#28497E;
   --color-primary-bg:rgba(62,139,255,.20);
   --color-primary-light:rgba(62,139,255,.12);
+  /* v2 floating layer (L2) and state overlays */
+  --color-primary-text:#5C9BFF;
+  --state-hover:rgba(255,255,255,.06);
+  --state-press:rgba(255,255,255,.10);
+  --material:rgba(28,35,48,.80);
+  --shadow-floating:0 2px 8px rgba(0,0,0,.45), 0 20px 48px rgba(0,0,0,.55);
+  --shadow-drawer-edge:8px 0 24px -12px rgba(0,0,0,.6);
 
   --color-fill-heavy:#77828F;
   --color-fill-deep:#66707E;
@@ -340,3 +420,12 @@ code::-webkit-scrollbar,
 
 /* AntD tweaks */
 .ant-layout{background:transparent}
+
+
+/* Explicit platform priorities also work when fonts from another OS are installed. */
+:root[data-font-platform="apple"]{
+  --font-family-cjk:"PingFang SC","Hiragino Sans GB";
+}
+:root[data-font-platform="windows"]{
+  --font-family-cjk:"Microsoft YaHei UI","Microsoft YaHei";
+}

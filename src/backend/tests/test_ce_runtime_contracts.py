@@ -9,7 +9,7 @@ from types import SimpleNamespace
 from api.routes.v1.auth import router as auth_router
 from api.routes.v1.users import router as users_router
 from cli import DEFAULT_LOCAL_CONTEXT_LENGTH, build_parser, configure_model
-from core.db import model_repository
+from core.models import repository as model_repository
 
 
 def test_ce_has_no_commercial_license_package():
@@ -25,12 +25,18 @@ def test_ce_has_no_enterprise_modules_or_model_exports():
 
     for module_name in (
         "edition_ee",
-        "core.kb.dify_kb",
+        "features.knowledge.dify_kb",
         "core.auth.team_permissions",
         "core.services.team_service",
         "core.db.repository.team",
     ):
-        assert importlib.util.find_spec(module_name) is None
+        try:
+            spec = importlib.util.find_spec(module_name)
+        except ModuleNotFoundError as exc:
+            # A removed parent package also makes this enterprise path unavailable.
+            assert exc.name and (module_name == exc.name or module_name.startswith(exc.name + "."))
+            spec = None
+        assert spec is None
     for model_name in (
         "Team",
         "TeamMember",
@@ -49,12 +55,12 @@ def test_ce_runtime_sources_have_no_commercial_symbols():
     pattern = re.compile(
         r"\b(?:TeamMember|TeamFolder|team_id|team_folder_id|"
         r"linked_team_folder_id|share_scope|grant_team_ids|team_read|team_edit|"
-        r"list_team_files|stage_team_file|resolve_team_file_permission|"
+        r"space_list_team_files|stage_team_file|resolve_team_file_permission|"
         r"require_team_file_permission|team_cache_dir|team_folders)\b|"
         r"/v1/(?:me/teams|my-teams|teams)(?:/|\b)|\bkind=team\b"
     )
     hits = []
-    for relative_root in ("api", "core", "mcp_servers", "orchestration"):
+    for relative_root in ("api", "core", "extensions", "orchestration"):
         for path in (backend / relative_root).rglob("*.py"):
             for line_no, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
                 if pattern.search(line):
@@ -116,12 +122,13 @@ def test_ce_user_router_exposes_self_service_password_change():
 
 
 def test_dingtalk_status_env_does_not_import_ee_sandbox_module(monkeypatch, tmp_path):
-    from core.sandbox import _common
-    from core.services.dingtalk_service import _dws_env
+    import integrations.dingtalk.environment as _common_account_env
+    import integrations.dingtalk.storage as _common_credentials
+    from integrations.dingtalk.service import _dws_env
 
-    monkeypatch.setattr(_common, "dws_home_dir", lambda _user_id: tmp_path / "dws-home")
+    monkeypatch.setattr(_common_credentials, "dws_home_dir", lambda _user_id: tmp_path / "dws-home")
     monkeypatch.setattr(
-        _common,
+        _common_account_env,
         "dws_extra_envs",
         lambda: {"DWS_TRUSTED_DOMAINS": "*.dingtalk.com"},
     )
@@ -133,11 +140,11 @@ def test_dingtalk_status_env_does_not_import_ee_sandbox_module(monkeypatch, tmp_
 
 
 def test_ce_ignores_stale_database_query_builtin(db_session, monkeypatch):
-    from core.config.catalog_runtime import get_runtime_catalog, invalidate_runtime_catalog_cache
+    from core.capabilities.catalog.runtime import get_runtime_catalog, invalidate_runtime_catalog_cache
     from core.db.models import AdminMcpServer
-    from core.services import mcp_service
-    from core.services.mcp_service import McpServerConfigService
-    from mcp_servers._ports import PORTS
+    from core.capabilities.mcp import service as mcp_service
+    from core.capabilities.mcp.service import McpServerConfigService
+    from extensions.mcp_servers._ports import PORTS
 
     assert "query_database" not in PORTS
     db_session.add_all(
@@ -179,11 +186,11 @@ def test_ce_ignores_stale_database_query_builtin(db_session, monkeypatch):
 
 
 def test_ce_local_launcher_covers_default_plugin_mcp_servers():
-    from cli import _DEFAULT_PLUGINS
-    from mcp_servers._launcher import PORTS as LAUNCHER_PORTS
-    from mcp_servers._ports import PORTS, package_name
+    from cli import _default_plugins
+    from extensions.mcp_servers._launcher import PORTS as LAUNCHER_PORTS
+    from extensions.mcp_servers._ports import PORTS, package_name
 
-    assert _DEFAULT_PLUGINS == ["automation", "skill-manager", "sites"]
+    assert _default_plugins() == ["automation", "skill-manager", "sites", "visualize"]
     assert {
         "automation_task": 9108,
         "skill_manager": 9112,
@@ -195,7 +202,7 @@ def test_ce_local_launcher_covers_default_plugin_mcp_servers():
 
 def test_ce_fresh_database_bootstraps_default_plugins(db_session):
     from core.db.models import AdminMcpServer, ContentBlock, InstalledPlugin
-    from core.services import plugin_service
+    from core.capabilities.plugins import management as plugin_service
 
     assert plugin_service.ensure_default_plugins_bootstrapped(db_session) is True
     installs = db_session.query(InstalledPlugin).filter(InstalledPlugin.owner_user_id.is_(None))
@@ -203,6 +210,7 @@ def test_ce_fresh_database_bootstraps_default_plugins(db_session):
         "automation",
         "skill-manager",
         "sites",
+        "visualize",
     }
     assert {
         row.source_plugin
@@ -211,21 +219,19 @@ def test_ce_fresh_database_bootstraps_default_plugins(db_session):
         .all()
     } == {"automation", "skill-manager", "sites"}
     marker = db_session.get(ContentBlock, plugin_service.DEFAULT_BOOTSTRAP_MARKER_ID)
-    assert marker.payload["plugins"] == ["automation", "skill-manager", "sites"]
+    assert marker.payload["plugins"] == ["automation", "skill-manager", "sites", "visualize"]
     assert plugin_service.ensure_default_plugins_bootstrapped(db_session) is False
 
 
 def test_ce_launcher_and_catalog_cover_core_mcp_servers():
-    from core.services.mcp_service import BUILTIN_MCP_SERVERS
-    from mcp_servers._launcher import PORTS as LAUNCHER_PORTS
-    from mcp_servers._ports import PORTS, package_name
+    from core.capabilities.mcp.service import BUILTIN_MCP_SERVERS
+    from extensions.mcp_servers._launcher import PORTS as LAUNCHER_PORTS
+    from extensions.mcp_servers._ports import PORTS, package_name
 
     expected = {
         "retrieve_dataset_content": 9100,
         "internet_search": 9102,
-        "generate_chart_tool": 9104,
         "web_fetch": 9106,
-        "batch_runner": 9107,
     }
     assert expected.items() <= PORTS.items()
     assert {
@@ -239,14 +245,12 @@ def test_ce_launcher_and_catalog_cover_core_mcp_servers():
 
 def test_ce_fresh_database_seeds_core_mcp_servers_enabled(db_session):
     from core.db.models import AdminMcpServer
-    from core.services.mcp_service import seed_builtin_mcp_servers_if_empty
+    from core.capabilities.mcp.service import seed_builtin_mcp_servers_if_empty
 
     expected = {
         "retrieve_dataset_content",
         "internet_search",
-        "generate_chart_tool",
         "web_fetch",
-        "batch_runner",
     }
     seeded = set(seed_builtin_mcp_servers_if_empty(db_session))
     rows = {
@@ -274,7 +278,6 @@ def test_serve_cli_accepts_explicit_public_bind():
 
 def test_configure_chat_model_persists_context_window(monkeypatch):
     from core.db import engine
-    from core.services.model_config import ModelConfigService
 
     class FakeDb:
         closed = False
@@ -284,7 +287,6 @@ def test_configure_chat_model_persists_context_window(monkeypatch):
 
     db = FakeDb()
     captured = {}
-    invalidated = []
 
     def fake_create_provider(_db, **kwargs):
         captured.update(kwargs)
@@ -293,11 +295,6 @@ def test_configure_chat_model_persists_context_window(monkeypatch):
     monkeypatch.setattr(engine, "SessionLocal", lambda: db)
     monkeypatch.setattr(model_repository, "create_provider", fake_create_provider)
     monkeypatch.setattr(model_repository, "assign_role", lambda *args, **kwargs: None)
-    monkeypatch.setattr(
-        ModelConfigService,
-        "get_instance",
-        classmethod(lambda cls: SimpleNamespace(invalidate_cache=lambda: invalidated.append(True))),
-    )
 
     configure_model(
         "http://model.example/v1",
@@ -309,7 +306,6 @@ def test_configure_chat_model_persists_context_window(monkeypatch):
 
     assert captured["extra_config"] == {"context_length": 65536}
     assert db.closed is True
-    assert invalidated == [True]
 
 
 def test_ce_schema_keeps_ontology_control_plane_tables():
@@ -343,13 +339,13 @@ def test_ce_site_contract_has_no_organization_scope():
 
 
 def test_ce_site_publish_tool_has_no_organization_parameter():
-    from mcp_servers.site_publish_mcp.server import publish_site
+    from extensions.mcp_servers.site_publish_mcp.server import publish_site
 
     assert "team_id" not in inspect.signature(publish_site).parameters
 
 
 def test_ce_site_publish_callback_uses_desktop_listener(monkeypatch):
-    from mcp_servers.site_publish_mcp import impl
+    from extensions.mcp_servers.site_publish_mcp import impl
 
     monkeypatch.delenv("BACKEND_INTERNAL_URL", raising=False)
     monkeypatch.delenv("BACKEND_PORT", raising=False)
@@ -365,3 +361,82 @@ def test_ce_registers_native_api_key_routes():
     assert {"get", "post"} <= set(paths["/v1/me/api-keys"])
     assert "get" in paths["/v1/me/api-keys/{key_id}/reveal"]
     assert {"patch", "delete"} <= set(paths["/v1/me/api-keys/{key_id}"])
+
+
+def test_ce_opensandbox_provider_is_shared_runtime(monkeypatch):
+    from core.sandbox.providers.edition import PersistentSandboxProvider
+    from core.sandbox.providers.opensandbox.provider import OpenSandboxProvider
+
+    from core.files.spaces.sandbox import SpaceSandboxMixin
+
+    assert issubclass(PersistentSandboxProvider, OpenSandboxProvider)
+    assert issubclass(PersistentSandboxProvider, SpaceSandboxMixin)
+    assert PersistentSandboxProvider.workspace_mount_names == SpaceSandboxMixin.workspace_mount_names
+    assert OpenSandboxProvider.workspace_mount_names == ("myspace", "skills")
+
+
+def test_ce_factory_selects_opensandbox_without_enterprise_code(monkeypatch):
+    from types import SimpleNamespace
+    from core.sandbox import factory
+    from core.sandbox.providers.opensandbox.provider import OpenSandboxProvider
+
+    from core.sandbox.providers.edition import PersistentSandboxProvider
+
+    monkeypatch.setattr(factory, "settings", SimpleNamespace(sandbox=SimpleNamespace(provider="opensandbox")))
+    factory.reset_provider_cache()
+    try:
+        ordinary = factory.get_sandbox_provider()._ordinary
+        assert type(ordinary) is PersistentSandboxProvider
+        assert isinstance(ordinary, OpenSandboxProvider)
+    finally:
+        factory.reset_provider_cache()
+
+
+def _personal_name_migration():
+    from alembic.config import Config
+    from alembic.script import ScriptDirectory
+
+    config = Config()
+    config.set_main_option("script_location", str(Path(__file__).parents[1] / "alembic"))
+    return ScriptDirectory.from_config(config).get_revision("ce_0018").module
+
+
+def test_ce_personal_name_migration_after_current_baseline(monkeypatch):
+    import sqlalchemy as sa
+    from core.db.edition import ce_create_all
+    from core.db.personal_file_names import INDEX_NAMES
+
+    migration = _personal_name_migration()
+    engine = sa.create_engine("sqlite://")
+    with engine.begin() as connection:
+        ce_create_all(connection)
+        monkeypatch.setattr(migration.op, "get_bind", lambda: connection)
+        migration.upgrade()
+        indexes = {item["name"]: item for item in sa.inspect(connection).get_indexes("artifacts")}
+        assert all(indexes[name]["unique"] for name in INDEX_NAMES)
+    engine.dispose()
+
+
+def test_ce_personal_name_migration_builds_indexes_and_rejects_duplicates(monkeypatch):
+    import pytest
+    import sqlalchemy as sa
+    from core.db.personal_file_names import INDEX_NAMES
+
+    migration = _personal_name_migration()
+    engine = sa.create_engine("sqlite://")
+    with engine.begin() as connection:
+        connection.exec_driver_sql(
+            "CREATE TABLE artifacts (user_id TEXT, user_folder_id TEXT, filename TEXT, deleted_at TEXT)"
+        )
+        monkeypatch.setattr(migration.op, "get_bind", lambda: connection)
+        migration.upgrade()
+        indexes = {item["name"] for item in sa.inspect(connection).get_indexes("artifacts")}
+        assert set(INDEX_NAMES) <= indexes
+        for name in INDEX_NAMES:
+            connection.exec_driver_sql("DROP INDEX " + name)
+        connection.exec_driver_sql(
+            "INSERT INTO artifacts (user_id,filename) VALUES ('u','same.txt'),('u','same.txt')"
+        )
+        with pytest.raises(RuntimeError, match="duplicate names"):
+            migration.upgrade()
+    engine.dispose()

@@ -7,11 +7,9 @@ from unittest.mock import AsyncMock
 import pytest
 from agentscope.message import Msg, TextBlock, ToolCallBlock, ToolResultBlock
 
-from core.llm.chat_models import (
-    _normalize_text_only_content,
-    make_chat_model,
-)
-from core.llm.context_adapter import PROVIDER_CONTEXT_META_KEY
+from core.models.providers.openai_compat import _normalize_text_only_content
+from core.models.chat_models import make_chat_model
+from core.models.constants import PROVIDER_CONTEXT_META_KEY
 
 
 @pytest.mark.parametrize("role", ["system", "user", "assistant", "tool"])
@@ -59,7 +57,7 @@ def _model():
     return make_chat_model(
         model="test-model", temperature=0.6, max_tokens=32, timeout=5,
         base_url="http://example.invalid/v1", api_key="dummy",
-        context_size=4096, stream=False,
+        api_protocol="chat_completions", context_size=4096, stream=False,
     )
 
 
@@ -72,7 +70,7 @@ async def test_actual_request_normalizes_plain_chat_and_tool_history(monkeypatch
     model = _model()
     monkeypatch.setattr(model, "_build_client", lambda: SimpleNamespace(
         chat=SimpleNamespace(completions=SimpleNamespace(create=create))))
-    monkeypatch.setattr("core.llm.model_usage.record_provider_failure", AsyncMock())
+    monkeypatch.setattr("core.models.usage.record_provider_failure", AsyncMock())
     messages = [
         Msg(name="user", role="user", content=[TextBlock(type="text", text="计算")]),
         Msg(name="assistant", role="assistant", content=[

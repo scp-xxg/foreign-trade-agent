@@ -8,26 +8,11 @@ these names for backward compatibility.
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+import os
+from core.llm import prompt_versions as prompt_versions_module
 
 from prompts.prompt_runtime import _load_db_prompt_parts  # noqa: E402 (cycle-safe)
 
-
-def _format_size(n: int) -> str:
-    """Human-readable byte size (1.2 MB / 480 KB / 12 B)."""
-    n = int(n or 0)
-    if n < 1024:
-        return f"{n} B"
-    if n < 1024 * 1024:
-        return f"{n/1024:.1f} KB"
-    if n < 1024 * 1024 * 1024:
-        return f"{n/1024/1024:.1f} MB"
-    return f"{n/1024/1024/1024:.1f} GB"
-
-
-# Hard cap on the file listing in the project-mode prompt: beyond it only the first
-# N are listed, with a hint to query the rest via tools
-_PROJECT_FILE_LIST_CAP = 50
 
 # part_id of the project-mode section in AdminPromptPart. Editable/versionable in
 # the Config console; falls back to _PROJECT_MODE_DEFAULT_TEMPLATE below when
@@ -40,55 +25,27 @@ PROJECT_MODE_DISPLAY_NAME = "项目模式段（动态附加）"
 # Available variables:
 #   {project_name}        project name (already replaced with "(未命名项目)" when empty)
 #   {folder_name}         bound folder name (may be empty)
-#   {folder_scope_text}   "我的空间" (My Space) / "团队空间" (team space)
+#   {folder_scope_text}   edition-specific folder label
 #   {folder_scope_block}  pre-rendered "bound to folder xx..." section (empty without a folder)
-#   {file_count}          total file count (int)
-#   {file_list_block}     pre-rendered "### project sandbox file list..." section (empty without files)
 #   {instructions_block}  pre-rendered "### project instructions..." section (empty without instructions)
 _PROJECT_MODE_DEFAULT_TEMPLATE = """## 项目模式
 本次对话挂载在项目「{project_name}」下。
 {folder_scope_block}
-{file_list_block}
 {instructions_block}"""
 
 
-def _render_file_list_block(files: list, total: int) -> str:
-    """Markdown section for the file listing (heading + entries + truncation notice + hint). Returns '' for an empty list."""
-    if total <= 0:
-        return ""
-    shown = min(total, _PROJECT_FILE_LIST_CAP)
-    lines: list[str] = [f"### 项目沙盒文件清单（共 {total} 个，列出前 {shown}）"]
-    for item in files[:_PROJECT_FILE_LIST_CAP]:
-        rel = (item.get("name") or "").strip()  # the name returned by the service already includes the subpath
-        if not rel:
-            continue
-        mime = (item.get("mime_type") or "").strip()
-        size = _format_size(item.get("size_bytes") or 0)
-        meta = f"{mime}, {size}" if mime else size
-        lines.append(f"- {rel} ({meta})")
-    if total > _PROJECT_FILE_LIST_CAP:
-        lines.append(
-            f"...还有 {total - _PROJECT_FILE_LIST_CAP} 个未列出，"
-            "用 list_myspace_files 工具查看完整列表。"
-        )
-    lines.append(
-        "用户提到的文件名默认指上面这些文件——直接用 Read/Edit/Glob/Grep 等工具操作即可。"
-    )
-    return "\n".join(lines)
-
-
-def _render_folder_scope_block(folder_name: str, folder_scope_text: str, file_count: int) -> str:
+def _render_folder_scope_block(folder_name: str, folder_scope_text: str, workspace_path: str = "") -> str:
     """Bound-folder description section. Returns '' without a folder_name."""
     f = (folder_name or "").strip()
     if not f:
         return ""
+    path = workspace_path or f"/myspace/{f}/"
     base = (
         f"该项目挂钩到{folder_scope_text}的「{f}」文件夹。"
-        f"项目相关的文件读写应当严格限定在 `/myspace/{f}/`（及其子文件夹）下，"
+        f"项目相关的文件读写应当严格限定在 `{path}`（及其子文件夹）下，"
         f"不要把项目无关的文件写到此处，也不要假设其它路径下的文件属于本项目。"
     )
-    if file_count <= 0:
-        base += "\n该项目沙盒目前还没有任何文件；用户可能在对话中补充上传。"
+    base += "\n需要了解项目文件时，使用目录、搜索和读取工具按需查看。"
     return base
 
 
@@ -123,8 +80,8 @@ def _get_project_mode_template() -> str:
             return content
     # 2) parts of the active system version (edited in the admin UI)
     try:
-        from core.services import prompt_version_service as pvs
-        active = pvs.get_active_version("system")
+        from core.llm import prompt_versions as pvs
+        active = prompt_versions_module.get_active_version("system")
         if active:
             for p in active.get("parts") or []:
                 if (p.get("part_id") or "").strip() != PROJECT_MODE_PART_ID:
@@ -146,7 +103,7 @@ def _build_project_section(
     project_instructions: str,
     folder_name: str,
     folder_kind: str,
-    project_files: list | None = None,
+    workspace_path: str = "",
 ) -> str:
     """Build the "project mode" system-prompt section.
 
@@ -157,29 +114,29 @@ def _build_project_section(
     - the outer frame (heading, assembly order of the sections) goes through
       ``AdminPromptPart(part_id='project_mode')``, editable/versionable in the
       Config console;
-    - the file listing / folder-binding section / project-instructions section are
+    - the folder-binding section and project-instructions section are
       pre-rendered into strings in Python and injected via the
-      ``{file_list_block}`` / ``{folder_scope_block}`` / ``{instructions_block}``
+      ``{folder_scope_block}`` / ``{instructions_block}``
       variables, working around str.format_map's lack of loops/conditionals.
     """
     from prompts.provider import render_template
 
     name = (project_name or "").strip() or "(未命名项目)"
-    files = list(project_files or [])
-    total = len(files)
-    scope_text = "我的空间" if folder_kind == "personal" else "团队空间"
+    from core.files.edition import folder_scope_label
+    scope_text = folder_scope_label(folder_kind)
+
 
     vars_ = {
         "project_name": name,
         "folder_name": (folder_name or "").strip(),
         "folder_scope_text": scope_text,
-        "folder_scope_block": _render_folder_scope_block(folder_name, scope_text, total),
-        "file_count": total,
-        "file_list_block": _render_file_list_block(files, total),
+        "folder_scope_block": _render_folder_scope_block(folder_name, scope_text, workspace_path),
         "instructions_block": _render_instructions_block(project_instructions),
     }
     template = _get_project_mode_template()
     rendered = render_template(template, vars=vars_, strict=False)
+    if workspace_path:
+        rendered += f"\n当前项目工作目录：`{workspace_path}`（已挂载目录的子目录，无需暂存）。"
     return _collapse_blanks(rendered)
 
 
@@ -189,6 +146,7 @@ def _build_local_project_section(
     project_instructions: str,
     local_path: str,
     local_slug: str,
+    inherited_instructions=(),
 ) -> str:
     """Build the desktop **local-mode** project section (ticket #05).
 
@@ -197,32 +155,20 @@ def _build_local_project_section(
     it directly — no upload — but must respect the authorization + confirmation
     boundary enforced by the execution policy gate (ticket #07). Only injected
     when ``project_is_local`` is set, so the cloud/web deployment never sees it.
+
+    ``inherited_instructions`` are outer ``(path, text)`` AGENTS.md files, outermost
+    first; when present every file, the project root last, is labelled with its path.
     """
-    name = (project_name or "").strip() or "(未命名项目)"
-    path = (local_path or "").strip().rstrip("/")
-    ex = path or "/Users/xxx/项目"
-    lines = [
-        "## 本地项目模式",
-        f"当前会话绑定本地项目「{name}」——它就是**用户本机电脑上的真实文件夹**"
-        + (f"：`{path}`" if path else "")
-        + "。",
-        f"**一律用这个真实绝对路径直接操作文件**（`Read`/`Write`/`Edit`/`Glob`/`Grep`/`bash` "
-        f"在本机模式都支持真实路径，读写会实时落到用户电脑上）：例如 "
-        f"`Read('{ex}/某文件')`、`Write('{ex}/新文件.txt', ...)`、`bash('ls -la {ex}')`、"
-        f"`bash('rm {ex}/某文件')`。**不要**去 `/workspace/local/...` 找（那只是内部映射，可能不存在）。",
-        "",
-        "**在这个真实文件夹里新建、修改、删除、运行文件即可，产物实时出现在用户电脑上——"
-        "不需要、也不要引导用户上传到「我的空间」。**",
-        "建站必须先在本地项目真实目录下的 sites/<站点名>/ 编写源码，"
-        "不要把最终源码留在 /workspace/site 或 /workspace/site-src。"
-        "编辑已有站点先读取当前站点的 source_dir 并原地修改；"
-        "构建后 publish_site 的 src_dir 指向构建产物、source_dir 指向项目源码，"
-        "静态站显式传 src_dir 指向页面目录。发布只同步托管文件，源码保留本机。",
-        "越出授权目录的操作与危险命令受本机权限策略约束（可能被拦截或需用户确认）；"
-        "改本机文件前系统会自动快照、可回滚。",
-    ]
-    section = "\n".join(lines)
-    instr = _render_instructions_block(project_instructions)
-    if instr and instr.strip():
-        section = section + "\n\n" + instr.strip()
+    from prompts.desktop_templates import render_desktop_part
+    variables = dict(project_name=(project_name or "").strip(), local_path=(local_path or "").strip())
+    section = render_desktop_part("project" if variables["local_path"] else "project_missing", **variables)
+    instructions = project_instructions.strip()
+    blocks = [f"#### `{path}`\n{text.strip()}" for path, text in inherited_instructions or () if text.strip()]
+    if blocks and instructions:
+        root = os.path.join(variables["local_path"], "AGENTS.md")
+        blocks.append(f"#### `{root}`\n{instructions}")
+    if blocks:
+        instructions = "\n\n".join(blocks)
+    if instructions:
+        section += "\n\n" + render_desktop_part("project_instructions", instructions=instructions)
     return _collapse_blanks(section)

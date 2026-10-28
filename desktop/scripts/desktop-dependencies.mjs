@@ -2,6 +2,32 @@ import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
+export const DESKTOP_RUNTIME_INPUT_FILES = Object.freeze([
+  "desktop/native-tools.json",
+  "desktop/licenses/OfficeCLI-LICENSE.txt",
+  "desktop/licenses/Pandoc-COPYING.md",
+  "desktop/licenses/Office-runtime-NOTICES.txt",
+  "desktop/licenses/Git-Bash-NOTICES.txt",
+  "desktop/scripts/build-runtime.mjs",
+  "desktop/scripts/macos-runtime-signing.mjs",
+  "desktop/scripts/browser-jit.entitlements.plist",
+  "desktop/scripts/officecli-jit.entitlements.plist",
+  "desktop/scripts/python-self-signed.entitlements.plist",
+  "desktop/scripts/libreoffice-jit.entitlements.plist",
+  "desktop/scripts/libreoffice-self-signed.entitlements.plist",
+  "desktop/scripts/macos-signing.mjs",
+  "desktop/scripts/desktop-dependencies.mjs",
+  "desktop/scripts/install-native-tools.py",
+  "desktop/scripts/runtime-smoke.py",
+  "desktop/scripts/browser-runtime.py",
+  "desktop/scripts/plugin-cli-runtime.py",
+  "desktop/plugin-clis/package.json",
+  "desktop/plugin-clis/package-lock.json",
+  "desktop/scripts/extract-runtime-probe.py",
+  "src/backend/core/sandbox/runner/runtime_tools.py",
+  "desktop/scripts/create-runtime-archive.py",
+]);
+
 export const DESKTOP_REQUIREMENTS_FILE = "desktop/requirements-desktop.txt";
 export const MACOS_DESKTOP_OVERRIDES_FILE =
   "desktop/requirements-desktop-macos-overrides.txt";
@@ -127,14 +153,32 @@ export function readAndValidateWindowsDesktopLock(root) {
 export function desktopDependencyFingerprint(
   root,
   target = currentDesktopTarget(),
+  env = process.env,
 ) {
   const config = desktopTargetConfig(target);
   const lock = readAndValidateDesktopLock(root, target);
   const hash = createHash("sha256");
-  hash.update("desktop-dependencies-v2\0");
+  hash.update("desktop-dependencies-v3\0");
+  if (target.startsWith("darwin-")) {
+    // Rebuild and reactivate the runtime when its signing mode or identity changes.
+    const mode = env.HUGAGENT_MACOS_SIGNING_MODE?.trim() || "developer-id";
+    const identity = env.APPLE_SIGNING_IDENTITY?.trim() || "-";
+    hash.update(mode);
+    hash.update("\0");
+    hash.update(mode === "self-signed" ? identity.toUpperCase() : identity);
+    hash.update("\0");
+    hash.update(mode === "self-signed" ? "" : env.APPLE_TEAM_ID?.trim() || "");
+    hash.update("\0");
+  }
   hash.update(target);
   hash.update("\0");
   for (const file of targetInputFiles(target)) {
+    hash.update(file);
+    hash.update("\0");
+    hash.update(readNormalizedText(join(root, file)));
+    hash.update("\0");
+  }
+  for (const file of DESKTOP_RUNTIME_INPUT_FILES) {
     hash.update(file);
     hash.update("\0");
     hash.update(readNormalizedText(join(root, file)));

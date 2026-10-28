@@ -6,8 +6,15 @@ inside the authenticated agent process, never under an identity supplied by a mo
 from __future__ import annotations
 
 TRADE_PLUGIN = "foreign-trade-demo"
-TRADE_TOOL_NAMES = frozenset({"trade_inquiry", "trade_calculate_quote", "trade_product_content",
-                              "trade_save_inquiry", "trade_import_product", "trade_confirm_product_facts"})
+from core.foreign_trade.tool_names import TRADE_TOOL_NAMES
+
+
+def trade_tools_allowed(request) -> bool:
+    """Business writes require a selected plugin in a writable standard run."""
+    return bool(
+        request.current_user_id and not request.profile
+        and not (request.read_only or request.plan_mode or request.disable_tools or request.turbo_mode)
+    )
 
 
 class TradeSkillRequired(ValueError):
@@ -28,47 +35,72 @@ def _trade_selector(value: str) -> bool:
 
 def _legacy_available(user_id: str, install_id: str) -> bool:
     from core.db.engine import SessionLocal
-    from core.services.plugin_service import list_installed
+    from core.capabilities.plugins.management import list_installed
     with SessionLocal() as db:
-        matches = [row for row in list_installed(db, user_id, include_global=True)
-                   if row["install_id"] == install_id and row["slug"] == TRADE_PLUGIN]
-    return bool(matches and matches[0].get("enabled") and matches[0].get("callable")
+        rows = list_installed(db, user_id, include_global=True)
+    if install_id.startswith("plugin:"):
+        from types import SimpleNamespace
+        from core.capabilities.plugins.runtime.sticky_selection import _local_sticky_selection
+
+        visible = [SimpleNamespace(
+            install_id=row["install_id"], slug=row["slug"],
+            owner_user_id=None if row.get("is_global") else user_id,
+            source=row.get("source"),
+        ) for row in rows]
+        ids = {row.install_id for row in
+               _local_sticky_selection([install_id], visible, user_id=user_id)}
+    else:
+        ids = {install_id}
+    matches = [row for row in rows if row["install_id"] in ids and row["slug"] == TRADE_PLUGIN]
+    return bool(len(matches) == 1 and matches[0].get("enabled") and matches[0].get("callable")
                 and _upgraded(matches[0].get("version", "")))
 
 
 def _enabled_skill_ids(user_id: str) -> set[str]:
     from core.db.engine import SessionLocal
-    from core.config.catalog_resolver import resolve_all_runtime_enabled
+    from core.capabilities.catalog.resolver import resolve_all_runtime_enabled
     with SessionLocal() as db:
         selected, _, _ = resolve_all_runtime_enabled(db, user_id)
     return set(selected or ())
 
 
 def assert_trade_plugin_available(user_id: str, install_id: str) -> None:
-    """Recheck plugin ownership, current enablement and compatible version per call."""
+    """Recheck the exact installation and authenticated actor on every call."""
     if not user_id or not install_id:
         raise PermissionError("外贸插件缺少当前用户的有效安装，请重新加载插件。")
-    from core.capabilities.paths import capabilities_enabled, LOCAL_PROFILE, BUILTIN_PROFILE
-    if capabilities_enabled():
-        from core.capabilities import registry, skills
-        row = registry.get(install_id)
+    from core.harness.registry import device_catalog, execution_account
+    from core.capabilities.identity_rules import LOCAL_PROFILE, BUILTIN_PROFILE
+
+    rows = device_catalog.installations("plugin", user_id=user_id)
+    row = next((item for item in rows if item.install_id == install_id), None)
+    if row is not None:
         allowed_profiles = {LOCAL_PROFILE, BUILTIN_PROFILE}
-        if skills.account_authorized_for(user_id):
-            profile = skills.current_account_profile()
+        if execution_account.account_authorized_for(user_id):
+            profile = execution_account.current_account_profile()
             if profile:
                 allowed_profiles.add(profile)
-        if (row is None or row.kind != "plugin" or row.key != TRADE_PLUGIN or
+        if (row.kind != "plugin" or row.key != TRADE_PLUGIN or
             row.profile_id not in allowed_profiles or not row.ready or not row.enabled or
             row.payload.get("owner_user_id") not in (None, "", user_id) or not _upgraded(row.version)):
             raise PermissionError("当前账号的外贸插件未安装、已停用或需要升级至 0.2.0。")
-        # The web plugin switch is a per-user component override. A projected
-        # local installation may remain globally enabled after that switch is off.
+        entries = device_catalog.plugin_entries(user_id)
+        entry = next((item for item in entries if item.get("install_id") in {
+            install_id, row.payload.get("cloud_install_id"),
+        }), None)
+        if entry is not None and not (entry.get("enabled") and entry.get("callable")):
+            raise PermissionError("当前用户已关闭外贸插件或其组件尚未就绪。")
         source_install = row.payload.get("db_install_id")
-        if source_install and not _legacy_available(user_id, str(source_install)):
+        if source_install and not device_catalog.active() and not _legacy_available(user_id, str(source_install)):
             raise PermissionError("当前用户已关闭外贸插件，请重新启用后再使用。")
-    else:
-        if not _legacy_available(user_id, install_id):
-            raise PermissionError("当前账号的外贸插件未安装、已停用或需要升级至 0.2.0。")
+        return
+    # Only local/builtin identities may resolve to local database installations.
+    # Unknown cloud/account-scoped ids must never retarget an identically named plugin.
+    if install_id.startswith("plugin:"):
+        parts = install_id.split(":", 2)
+        if len(parts) != 3 or parts[1] not in (LOCAL_PROFILE, BUILTIN_PROFILE):
+            raise PermissionError("当前账号没有该外贸插件的有效安装。")
+    if not _legacy_available(user_id, install_id):
+        raise PermissionError("当前账号的外贸插件未安装、已停用或需要升级至 0.2.0。")
 
 
 def register_trade_plugin_target(collector, target, *, user_id: str, chat_id: str | None,
@@ -110,28 +142,37 @@ def register_initial_trade_tools(collector, *, user_id: str, chat_id: str | None
     else:
         # Eager mode still requires this run to select an actual plugin skill.
         from types import SimpleNamespace
-        from core.capabilities.paths import capabilities_enabled
+        from core.harness.registry import device_catalog
+        from core.db.engine import SessionLocal
+        from core.capabilities.plugins.management import list_installed
+
         selected = set(enabled_skill_ids or ())
         targets = []
-        if capabilities_enabled():
-            from core.capabilities import registry
-            for row in registry.list_installations(kind="plugin"):
+        if selected:
+            for row in device_catalog.installations("plugin", user_id=user_id):
                 if row.key != TRADE_PLUGIN:
                     continue
-                components = registry.components_of(row.install_id)
-                skills = {key for key in components if key.startswith("skill:")}
-                aliases = skills | {key.split(":", 2)[-1] for key in skills}
+                components = row.payload.get("components") or {}
+                skills = set(components.get("skills") or ())
+                aliases = skills | {
+                    "skill:" + row.profile_id + ":" + key for key in skills
+                    if not key.startswith("skill:")
+                } | {key.split(":", 2)[-1] for key in skills}
                 if aliases & selected:
-                    targets.append(SimpleNamespace(slug=row.key, install_id=row.install_id,
-                                                   skill_ids=sorted(aliases & selected)))
-        elif selected:
-            from core.db.engine import SessionLocal
-            from core.services.plugin_service import list_installed
+                    targets.append(SimpleNamespace(
+                        slug=row.key, install_id=row.install_id,
+                        skill_ids=sorted(aliases & selected),
+                    ))
             with SessionLocal() as db:
-                targets = [SimpleNamespace(slug=row["slug"], install_id=row["install_id"],
-                                           skill_ids=sorted(set(row.get("skills", [])) & selected))
-                           for row in list_installed(db, user_id, include_global=True)
-                           if row["slug"] == TRADE_PLUGIN and set(row.get("skills", [])) & selected]
+                local = list_installed(db, user_id, include_global=True)
+            projected_ids = {target.install_id for target in targets}
+            for row in local:
+                if (row["slug"] == TRADE_PLUGIN and row["install_id"] not in projected_ids
+                        and set(row.get("skills", [])) & selected):
+                    targets.append(SimpleNamespace(
+                        slug=row["slug"], install_id=row["install_id"],
+                        skill_ids=sorted(set(row.get("skills", [])) & selected),
+                    ))
     names = []
     for target in targets:
         try:

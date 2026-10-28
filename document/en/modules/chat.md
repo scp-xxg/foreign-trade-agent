@@ -2,6 +2,8 @@
 
 > Last updated: September 9, 2026
 
+The frontend shows “Working…” only while a new reply has no text, reasoning, or tool execution records. The label uses regular-weight 14px text, a gently breathing brand mark, and a text shimmer. Startup, inline reasoning, and execution headers share an 18px mark slot, 9px gap, and 28px minimum row height, without vertical entrance motion on handoff. Image processing uses its specific label; waits longer than 15 seconds show elapsed time. After output begins, pauses before further content or tool calls add no waiting text or timer.
+
 Regular code blocks have an always-visible Copy button in the top right. It copies only the code text, preserving indentation and line breaks; during streaming it copies the content currently displayed. On success, the button shows a checkmark and Copied in the original button color for two seconds before resetting. Failures appear in the button as Copy failed, without a top-of-page notification.
 
 Chat is the core pipeline of HugAgentOS: a user message travels through the FastAPI route, runtime-context assembly, and the streaming orchestrator, then an AgentScope 2.0 ReActAgent drives multi-turn "think → call tool → observe" loops whose events are pushed to the frontend in real time over SSE. This page walks the end-to-end flow as it exists in the code, then covers the citation system, plan mode, sub-agents, conversation summarization, chat sharing, context compression, and oversized-tool-result offloading.
@@ -10,20 +12,55 @@ Chat is the core pipeline of HugAgentOS: a user message travels through the Fast
 
 The home page, conversation page, and project panel share the message composer. Long text expands the editor up to its maximum height, then scrolls inside it. Shift+Enter, typing, and pasting keep the current line visible above the bottom toolbar. Editing earlier text follows the caret; manually scrolling to read preserves the scroll position.
 
+The bottom composer toolbar stays on one line. When zooming or split panes leave insufficient space, all labeled controls collapse to icons and the send button stays visible. Hover for descriptions and click to use the existing controls. Labels return when space permits; no additional overflow menu is introduced. At extremely narrow widths, the tool icons scroll horizontally while the send button stays fixed and visible.
+
+### Unsent drafts
+
+Each conversation, new conversation, and project keeps its own unsent draft. Switching shows the destination draft; returning restores text, formatting, capability references, quoted follow-up questions, and attachments. Returning home, clicking “New conversation”, or clicking the conversation icon within the chat module restores the current unsent new-conversation draft. After sending it, entering again creates an empty draft.
+
+The scheduled-task setup template is inserted only when its conversation is created. Editing or clearing it is preserved across navigation. In-flight uploads stay with their originating draft, including when a project draft becomes a new conversation on its first send. Drafts remain in the current page's memory and are cleared on refresh or logout.
+
+
+## Messages and reasoning
+
+User messages use rounded bubbles. Only newly sent messages play the entrance animation. History loading and returning to a conversation do not replay it. Message actions remain available on hover, keyboard focus, and touch devices.
+
+Standalone reasoning retains its original inline summary. Reasoning within tool steps retains the timeline style. Click the summary or press Enter / Space while focused to expand or collapse it. Streaming updates preserve this choice.
+
+Composer attachments use compact cards that retain filename extensions and omit the bottom file-type label. Failed uploads keep an inline error and a Retry action. Removing an attachment or switching drafts during an upload cannot place the result in another draft. Completed attachments retain preview and download actions. The document/image filter in My Space supports arrow keys, Home / End, and selected-state feedback.
+
+
 ## Uploaded attachment previews
 
 Once an upload completes, click its attachment card above the composer or in a sent message to preview it in the right-hand Canvas; images display directly. Canvas uses the existing document viewers and offers a download fallback for unsupported formats. Uploading or failed files do not open a preview. The download icon on message attachments and the Canvas download button remain available.
 
 ## Navigation within a conversation
 
+When tool results, prompts, or project resources occupy part of the workspace, the scroll viewport and turn navigation follow the actual chat content column. Fullscreen or narrow-screen Canvas overlays remove the hidden chat from keyboard focus and hide turn navigation; collapsing the panel restores focus to the chat toggle.
+
+The chat scrollbar sits at the right edge of the conversation pane, with turn navigation beside it. Messages and the composer retain their existing dimensions and centered positions. A closed side panel reserves no Canvas space, and completing a reply does not change the layout.
+
 The short marks on the right of the conversation represent loaded user turns. Hover or focus a mark to preview the question and answer; click to jump to that part of the same conversation. A longer, darker mark identifies the current turn. Arrow keys and Home / End move focus, Enter / Space jump, and Escape dismisses the preview. With reduced motion enabled, navigation jumps immediately.
 
 Scroll within the rail to browse long conversations. Loading earlier messages by scrolling upward adds their turns to the rail. Switching conversations rebuilds navigation; empty conversations have no rail. Navigation follows the chat area when a side panel opens and supports dark mode and touch input.
 
+
+## Create a chat branch
+
+Enter `/fork` and choose “Create chat branch” to branch from the latest finished assistant reply. The branch icon below an assistant reply creates a branch through that reply, including all preceding history. The new chat defaults to “Original title · 分支” and shows a source banner with a link back to the original chat.
+
+Messages receive independent IDs. Continuing, regenerating, or deleting branch history does not change the source chat. Tool calls and results, reasoning, references, and attachments are retained across the complete selected history, regardless of browser pagination. Attachments reference the original files; file contents, project files, and sandbox processes are not snapshotted. Running tasks, pending approvals, and queues are not transferred. Inherited plan and governance cards are read-only.
+
+Only the chat owner can branch, and access to the source project must still be valid. A reply still being generated cannot be the branch boundary, but earlier finished replies remain available. Empty chats or chats without a finished reply explain why branching is unavailable. Desktop branches retain the source chat's local or cloud execution target. Repeated clicks during creation do not create duplicates, and a failed attempt reuses its request ID when retried.
+
+Historical token usage is display-only: branching adds no model charges or call counts. Automatic evolution backfill also excludes copied history from new execution evidence.
+
+API: `POST /v1/chats/{chat_id}/fork` accepts a required UUID `request_id`, optional `through_message_id` (inclusive assistant reply), and optional `title`. Omitting the boundary selects the latest finished assistant reply. HTTP 201 returns the new session, with source and boundary details in `metadata.fork`. Repeating the same request ID and parameters returns the existing branch; conflicting parameters return 409. The server copies history in one transaction and does not inherit compaction checkpoints, preventing an earlier branch from including summaries of later turns.
+
 ## End-to-end flow of one conversation
 
 ```
-Browser ── POST /v1/chats/stream ──▶ api/routes/v1/chats.py::chat_stream
+Browser ── POST /v1/agents/responses (stream=true) ──▶ api/routes/v1/agent_responses.py::agent_response
    │   1. _ensure_main_model_configured()   503 immediately if no main model
    │   2. auth / chat-ownership checks / read user capabilities & memory flags
    │   3. core/chat/context.py::build_runtime_context()  assemble workflow context
@@ -34,10 +71,10 @@ orchestration/chat_run_executor.py::start_run()
    ▼
 orchestration/workflow.py::astream_chat_workflow()
    │   ├─ orchestration/memory_integration.py  non-blocking memory retrieval (bg task + budget)
-   │   ├─ core/config/catalog_resolver.py      resolve enabled skills/mcp/kb for this request
-   │   ├─ core/llm/agent_factory.py::create_agent_executor()
+   │   ├─ core/capabilities/catalog/resolver.py      resolve enabled skills/mcp/kb for this request
+   │   ├─ core/llm/factory/build.py::create_agent_executor()
    │   │     MCP pool + skill registration + file tools + system prompt + middlewares → Agent
-   │   ├─ core/llm/context_manager.py          trim history to the token budget
+   │   ├─ core/llm/context/window_policy.py          trim history to the token budget
    │   └─ orchestration/streaming.py::StreamingAgent.stream()
    │         consumes agent.reply_stream(), coalesces 25 event kinds while preserving tool-argument deltas
    ▼
@@ -48,12 +85,12 @@ SSE follower: chat_run_executor.follow_run_as_sse()
 
 ### Run decoupling and reconnect/resume
 
-Every sent message creates a `ChatRun` and a background task (`orchestration/chat_run_executor.py`); events are written to a Redis Stream (`maxlen=5000`; the default TTL is the 7,200-second maximum human wait plus a 1,800-second recovery grace period). The HTTP connection is merely a *follower*, which enables:
+Every sent message creates a `ChatRun` and a background task (`core/chat/runtime/`); events are written to a Redis Stream (`maxlen=5000`; the default TTL is the 7,200-second maximum human wait plus a 1,800-second recovery grace period). The HTTP connection is merely a *follower*, which enables:
 
 | Capability | Endpoint |
 |---|---|
-| Start a streaming chat | `POST /v1/chats/stream` |
-| Resume after refresh / disconnect | `GET /v1/chats/stream/{run_id}?from_offset=N` |
+| Start an agent response (JSON by default; SSE with `stream: true`) | `POST /v1/agents/responses` |
+| Resume after refresh / disconnect | `GET /v1/chats/stream/{run_id}?from=N` |
 | Probe for an in-flight run | `GET /v1/chats/{chat_id}/active-run` |
 | Cancel a run (kills the background task) | `POST /v1/chat-runs/{run_id}/cancel` |
 | Add an instruction at the next safe ReAct boundary | `POST /v1/chat-runs/{run_id}/steer` |
@@ -61,6 +98,12 @@ Every sent message creates a `ChatRun` and a background task (`orchestration/cha
 | Withdraw an instruction that hasn't taken effect | `DELETE /v1/chat-runs/{run_id}/steer/{steer_id}` |
 
 Defensive machinery: a `: heartbeat` SSE comment line every 15 silent seconds (keeps nginx `proxy_read_timeout` and other proxies from cutting the stream); an inactivity watchdog fails the run if the workflow produces no meaningful output for 600 s (`CHAT_RUN_INACTIVITY_TIMEOUT_SEC`); internal heartbeats keep that watchdog alive only while the backend registry contains a real pending human interaction; a periodic reaper collects over-age and quiet running runs; `recover_orphan_runs()` cleans up leftovers at startup.
+
+### Continue after cancellation
+
+Stopping a reply preserves the displayed answer, reasoning, and tool records. Reloaded history shows reasoning separately, including replies stopped before any answer text appeared. Sending “continue” starts a new turn with the previous answer text, recorded tool results, and an interruption marker.
+
+Completed reasoning with a compatible origin is replayed through its native protocol. Reasoning with an unknown or incompatible origin remains available for history display and is excluded from assistant answer text. Incomplete reasoning is not replayed as a completed native block; displayed partial answer text remains available for continuation. History replay does not execute tools. Calls without recorded results retain an explicit unknown-outcome result.
 
 ### Model-initiated user questions
 
@@ -107,27 +150,27 @@ A permission chip sits next to the project selector in the composer toolbar. It 
 | Approve for me | `auto` | Ordinary writes and edits pass silently; **destructive operations** (`DESTRUCTIVE_OPS`) and commands the local policy tagged `danger:<category>` still stop and ask |
 | Full access | `full` | No tool confirmation is ever raised |
 
-The vocabulary is declared once in `core/llm/tool_permissions.py` (`APPROVAL_ASK` / `APPROVAL_AUTO` / `APPROVAL_FULL`), travels with the chat context into `PermissionRuntime`, and is the single criterion every tool confirmation gate consults. No preset does more than skip the *asking* — a hard deny from the local security policy still denies. Whether a given call counts as dangerous is recovered by `core/sandbox/local_policy.danger_categories()` from the `danger:` prefix in the verdict reasons, never by matching prose. Legacy stored values (`standard`, `readonly`) fall back to the most conservative preset, `ask`.
+The vocabulary is declared once in `core/llm/tool_permissions/` (`APPROVAL_ASK` / `APPROVAL_AUTO` / `APPROVAL_FULL`), travels with the chat context into `PermissionRuntime`, and is the single criterion every tool confirmation gate consults. No preset does more than skip the *asking* — a hard deny from the local security policy still denies. Whether a given call counts as dangerous is recovered by `core/sandbox/permissions/models.py::danger_categories()` from the `danger:` prefix in the verdict reasons, never by matching prose. Legacy stored values (`standard`, `readonly`) fall back to the most conservative preset, `ask`.
 
 Trusted unattended entry points (channel bots, scheduled automation) take the `default_allow` branch and are unaffected by the preset.
 
 **The desktop client uses this same preset and no longer stores one of its own.** The former host permission preset (strict / standard / full, persisted in `local_grants.json` and exposed at `/v1/local/approval-mode`) has been removed entirely. The local execution policy is now derived from this preset by `core/services/local_grant_service.policy_for_gate(approval_mode)`: `full` allows everything, while `ask` / `auto` follow the user's per-category dispositions and the built-in defaults. The OS file-sandbox contract is declared per preset the same way (`LOCAL_CONFINEMENT_BY_MODE`): `ask` / `auto` prefer confinement and degrade with a warning when no runner exists, `full` explicitly opts out, and an unreadable local security configuration falls back to the `FAIL_CLOSED_MODE` sentinel, which demands confinement. What the desktop still keeps — authorized folders and per-category danger dispositions (`/v1/local/grants`, `/v1/local/policy`) — governs *which folders may be touched*, a separate concern, still reachable from the bottom of the chip's menu.
 
-### Agent construction highlights (core/llm/agent_factory.py)
+### Agent construction highlights (core/llm/factory/build.py)
 
 `create_agent_executor()` is the shared factory for every mode (main chat, plan, batch, sub-agents, automation):
 
-- **MCP tools**: after the three-layer filter of catalog + per-user overrides + request context (see [Capability Center](catalog.md)), stable servers reuse the process-level connection pool (`core/llm/mcp_pool.py`); per-request servers (e.g. `retrieve_dataset_content`, which needs per-request HTTP headers) are spawned fresh; the user's self-added private MCP servers are merged in with owner isolation.
-- **Skills**: registered as AgentScope Agent Skills via `core/agent_skills/loader.py`, with `view_text_file` allow-listed to read SKILL.md files (see [Agent Skills](agent-skills.md)).
-- **File / sandbox tools**: `bash`, `sandbox_put_artifact`, `sandbox_get_artifact` are always registered; Read/Edit/Write/Glob/Grep/Delete/Move/mkdir plus the MySpace tools are gated by `CODE_CAPABILITY_ENABLED` and share one `ReadStateTracker` to keep the "must Read before Edit" invariant.
-- **Middlewares** (onion model, `core/llm/middlewares.py`): `DynamicModelMiddleware` (switches the model per chat_mode, see [Model Providers](model-providers.md)), `FileContextMiddleware` (injects uploaded/historical file context), `SteerMiddleware` (injects follow-ups after tool results and before the next reasoning round), `WorkspacePinHintMiddleware`, `FinishPinGuardMiddleware`.
-- **Context compression**: `CompactingAgent` routes the pre-turn, mid-turn, and post-turn trigger points through one persistent checkpoint engine and one Codex-style handoff prompt. `ContextConfig` remains only for tool-result limiting and AgentScope overflow fallback, and that fallback reuses the same prompt. If its structured call still fails, the model adapter returns an L3 synthetic summary so the active reply is not aborted by a compression error.
+- **MCP tools**: after the three-layer filter of catalog + per-user overrides + request context (see [Capability Center](catalog.md)), stable servers reuse the process-level connection pool (`core/llm/mcp/`); per-request servers (e.g. `retrieve_dataset_content`, which needs per-request HTTP headers) are spawned fresh; the user's self-added private MCP servers are merged in with owner isolation.
+- **Skills**: registered as AgentScope Agent Skills via `core/capabilities/skills/loader.py`, with `view_text_file` allow-listed to read SKILL.md files (see [Agent Skills](agent-skills.md)).
+- **File / sandbox tools**: `bash`, `sandbox_put_artifact`, `sandbox_get_artifact` are always registered; Read/Edit/Write/Glob/Grep/Delete/Move/mkdir plus the MySpace tools are gated by `CODE_CAPABILITY_ENABLED`. As in pi's coding agent, Edit/Write need no prior Read: Edit only requires `old_string` to match uniquely (retrying with trailing whitespace and smart quotes/dashes normalized when the exact match fails), and Edit/Write on the same file run one at a time.
+- **Middlewares** (onion model, `core/llm/runtime/`): `DynamicModelMiddleware` (switches the model per chat_mode, see [Model Providers](model-providers.md)), `FileContextMiddleware` (injects uploaded/historical file context), `SteerMiddleware` (injects follow-ups after tool results and before the next reasoning round), `WorkspacePinHintMiddleware`, `FinishPinGuardMiddleware`.
+- **Context compression**: `CompactingAgent` routes the pre-turn, mid-turn, and post-turn trigger points through one persistent checkpoint engine and one Codex-style handoff prompt. `ContextConfig` remains only for tool-result limiting. Compaction uses the unified coordinator without a second framework summary fallback. Failure preserves the original context. If the final request still exceeds its budget, the run saves a checkpoint and pauses before calling the reply model.
 - **Permissions**: every registered tool gets a native `PermissionRule(ALLOW)` seed, preserving AgentScope's built-in dangerous-operation checks (no blanket BYPASS).
 - **Iteration caps**: main agent defaults to `max_iters=50`, isolated sub-agents to 10.
 
 ## SSE event types and payloads
 
-`orchestration/streaming.py::StreamingAgent` coalesces AgentScope 2.0 `reply_stream` events into internal events. Tiny tool-argument fragments are batched at 256 characters or 50ms, keeping them visible without recreating an SSE event storm. `workflow.py` and `chats.py::_stream_sse_response` enrich them with chat-level fields before they hit the wire. Events as the frontend sees them:
+`core/llm/runtime/streaming.py::StreamingAgent` coalesces AgentScope 2.0 `reply_stream` events into internal events. Tiny tool-argument fragments are batched at 256 characters or 50ms, keeping them visible without recreating an SSE event storm. `workflow.py` and `chats.py::_stream_sse_response` enrich them with chat-level fields before they hit the wire. Events as the frontend sees them:
 
 | `type` | Meaning | Key fields |
 |---|---|---|
@@ -143,7 +186,6 @@ Trusted unattended entry points (channel bots, scheduled automation) take the `d
 | `subagent_event` | Child execution details nested under the parent `call_subagent` card | `parent_tool_id`, `sub_type`, `agent_name`, plus child tool or content fields |
 | `ontology_activation` / `ontology_gate` / `ontology_review` | Ontology-governance state, separate from model reasoning | workflow activation, gate decision, and committee status or verdict |
 | `tool_pending` | Waiting fallback when the provider exposes no parseable argument deltas | `reason` |
-| `batch_confirm` | Batch plan generated, awaiting user confirmation (human gate) | `plan_id`, `total`, `preview`, `default_template`, `placeholder_keys` |
 | `file_confirm` | A tool is suspended awaiting confirmation of a MySpace write | confirmation context; the tool resumes in place after an out-of-band `POST /v1/chats/{chat_id}/file-confirm` |
 | `user_question` | `ask_user_question` is suspended awaiting the chat owner's answer | `request_id`, `questions[]`, `created_at`, `expires_at`, `chat_id` |
 | `user_question_resolved` | The server settled an answer, cancellation, or timeout | `request_id`, `outcome`, `chat_id` |
@@ -177,7 +219,7 @@ data: [DONE]
 
 After `meta`, `chat_run_executor.py` persists the assistant message, backfills artifacts,
 and launches a background follow-up-question generator
-(`orchestration/followups.py`; results land in the message's
+(`core/chat/followups.py`; results land in the message's
 `extra_data.follow_up_questions` and are fetched through
 `GET /v1/chats/{chat_id}/messages/{message_id}/followups`). The frontend
 collects ontology events in a standalone **Domain Ontology Governance** module
@@ -230,9 +272,9 @@ Each canonical tool-result step is persisted before its display event, independe
 
 Citations make every fact in the answer traceable back to a specific tool result. Numbering authority belongs to a single backend source of truth — the model only **copies** ids, never computes them. The chain has four segments:
 
-1. **Anchor allocation & injection (backend middleware)**: `core/llm/middlewares.py::CitationAnchorMiddleware` hooks AgentScope 2.0's `on_acting` and, before a tool result reaches the model, calls `orchestration/citation_anchor.py` to extract → allocate → inject: each citable item gets a session-monotonic anchor id (`e1`, `e2`, … — unique across tools, calls, and turns; a new turn continues from the max anchor found in the chat's persisted messages), and `"cite_id": "e7"` is written into the result JSON in place (plain-text results get a trailing `[cite_id: e7]` line). **The allocator is bound to the agent instance** (`attach_allocator()` / `resolve_allocator()`), which is how the orchestrator and the middleware share one counter; the ContextVar is only a fallback for sub-agent chains, because `astream_chat_workflow` is an async generator whose context does not reach the task the agent actually runs in. Extraction degrades through four layers: tool-declared `__citations__` → the tool spec registry (`TOOL_SPECS` config: list paths + CN/EN field aliases) → a generic heuristic (unique dict-array field) → the whole result as one anchor. Operational tools (file writes, pin, etc. — `SKIP_TOOLS`) pass through untouched. Any exception passes the original result through — citations degrade, the conversation never breaks.
+1. **Anchor allocation & injection (backend middleware)**: `core/llm/runtime/` hooks AgentScope 2.0's `on_acting` and, before a tool result reaches the model, calls `core/llm/citations/hook.py` to extract → allocate → inject: each citable item gets a session-monotonic anchor id (`e1`, `e2`, … — unique across tools, calls, and turns; a new turn continues from the max anchor found in the chat's persisted messages), and `"cite_id": "e7"` is written into the result JSON in place (plain-text results get a trailing `[cite_id: e7]` line). **The allocator is bound to the agent instance** (`attach_allocator()` / `resolve_allocator()`), which is how the orchestrator and the middleware share one counter; the ContextVar is only a fallback for sub-agent chains, because `astream_chat_workflow` is an async generator whose context does not reach the task the agent actually runs in. Extraction degrades through four layers: tool-declared `__citations__` → the tool spec registry (`TOOL_SPECS` config: list paths + CN/EN field aliases) → a generic heuristic (unique dict-array field) → the whole result as one anchor. Operational tools (file writes, pin, etc. — `SKIP_TOOLS`) pass through untouched. Any exception passes the original result through — citations degrade, the conversation never breaks.
 2. **Prompt contract**: the system prompt (fallback file `prompts/prompt_text/default/system/40_format.system.md`; the active DB version is authoritative at runtime) needs only one tool-count-independent rule: copy the `cite_id` annotated in the result verbatim into `[anchor text](cite:e7)` (or `[来源](cite:e7)` at sentence end); never self-number.
-3. **Orchestration consumption**: each `tool_result` event calls `collect_citation_dicts()`, which fetches `CitationItem`s (`id` / `tool_name` / `tool_id` / `title` / `url` / `snippet` / `source_type` / `item_index`) from the allocator registry keyed by `tool_id`; when no allocator is installed (legacy replay paths) it falls back to the old offset extraction in `orchestration/citations.py`. `source_type` values: CE ships `internet`, `knowledge_base`, and `database`; industry citation types such as `industry_news`, `ai_news`, `chain_info`, and `company_profile` are added by the Enterprise Edition (EE).
+3. **Orchestration consumption**: each `tool_result` event calls `collect_citation_dicts()`, which fetches `CitationItem`s (`id` / `tool_name` / `tool_id` / `title` / `url` / `snippet` / `source_type` / `item_index`) from the allocator registry keyed by `tool_id`; when no allocator is installed (legacy replay paths) it falls back to the old offset extraction in `core/llm/citations/`. `source_type` values: CE ships `internet`, `knowledge_base`, and `database`; industry citation types such as `industry_news`, `ai_news`, `chain_info`, and `company_profile` are added by the Enterprise Edition (EE).
 4. **Frontend rendering**: citations ride on `tool_result` and `meta` events and are persisted with the message (what is persisted is the annotated result, so replay/share shows the same numbering as generation). `components/citation/CitationMarkdownBlock.tsx` recognizes three marker forms in parallel — `[anchor text](cite:eN)` (rendered as a text link with a hover source card), `[[eN]]` (obsidian-style tolerance), and the legacy `[ref:tool_name-N]` (historical messages, rendered as a superscript badge). Tool cards show a matching `cite_id` chip on each item (`jx-tr-citeTag`), and tools without a dedicated renderer fall back to a generic list-card renderer.
 
 **Tool development convention**: a tool (in-house or MCP) that wants precise citation granularity should return a `__citations__` field in its JSON — `[{"title": "...", "url": "...", "snippet": "...", "source_type": "..."}, …]`, entries ordered to match the result body; the middleware adopts it verbatim and injects `cite_id` in place. Tools without the field fall back to registry config or heuristics — at worst the whole result becomes one anchor, so **every tool is citable by default**. See the citation-declaration section in [MCP tools](mcp-tools.md).
@@ -255,16 +297,19 @@ Cards are persisted with the message (`metadata.referenced_chats`) and history r
 
 ## Plan Mode
 
-Plan Mode splits complex tasks into "generate plan → user reviews/edits → execute step by step", implemented in `orchestration/subagents/plan_mode.py`:
+Plan Mode splits complex tasks into "generate plan → user reviews/edits → execute step by step", implemented in `orchestration/plans/`:
 
 - **Generate** (`astream_generate_plan` / `POST /v1/plans/generate`): a "bare LLM" agent (`disable_tools=True`) produces a structured JSON plan. System-prompt resolution: active `plan_mode` version in the prompt pool → legacy `system/90_plan_mode` part → fallback file `prompts/prompt_text/plan_mode/plan_mode.system.md` → hardcoded minimal prompt.
 - **Execute** (`astream_execute_plan` / `POST /v1/plans/{plan_id}/execute`): each step gets its own agent, executed sequentially, with step-level MCP/skill/sub-agent bindings and cancellation (`is_run_cancelled` polling); execution also goes through ChatRun + Redis Stream, so it survives disconnects.
 - **Frontend presentation and title**: manual Plan Mode keeps plan previews and execution progress in the in-conversation plan card instead of duplicating them in the compact strip above the composer (that strip is reserved for model-driven `update_plan` progress in regular chats). A model-generated conversation title is requested as soon as the preview is ready, with a first-task title used as the temporary fallback.
 - **History is separate from the active mode**: the chat's `planChat` marker and `plan_snapshot` only preserve its sidebar classification and historical plan cards; an independent per-chat composer state decides whether the next message uses Plan Mode. Turning Plan Mode off keeps prior plans and reports visible, while later requests (for example, generating a presentation from a report) run as ordinary chat and stay that way after refresh or re-entry.
-- **Model role**: plan mode prefers the `plan_agent` role and falls back to `main_agent` (the `_mode_role` branch in `agent_factory.py`).
-- Unattended modes (plan execution / automation) remove `batch_runner` from the toolkit, since `batch_plan`'s confirmation dialog has no UI in those contexts (`workflow.py::_resolve_batch_runner_visibility`).
+- **Model role**: plan mode prefers the `plan_agent` role and falls back to `main_agent` (role selection in `factory/runtime/model_selection.py`).
 
 ## Sub-agents
+
+Native image tools return images as separate media blocks. Main agents and sub-agents share text-only tool-result truncation: image base64 does not consume the text allowance or enter text offload files. Text pruning in the canonical context also preserves image blocks. Image read-size limits and overall context capacity protection remain in effect.
+
+Sub-agent call rows in the main conversation show identity, status, and the details link without a running timer or completed duration. Timing remains available in the execution details panel. Rows use the same arrow styling as ordinary tools: the arrow sits next to the name and appears only on hover or keyboard focus.
 
 The regular main-chat harness always provides three platform defaults. They
 are not `UserAgent` rows, use reserved IDs, and cannot be shadowed by a
@@ -304,9 +349,9 @@ maintains plans via `update_plan`, avoiding “plans inside plans.” At runtime
 their prompts remain the independent `explorer / worker / reviewer` parts of
 the `subagents` prompt-pool kind. That kind stays in backend storage and
 migration snapshots for compatibility;
-`prompts/prompt_text/subagents/` is only the seed and failure fallback.
+`extensions/agents/default/<role>/system.md` is only the seed and failure fallback.
 
-In addition, user-created sub-agents (`api/routes/v1/agents.py`, DB table `UserAgent`)
+In addition, user-created sub-agents (`edition_ee/routes/agents.py`, DB table `UserAgent`)
 can carry their own system prompt, MCP, skill, plugin, and knowledge base
 bindings, plus model parameters such as provider, temperature, `max_tokens`,
 and `max_iters`. When you create or edit a sub-agent, the resource picker
@@ -383,7 +428,7 @@ or no-longer-owned components are not restored.
 - **Autonomous main-agent dispatch**: when neither a structured `@` selection
   nor the strict natural-language command matches, the main agent can use the
   `call_subagent` tool registered by
-  `core/llm/subagent_tool.py`. Each child runs in its own thread and event loop,
+  `core/llm/subagents/tool.py`. Each child runs in its own thread and event loop,
   then returns text for the main agent to integrate. This path supports parallel
   sub-agents, task decomposition, and cross-domain synthesis.
 
@@ -393,9 +438,9 @@ Three complementary layers:
 
 | Layer | Implementation | Trigger |
 |---|---|---|
-| Chat title summary | `core/llm/summarizer.py::ConversationSummarizer` (`summarizer` model role, `ENABLE_SUMMARY` flag), `POST /v1/summary` | Auto-titling new chats |
-| Unified context checkpoint | `core/services/compaction_service.py::run_compaction()`; pre-turn, mid-turn, and post-turn share one trigger ratio, handoff prompt, replacement shape, and persistent checkpoint | Context reaches the configured fraction of the model window |
-| Deterministic overflow protection | `ContextConfig.tool_result_limit` bounds individual tool results first; when unified compaction fails or persistence is disabled, the AgentScope fallback compacts the live in-memory context with the same handoff prompt | A tool result is oversized or unified compaction is temporarily unavailable |
+| Chat title summary | `core/models/completions/summarizer.py::ConversationSummarizer` (`summarizer` model role, `ENABLE_SUMMARY` flag), `POST /v1/summary` | Auto-titling new chats |
+| Unified context checkpoint | `core/chat/compaction/service.py::run_compaction()`; pre-turn, mid-turn, and post-turn share one trigger ratio, handoff prompt, replacement shape, and persistent checkpoint | Context reaches the configured fraction of the model window |
+| Deterministic overflow protection | `ContextConfig.tool_result_limit` bounds individual tool results first; failed compaction preserves the original context, and an over-budget final request saves a checkpoint and pauses | A tool result is oversized or unified compaction is temporarily unavailable |
 
 Compaction cuts only at legal boundaries: history is first split into steps,
 the longest recent region that fits `CHAT_COMPACT_RECENT_USER_MAX_TOKENS` is
@@ -423,7 +468,7 @@ recovery stay consistent.
 
 ## Oversized tool-result offloading
 
-`core/llm/offloader.py::SandboxOffloader` implements the AgentScope 2.0 `Offloader` protocol: when context compression or tool-result truncation happens, the overflow is no longer silently discarded — it is written into the sandbox at `/workspace/.offload/` (`tool_<id>.txt` / `context_<hash>.txt`), the framework appends the path to the model-facing `<system-reminder>`, and the model can read it back on demand via `Read` / `bash`. Mounted only when sandbox tools are enabled (`SANDBOX_TOOLS_ENABLED=true`, default on); write failures never raise and degrade to an explanatory message.
+`core/llm/context/offloader.py::SandboxOffloader` implements the AgentScope 2.0 `Offloader` protocol: when context compression or tool-result truncation happens, the overflow is no longer silently discarded — it is written into the sandbox at `/workspace/.offload/` (`tool_<id>.txt` / `context_<hash>.txt`), the framework appends the path to the model-facing `<system-reminder>`, and the model can read it back on demand via `Read` / `bash`. Mounted only when sandbox tools are enabled (`SANDBOX_TOOLS_ENABLED=true`, default on); write failures never raise and degrade to an explanatory message.
 
 ## Chat sharing
 
@@ -441,29 +486,29 @@ Storage is Redis (`chat_share:*` key groups + TTL) with an in-process memory fal
 
 ## Other entry points
 
-The same orchestration foundation also powers: response regeneration (`POST /v1/chats/{chat_id}/regenerate`), edit-and-resend (`POST /v1/chats/{chat_id}/edit`), non-streaming `POST /v1/chats/send`, batch execution (`orchestration/batch_orchestrator.py`, see [Automation](automation.md)), and scheduled automation (`orchestration/schedulers/`).
+The same orchestration foundation also powers: response regeneration (`POST /v1/chats/{chat_id}/regenerate`), edit-and-resend (`POST /v1/chats/{chat_id}/edit`), non-streaming `POST /v1/agents/responses` with `stream: false` (see [Automation](automation.md)), and scheduled automation (`orchestration/automations/`).
 
 ## Source map
 
 | Topic | Path |
 |---|---|
-| Chat routes / SSE egress | `src/backend/api/routes/v1/chats.py` |
-| Run decoupling / Redis Stream / resume | `src/backend/orchestration/chat_run_executor.py`, `api/routes/v1/chat_runs.py` |
-| Streaming orchestration | `src/backend/orchestration/workflow.py` |
-| Event mapping (reply_stream → SSE) | `src/backend/orchestration/streaming.py` |
+| Chat routes / SSE egress | `src/backend/api/routes/v1/chats/__init__.py` |
+| Run decoupling / Redis Stream / resume | `src/backend/core/chat/runtime/`, `api/routes/v1/chat_runs.py` |
+| Streaming orchestration | `src/backend/core/agent_runtime/runner.py` |
+| Event mapping (reply_stream → SSE) | `src/backend/core/llm/runtime/streaming.py` |
 | Runtime context assembly | `src/backend/core/chat/context.py` |
-| Agent factory | `src/backend/core/llm/agent_factory.py` |
-| Middlewares | `src/backend/core/llm/middlewares.py` (pure-function helpers in `core/llm/hooks.py`) |
-| Citation extraction | `src/backend/orchestration/citations.py` |
-| Cross-chat references (cards / digests / paging) | `src/backend/core/services/chat_reference_service.py` |
+| Agent factory | `src/backend/core/llm/factory/build.py` |
+| Middlewares | `src/backend/core/llm/runtime/` (pure-function helpers in `core/harness/hooks.py`) |
+| Citation extraction | `src/backend/core/llm/citations/` |
+| Cross-chat references (cards / digests / paging) | `src/backend/core/chat/references.py` |
 | Cross-chat history tools | `src/backend/core/llm/tools/chat_history_tool.py` |
 | Citation rendering | `src/frontend/src/utils/citations.ts`, `src/frontend/src/components/citation/` |
-| Plan mode | `src/backend/orchestration/subagents/plan_mode.py`, `api/routes/v1/plans.py` |
-| Sub-agent tool | `src/backend/core/llm/subagent_tool.py`, `api/routes/v1/agents.py` |
-| Title summarization / context compaction / window protection | `src/backend/core/llm/summarizer.py`, `compaction.py`, `core/services/compaction_service.py`, `context_manager.py` |
-| Oversized-result offloading | `src/backend/core/llm/offloader.py` |
+| Plan mode | `src/backend/orchestration/plans/`, `api/routes/v1/plans.py` |
+| Sub-agent tool | `src/backend/core/llm/subagents/tool.py`, `edition_ee/routes/agents.py` |
+| Title summarization / context compaction / window protection | `src/backend/core/models/completions/summarizer.py`, `compaction.py`, `core/chat/compaction/service.py`, `context_manager.py` |
+| Oversized-result offloading | `src/backend/core/llm/context/offloader.py` |
 | Chat sharing | `src/backend/api/routes/v1/chat_shares.py` |
-| Follow-up generation | `src/backend/orchestration/followups.py` |
+| Follow-up generation | `src/backend/core/chat/followups.py` |
 | Frontend stream parsing / follow-up queue | `src/frontend/src/hooks/chatStream.ts`, `useStreaming.ts`, `components/chat/QueuedMessageCard.tsx` |
 
 ### Desktop tool permissions and operation confirmation
@@ -513,3 +558,98 @@ resolve permissions on the desktop before starting a new request.
 Cloud services continue to handle channel ingress, credentials and message delivery.
 Local execution is not fully offline: models and configured cloud tools still use their
 services, and replies and returned files pass through the cloud and channel platform.
+
+WeChat QR confirmation saves the binding. The list shows Connecting until the first valid receive response.
+Credential tests check both HTTP status and WeChat business error codes. A successful test validates
+credentials only; it does not change long-connection health. In multi-worker deployments, the elected
+receiver reconciles bindings about every three seconds. Adding, disabling or deleting a bot requires no restart.
+
+### Subagent execution details
+
+Subagent invocation rows show a status indicator, the agent avatar, its name and elapsed time. Clicking the row opens that invocation in a dedicated right-side Canvas tab instead of expanding its process beneath the message. The running animation is separate from the avatar. Ordinary tools retain their existing expand/collapse behavior.
+
+The detail view reuses the main transcript’s tool batches, thinking and answer UI, including the same process visibility setting and collapsed defaults. It adds no separate parameter or execution-process sections. Completed invocation rows have no checkmark. It follows live updates until the reader scrolls up. Repeated invocations remain separate and coexist with file, ontology and plugin tabs. History uses saved data: at most 200 sub-steps and approximately 16,000 characters per string tool output; already truncated data cannot be recovered.
+
+Skill loading, plugin loading and tools with an unambiguous connector owner display the corresponding capability-center logo. Plugin-contributed tool icons take precedence. The running indicator remains separate from the logo, with existing click and collapse behavior unchanged. Ordinary tools retain their category icons.
+
+Canvas omits the fixed “【agent name】的回复：” heading added by the tool response wrapper while preserving the agent’s answer. Tool batch headers fill the transcript width from their first render and keep the same width when individual tool details are expanded or collapsed.
+
+Tools inherit their connector logo; skills and tools belonging to a plugin inherit the plugin logo.
+
+
+### First response timeout
+
+Once a normal chat workflow starts, it has 600 seconds to produce visible text, reasoning text, or a tool interaction. Otherwise the run ends with “当前模型调用量大，算力资源紧张，请稍后再试！” (The model is busy; please try again later). Heartbeats, empty deltas, and setup status events do not satisfy this deadline. After the first meaningful response, only the existing inactivity timeout applies. The timeout is persisted and remains available after refresh or stream replay.
+
+### Human interactions with multiple workers
+
+User questions, file and automation confirmations, host/tool permission approvals, and design choices store requests and decisions in a shared TTL store. Any worker can validate and accept the answer; the original tool call resumes on its owning worker, without starting another model task or replaying the tool. The first valid decision wins. Session approvals remain scoped to the original permission domain and path/command. Refresh recovery reads the same shared state. Pending records stop being advertised after a lost owner's lease expires; a server restart does not automatically replay interrupted operations. Redis-free desktop deployments use the single-process memory backend.
+
+Yida QR login and organization selection also use shared TTL state, allowing the same login flow to continue after a worker switch or page refresh.
+
+## Markdown chat input
+
+Chat keeps one input box without an additional formatting toolbar. Completed Markdown markers such as **bold**, *italic* and inline code turn into editable formatting. Headings, lists, quotes and code fences are also supported. Enter sends in text and all structured blocks, including code; Shift+Enter adds a newline. The send button is unchanged. IME confirmation and @ / slash menu selection keep their existing behavior.
+
+Shortcuts include Ctrl+B for bold, Ctrl+I for italic, Ctrl+E for inline code, Ctrl+Shift+S for strike-through, Ctrl+Shift+7/8 for ordered/bullet lists, Ctrl+Alt+C for code blocks, Ctrl+Z for undo, and Ctrl+Shift+Z or Ctrl+Y for redo. Use the corresponding Command shortcuts on macOS.
+
+Pasting Markdown or formatted HTML preserves common structures. A single paragraph joins the current line at the cursor without extra line breaks or blank lines; original line breaks and multiple paragraphs remain. Ctrl+Shift+V pastes literal text. Copying a message supplies Markdown and formatted HTML with the same content semantics. Assistant HTML formatting tags are not copied as literal text; user-authored HTML examples and code remain literal. Empty streamed text fragments do not create paragraphs, existing paragraph separators are not duplicated, and lists or code blocks do not receive automatic trailing empty paragraphs. Code rendering does not append a newline. Consecutive spaces within inline code are preserved. Plain messages retain authored line breaks and spaces. Multiline HTML examples remain literal code. Repeated copying preserves nested ordered tasks, backticks within code, and literal heading or list markers in ordinary text. SSH destinations and other implicit email-shaped text remain plain text; explicit Markdown mail and web links are preserved. Browser newline markers attached to copied selections are excluded from pasted content. Layout newlines between HTML tags do not become blank content lines; explicit breaks, empty paragraphs and code indentation remain. User messages, history, shares and re-editing use consistent formatting. HTML examples and image Markdown that is not editable retain their literal content; user Mermaid fences remain visible code. Previously lost formatting cannot be recovered.
+
+Shift+Enter continues list/task items; an empty item exits the list. Headings continue as paragraphs and blockquotes continue or exit. Tab/Shift+Tab indent/outdent list items. Tab in the last table cell adds a row. Type pipe table header and delimiter lines followed by Shift+Enter to create a table. Task markers [ ] / [x] followed by a space and Markdown links [text](URL) convert while typing. Standard task-list Markdown also works when pasted or edited.
+
+
+### Context usage update ordering
+
+The gauge reports occupancy for the latest primary model call, rather than cumulative billing across repeated calls.
+After a compaction checkpoint commits, the API returns its compressed baseline estimate. A later model call in the same turn can replace it with fresh measured usage.
+Snapshots follow server capture time. Delayed history responses cannot overwrite newer statistics, and edit-and-resend invalidates older requests.
+Categories remain estimates. Switching models labels the previous model snapshot as awaiting calibration. Overflow shows the actual percentage, such as 120%, while the ring draws at most one full circle.
+
+Editing and regenerating use the model, conversation mode, and thinking effort currently selected in the composer. Modes with locked effort use their default. When older clients omit these selections, the backend restores the saved turn selections. Attachments and skill references remain attached to the turn.
+
+### Context compaction progress and /compact
+
+Automatic compaction appears as “Compacting context” inside the conversation's tool-call section. The collapsed header keeps the status visible; expanding it reveals a separate compaction step. Compaction does not increase the tool count. Completed, failed and interrupted states remain visible in history, and background work can be observed after a page reload.
+
+Send `/compact` to compact the current conversation, or select “Compact the current conversation context” from the slash-command suggestions. This command reuses the existing compaction coordinator without invoking the main reply model. A short context, an already running compactor or disabled compaction produces an explicit explanation. Retry failed or interrupted work with `/compact`. The visible transcript is retained; only the context read by subsequent model calls changes.
+
+History responses and streamed compaction notices use the same context projection. The current model window takes precedence over an older snapshot when model switching is disabled or the window changes. Post-turn refresh waits for the target phase to finish; an earlier mid-turn checkpoint does not stop polling.
+
+
+Post-turn automatic compaction uses measured usage from the current persisted
+assistant message when available. A byte estimate cannot veto that measurement.
+The window and provider identity follow the endpoint actually called, including
+the default model and failover. Streaming saves and final commits serialize on
+the same run record so a delayed save cannot overwrite final usage.
+
+
+## Standalone chat links for projects and agents
+
+Open a project or agent API dialog and select **Enable public chat**. The resource gets a dedicated URL with copy, open, and disable controls. Publishing requires API management permission for that resource.
+
+Anyone with the link can chat without signing in. The page reuses the main conversation renderer and displays the resource name. Its sidebar contains only the current visitor's conversations for that entry. Visitor identity is kept in the current browser; clearing browser storage or switching browsers loses access to the earlier visitor's history. Visitor conversations are isolated.
+
+The standalone page accepts text and omits account navigation, project switching, personal-space imports, and agent switching. Usage is charged to the publisher. Disabling the link rejects new requests and cancels active runs for the link. Runtime capabilities, project context, and tool configuration follow the existing project or agent API behavior, without additional capability restrictions.
+
+
+## Personal Agent conversation and cloud computer (EE)
+
+The message scrollbar sits at the conversation area's right edge while the transcript and composer keep a centered, limited width. When a canvas opens, the scrollbar follows the remaining conversation area.
+
+The cloud computer distinguishes waiting to start, preparing, recovering, connection failure with retry, and connected states. It can be opened only when connected. Its dedicated controller uses its own authenticated address and server routing information; ordinary sandbox endpoint acceleration must preserve both.
+
+Standalone chat pages reuse file/image uploads, model and reasoning controls, tool approval presets, and approval prompts from the main chat. Available models follow the same admin configuration. Each link visitor has separate approval preferences; changing them does not change the publisher’s account settings.
+
+
+## Sidebar task reminders
+
+Conversation rows use a blue breathing dot while running, green for completed unread results, amber when input or approval is required, and red for failures. A pending user decision takes priority over the running state. Cancelling a task does not produce a success reminder.
+
+When the conversation is visible and focused, scrolling to its loaded final reply acknowledges that result. The completion indicator disappears without leaving a check icon; clicking a failed history row immediately clears its red dot, without requiring a scroll to the failed reply. A later failed run in the same conversation shows a new red dot. Reminders continue to update while navigating to other pages. Failed network requests preserve the existing state; disconnection never implies completion. Reduced-motion mode displays static indicators.
+
+Read acknowledgements are stored in this browser per account and backend, and synchronized between same-browser tabs. Cross-device read synchronization is not provided. On first use or upgrade, existing results are acknowledged once as history; only later completions create new unread reminders. Active tasks and tasks needing attention retain their status.
+
+For ordinary conversations, amber reminders follow actionable question, file confirmation, or design selection requests only. Removing the last pending interaction clears the amber reminder immediately. A backend pause or cached waiting verdict alone does not show amber. Desktop clients need an updated bundled frontend.
+
+
+Model history is separate from display records. Compaction progress, display reasoning and tool cards do not reconstruct model history. Canonical steps preserve the model's actual reasoning, tool calls and results. Each fallback candidate is checked against its own context window before dispatch. A budget pause retains completed results and prevents automatic replay from the original prompt.

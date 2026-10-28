@@ -20,6 +20,8 @@ import {
   type ProviderSchema,
 } from '../../api';
 import { t } from '../../i18n';
+import { ReasoningEffortFields } from '../common/ReasoningEffortFields';
+import { reasoningFormValues, collectReasoningFields } from '../../utils/reasoningEffort';
 import { useModelCapabilitiesStore } from '../../stores';
 import { describeContextProbe } from '../../utils/contextUsage';
 
@@ -29,6 +31,7 @@ const TYPE_LABELS: Record<string, string> = {
   chat: t('对话'),
   embedding: t('向量'),
   reranker: t('重排'),
+  audio: t('语音模型'),
 };
 
 /**
@@ -80,15 +83,17 @@ export function SystemModelPanel() {
     getModelProviderSchemas().then(setSchemas).catch(() => setSchemas([]));
   }, [reload]);
 
+  const selectedType = Form.useWatch('provider_type', form);
   const providerOptions = useMemo(
-    () => schemas.map((s) => ({ value: s.id, label: s.label || s.id })),
-    [schemas],
+    () => schemas.filter(s => !selectedType || s.supports_types?.includes(selectedType)).map((s) => ({ value: s.id, label: s.label || s.id })),
+    [schemas, selectedType],
   );
 
   const openCreate = () => {
     setEditing(null);
     setProbeHint('');
     form.resetFields();
+    form.setFieldsValue(reasoningFormValues());
     form.setFieldsValue({ provider: 'openai_compatible', provider_type: 'chat', is_active: true });
     setEditorOpen(true);
   };
@@ -110,6 +115,7 @@ export function SystemModelPanel() {
       is_active: p.is_active,
       context_length: (p.extra_config?.context_length as number | undefined) ?? undefined,
       supports_reasoning_effort: Boolean(p.extra_config?.supports_reasoning_effort),
+      ...reasoningFormValues(p.extra_config),
       supports_vision: Boolean(p.extra_config?.supports_vision),
     });
     setEditorOpen(true);
@@ -167,6 +173,7 @@ export function SystemModelPanel() {
     } else {
       delete extra.supports_vision;
     }
+    collectReasoningFields({ ...values, reasoning_effort_detected: form.getFieldValue('reasoning_effort_detected') }, extra, editing?.extra_config);
     const payload: Partial<ModelProviderInput> = {
       display_name: values.display_name,
       provider: values.provider,
@@ -184,7 +191,7 @@ export function SystemModelPanel() {
         message.success(t('模型供应商已更新'));
       } else {
         await createModelProvider({ api_key: '', ...payload } as ModelProviderInput);
-        message.success(t('模型供应商已添加并通过连通性校验'));
+        message.success(values.provider_type === 'audio' && !values.base_url ? t('音频模型已保存；服务地址待配置') : t('模型供应商已添加并通过连通性校验'));
       }
       setEditorOpen(false);
       await reload();
@@ -261,7 +268,7 @@ export function SystemModelPanel() {
           options={providers
             .filter(
               (p) =>
-                (!r.type || p.provider_type === r.type) &&
+                (!(r.required_type || r.type) || p.provider_type === (r.required_type || r.type)) &&
                 // 角色还可能要求能力位（视觉桥要求 supports_vision）。只按用途筛的话，
                 // 纯文本模型也会出现在视觉桥的下拉里，配错要到对话中途才暴露。
                 (!r.requires_capability ||
@@ -393,16 +400,22 @@ export function SystemModelPanel() {
             </Form.Item>
             <Form.Item name="provider_type" label={t('用途')} style={{ width: 120, marginLeft: 8 }} rules={[{ required: true }]}>
               <Select
+                onChange={value => {
+                  const current = schemas.find(s => s.id === form.getFieldValue('provider'));
+                  if (value === 'audio') form.setFieldValue('provider', 'audio_compatible');
+                  else if (!current?.supports_types?.includes(value)) form.setFieldValue('provider', 'openai_compatible');
+                }}
                 options={[
                   { value: 'chat', label: TYPE_LABELS.chat },
                   { value: 'embedding', label: TYPE_LABELS.embedding },
                   { value: 'reranker', label: TYPE_LABELS.reranker },
+                  { value: 'audio', label: TYPE_LABELS.audio },
                 ]}
               />
             </Form.Item>
           </Space.Compact>
           <Form.Item name="base_url" label="base_url">
-            <Input placeholder="https://api.deepseek.com" />
+            <Input placeholder={selectedType === 'audio' ? 'http://<asr-host>:8000/v1' : 'https://api.deepseek.com'} />
           </Form.Item>
           <Form.Item
             name="api_key"
@@ -412,8 +425,11 @@ export function SystemModelPanel() {
           >
             <Input.Password placeholder={editing ? '••••••••' : 'sk-...'} autoComplete="new-password" />
           </Form.Item>
+          <Form.Item noStyle shouldUpdate={(prev, cur) => prev.provider_type !== cur.provider_type}>
+            {({ getFieldValue }) => getFieldValue('provider_type') === 'audio' && <Text type="secondary">{t('音频模型用于语音转文字；服务未部署时可留空地址。部署后填写兼容接口的 Base URL，并分配给「语音转文字」角色。')}</Text>}
+          </Form.Item>
           <Form.Item name="model_name" label={t('模型名')} rules={[{ required: true }]}>
-            <Input placeholder="deepseek-chat" />
+            <Input placeholder={selectedType === 'audio' ? 'Qwen3-ASR-0.6B' : 'deepseek-chat'} />
           </Form.Item>
           <Space.Compact block>
             <Form.Item
@@ -445,14 +461,17 @@ export function SystemModelPanel() {
           </Space.Compact>
           <Form.Item noStyle shouldUpdate={(prev, cur) => prev.provider_type !== cur.provider_type}>
             {({ getFieldValue }) => getFieldValue('provider_type') === 'chat' && (
+              <>
               <Form.Item
                 label={t('支持多档思考强度（reasoning_effort）')}
                 name="supports_reasoning_effort"
                 valuePropName="checked"
-                tooltip={t('开启后，前端「思考强度」选项里会出现「思考·高 / 思考·超高」两档，并通过 chat_template_kwargs.reasoning_effort 传给上游。需要上游模型本身认 reasoning_effort 字段（如 Qwen3 多档、GPT-OSS、Claude thinking 等），否则可能 4xx。普通 DeepSeek/Qwen 关闭即可。')}
+                tooltip={t('开启后配置模型支持的档位、上游参数与默认档位。')}
               >
                 <Switch />
               </Form.Item>
+              <ReasoningEffortFields providerId={editing?.provider_id} />
+              </>
             )}
           </Form.Item>
           <Form.Item noStyle shouldUpdate={(prev, cur) => prev.provider_type !== cur.provider_type}>

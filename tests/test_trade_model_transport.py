@@ -8,7 +8,7 @@ import pytest
 from agentscope.message import Msg, TextBlock, ToolCallBlock
 from agentscope.model import ChatResponse
 
-from core.llm.chat_models import make_chat_model
+from core.models.chat_models import make_chat_model
 from core.llm.foreign_trade_plugin import TRADE_TOOL_NAMES
 
 
@@ -37,7 +37,7 @@ def completion(name="trade_inquiry"):
 @pytest.fixture
 def model_client(monkeypatch):
     model = make_chat_model(model="offline-dummy", temperature=0.0, max_tokens=1000, timeout=5,
-                           base_url="http://example.invalid/v1", api_key="dummy", context_size=4096, stream=True)
+                           base_url="http://example.invalid/v1", api_key="dummy", api_protocol="chat_completions", context_size=4096, stream=True)
     requests, responses = [], []
     async def create(**kwargs):
         requests.append(deepcopy(kwargs))
@@ -53,8 +53,9 @@ def model_client(monkeypatch):
 
 async def invoke(model, names=None, **kwargs):
     schemas = None if names is None else [tool(name) for name in names]
-    return await model._call_api("offline-dummy", [Msg(name="user", role="user", content=[TextBlock(text="test")])],
-                                 tools=schemas, **kwargs)
+    # The pinned SDK accumulates wire deltas in ChatModelBase.__call__.
+    return await model([Msg(name="user", role="user", content=[TextBlock(text="test")])],
+                       tools=schemas, **kwargs)
 
 
 @pytest.mark.asyncio

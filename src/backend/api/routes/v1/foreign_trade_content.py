@@ -10,7 +10,7 @@ from starlette.concurrency import run_in_threadpool
 from core.auth.backend import UserContext, get_current_user
 from core.db.engine import get_db
 from core.infra.responses import created_response, success_response
-from core.services.foreign_trade_content import ContentPackError, ContentPackService, MAX_UPLOAD, demo_file
+from core.foreign_trade.content import ContentPackError, ContentPackService, MAX_UPLOAD, demo_file
 
 router = APIRouter(prefix="/v1/foreign-trade/content-packs", tags=["Product content packs"])
 
@@ -72,6 +72,7 @@ class UpdatePack(RevisionRequest):
 
 class GeneratePack(RevisionRequest):
     confirmed: StrictBool
+    generation_mode: Literal["ai", "template"] = "ai"
 
 
 def _call(fn, *args):
@@ -143,7 +144,7 @@ def download_source(pack_id: str, file_id: str, user: UserContext = Depends(get_
 async def generate(pack_id: str, req: GeneratePack, user: UserContext = Depends(get_current_user),
                    db: Session = Depends(get_db)):
     try:
-        record = await ContentPackService(db).generate(user.user_id, pack_id, req.revision, req.confirmed)
+        record = await ContentPackService(db).generate(user.user_id, pack_id, req.revision, req.confirmed, req.generation_mode)
     except ContentPackError as exc:
         raise HTTPException(status_code=exc.status, detail={"message": exc.message}) from None
     return success_response(data=record)

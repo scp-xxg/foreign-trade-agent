@@ -83,9 +83,12 @@ def build() -> dict:
         plugin / "skills/inquiry-quote/SKILL.md",
         plugin / "skills/buyer-inquiry-followup/SKILL.md",
         plugin / "skills/product-content/SKILL.md",
+        plugin / "skills/cross-role-collaboration/SKILL.md",
         plugin / "HOST_REQUIREMENTS.md",
         HERE.parents[1] / "docs/CHAT_PLUGIN.md",
         HERE.parents[1] / "docs/CHAT_PLUGIN_ACCEPTANCE.md",
+        HERE.parents[1] / "docs/SCENARIO_THREE.md",
+        HERE.parents[1] / "docs/ACCEPTANCE_20261028.md",
         HERE / "engine.py", HERE / "catalog.json", SERVER,
     ]
     missing = [str(path) for path in required if not path.is_file()]
@@ -103,6 +106,11 @@ def build() -> dict:
             archive.write(HERE / "README.md", "README.md")
         archive.write(HERE.parents[1] / "docs/CHAT_PLUGIN.md", "CHAT_PLUGIN.md")
         archive.write(HERE.parents[1] / "docs/CHAT_PLUGIN_ACCEPTANCE.md", "CHAT_PLUGIN_ACCEPTANCE.md")
+        archive.write(HERE.parents[1] / "docs/SCENARIO_THREE.md", "SCENARIO_THREE.md")
+        archive.write(HERE.parents[1] / "docs/ACCEPTANCE_20261028.md", "ACCEPTANCE_20261028.md")
+        for path in sorted((HERE / "demo_product").iterdir()):
+            if path.is_file() and path.suffix in {".csv", ".txt", ".json", ".png", ".jpg"}:
+                archive.write(path, "demo_product/" + path.name)
     return {"status": "built", "path": str(out), "bytes": out.stat().st_size}
 
 

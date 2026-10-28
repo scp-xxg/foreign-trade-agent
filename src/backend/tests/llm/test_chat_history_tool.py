@@ -22,7 +22,9 @@ class FakeToolkit:
     def __init__(self):
         self.tools = {}
 
-    def register_tool_function(self, fn, **_kwargs):
+    def append(self, tool):
+        fn = tool._func
+        _kwargs = {"func_description": tool.description, "permission": getattr(tool, "dispatch_spec", None)}
         self.tools[fn.__name__] = fn
 
 
@@ -37,15 +39,7 @@ def wired(tmp_path, monkeypatch):
     engine = create_engine(
         f"sqlite:///{tmp_path / 'tool.db'}", connect_args={"check_same_thread": False}
     )
-    Base.metadata.create_all(
-        engine,
-        tables=[
-            ChatSession.__table__,
-            ChatMessage.__table__,
-            ChatCompactionState.__table__,
-            Project.__table__,
-        ],
-    )
+    Base.metadata.create_all(engine)
     Session = sessionmaker(bind=engine)
     with Session() as db:
         db.add_all(
@@ -177,15 +171,13 @@ async def test_bad_arguments_are_rejected_with_a_usable_message(wired):
 
 @pytest.mark.asyncio
 async def test_digest_is_generated_once_then_served_from_cache(wired, monkeypatch):
-    import core.services.compaction_service as compaction
-
     calls = {"n": 0}
 
     async def fake_summarize(_history, *, timeout):  # noqa: ARG001
         calls["n"] += 1
         return "这段会话讨论了杭州落户积分的构成与社保断缴的处理。"
 
-    monkeypatch.setattr(compaction, "_summarize", fake_summarize)
+    monkeypatch.setattr('core.chat.compaction.summary._summarize', fake_summarize)
 
     first = _payload(await wired.tools["read_chat"](chat_id="past", mode="digest"))
     second = _payload(await wired.tools["read_chat"](chat_id="past", mode="digest"))
@@ -198,12 +190,10 @@ async def test_digest_is_generated_once_then_served_from_cache(wired, monkeypatc
 
 @pytest.mark.asyncio
 async def test_digest_failure_points_at_the_full_text_path(wired, monkeypatch):
-    import core.services.compaction_service as compaction
-
     async def failing_summarize(_history, *, timeout):  # noqa: ARG001
         return None
 
-    monkeypatch.setattr(compaction, "_summarize", failing_summarize)
+    monkeypatch.setattr('core.chat.compaction.summary._summarize', failing_summarize)
 
     result = _payload(await wired.tools["read_chat"](chat_id="past", mode="digest"))
 

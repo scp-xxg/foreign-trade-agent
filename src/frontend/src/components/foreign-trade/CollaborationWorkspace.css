@@ -1,0 +1,32 @@
+/* Modified by foreign-trade-agent contributors, 2026-10-28. */
+.jx-collaborationWorkspace { width: min(1300px, 100%); margin: 0 auto; padding: 24px; color: var(--color-text); }
+.jx-collaborationHeader, .jx-collaborationCard > header, .jx-collaborationTaskHeading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.jx-collaborationHeader h2 { margin: 0 0 8px; }
+.jx-collaborationHeader p, .jx-collaborationScope { color: var(--color-text-secondary); font-size: 13px; line-height: 1.65; }
+.jx-collaborationActions { display: flex; gap: 8px; flex-wrap: wrap; margin: 12px 0; }
+.jx-collaborationLayout { display: grid; grid-template-columns: 240px minmax(0, 1fr); gap: 20px; margin-top: 20px; }
+.jx-collaborationList { display: flex; flex-direction: column; gap: 8px; }
+.jx-collaborationList button { text-align: left; border: 1px solid var(--color-border); background: var(--color-bg-container); color: var(--color-text); border-radius: 10px; padding: 12px; cursor: pointer; overflow-wrap: anywhere; }
+.jx-collaborationList button[aria-current="true"] { border-color: var(--color-primary); }
+.jx-collaborationList small { display: block; margin-top: 6px; color: var(--color-text-secondary); }
+.jx-collaborationCard, .jx-collaborationCreate { border: 1px solid var(--color-border); background: var(--color-bg-container); border-radius: 14px; padding: 18px; margin: 14px 0; }
+.jx-collaborationCard h4, .jx-collaborationTaskHeading h4 { margin: 8px 0; }
+.jx-collaborationSources { display: grid; gap: 8px; margin: 16px 0; }
+.jx-collaborationSources article { display: flex; flex-wrap: wrap; gap: 8px 14px; border-bottom: 1px solid var(--color-border); padding: 10px 0; font-size: 12px; overflow-wrap: anywhere; }
+.jx-collaborationTasks { display: grid; gap: 12px; }
+.jx-collaborationTasks article { border: 1px solid var(--color-border); border-radius: 12px; padding: 16px; }
+.jx-collaborationTasks article.is-blocked { border-style: dashed; }
+.jx-collaborationTasks h5 { margin: 12px 0 4px; }
+.jx-collaborationTasks ul { padding-left: 20px; margin-top: 6px; }
+.jx-collaborationWarning { color: var(--color-warning); white-space: pre-wrap; overflow-wrap: anywhere; }
+.jx-collaborationResult, .jx-collaborationReview { white-space: pre-wrap; overflow-wrap: anywhere; }
+.jx-collaborationReview { padding-top: 12px; border-top: 1px solid var(--color-border); }
+.jx-collaborationForm { display: grid; gap: 14px; }
+.jx-collaborationForm label { display: grid; gap: 6px; }
+.jx-collaborationForm .ant-select { width: 100%; }
+.jx-collaborationCreate summary { cursor: pointer; font-weight: 600; }
+.jx-collaborationCreate .jx-collaborationForm { margin-top: 16px; }
+.jx-collaborationHistory { margin-top: 20px; font-size: 12px; color: var(--color-text-secondary); }
+@media (max-width: 760px) { .jx-collaborationWorkspace { padding: 16px; } .jx-collaborationLayout { grid-template-columns: 1fr; } .jx-collaborationHeader { align-items: flex-start; flex-direction: column; } }
+
+.jx-collaborationFooter { margin-top: 24px; padding: 16px 0; text-align: center; font-size: 12px; color: var(--color-text-secondary); }

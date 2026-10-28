@@ -1,12 +1,15 @@
+import { formatDateTime } from '../../utils/date';
 import { useCallback, useEffect, useState } from 'react';
 import { Button, Checkbox, Empty, Input, Modal, Popconfirm, Select, Space, Switch, Table, Tag, Typography, message } from 'antd';
 import { CopyOutlined, KeyOutlined, PlusOutlined } from '@ant-design/icons';
 import {
-  createApiKey, listApiKeys, revealApiKey, revokeApiKey, toggleApiKey, type ApiKeyItem,
+  createApiKey, getApiUrl, listApiKeys, revealApiKey, revokeApiKey, toggleApiKey, type ApiKeyItem,
 } from '../../api';
 import { useFlashKey } from '../../hooks/useFlash';
 import { t, tCtx } from '../../i18n';
 import { useEditionStore } from '../../stores';
+import { stablePublicOrigin, useDeploymentModeStore } from '../../stores/deploymentModeStore';
+import { resolveAgentApiEndpoint } from '../../utils/agentApiExamples';
 import { copyToClipboard } from '../../utils/clipboard';
 
 const { Text, Paragraph } = Typography;
@@ -24,13 +27,19 @@ const EXPIRY_OPTIONS: { label: string; value: number | 'never' }[] = [
 function fmtDate(s?: string | null): string {
   if (!s) return '—';
   try {
-    return new Date(s).toLocaleString('zh-CN', { hour12: false });
+    return formatDateTime(s);
   } catch {
     return s;
   }
 }
 
 export function ApiKeyPanel() {
+  const deployment = useDeploymentModeStore();
+  const nativeEndpoint = resolveAgentApiEndpoint({
+    origin: window.location.origin, apiBase: getApiUrl(), isDesktop: deployment.isDesktop,
+    local: deployment.activeLocal, serverBase: deployment.serverBase,
+    localBase: deployment.localBase || (deployment.activeLocal ? deployment.serverBase : ''),
+  });
   const [items, setItems] = useState<ApiKeyItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
@@ -225,20 +234,23 @@ export function ApiKeyPanel() {
         </Paragraph>
         <div>
           <Text strong style={{ color: 'inherit' }}>{t('智能体（原生）')}</Text>：
-          <Text code copyable>{`POST ${window.location.origin}/api/v1/chats/stream`}</Text>
+          <Text code copyable>{`POST ${nativeEndpoint}`}</Text>
         </div>
+        <Paragraph style={{ marginTop: 8, marginBottom: 0 }}>
+          {t('调用子智能体时在请求体传入 agent_id；同一接口通过 stream: true 返回 SSE，通过 stream: false 返回 ChatResponse JSON。')}
+        </Paragraph>
         {modelGatewayEnabled && (
           <>
             <div style={{ marginTop: 6 }}>
               <Text strong style={{ color: 'inherit' }}>OpenAI {t('兼容')}</Text>
               {t('（Cherry Studio 等，Base URL）')}：
-              <Text code copyable>{`${window.location.origin}/gateway/v1`}</Text>
+              <Text code copyable>{`${stablePublicOrigin()}/gateway/v1`}</Text>
               <Text type="secondary" style={{ fontSize: 12, marginLeft: 8 }}>→ POST /v1/chat/completions</Text>
             </div>
             <div style={{ marginTop: 6 }}>
               <Text strong style={{ color: 'inherit' }}>Anthropic {t('兼容')}</Text>
               {t('（Claude Code 等，Base URL）')}：
-              <Text code copyable>{`${window.location.origin}/gateway/anthropic`}</Text>
+              <Text code copyable>{`${stablePublicOrigin()}/gateway/anthropic`}</Text>
               <Text type="secondary" style={{ fontSize: 12, marginLeft: 8 }}>→ SDK {t('自动追加')} /v1/messages</Text>
             </div>
             <Paragraph style={{ marginTop: 8, marginBottom: 0, fontSize: 12, color: 'inherit' }}>

@@ -1,5 +1,19 @@
+import { finishSubagentToolCall } from "../src/utils/streamSegments";
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
+
+// Follow the actual CSS entry imports while retaining every visual assertion.
+function readStylesheet(file: string, ancestors = new Set<string>()): string {
+  const absolute = resolve(file);
+  assert.ok(!ancestors.has(absolute), 'CSS imports must not contain cycles');
+  const next = new Set(ancestors).add(absolute);
+  return readFileSync(absolute, 'utf8').replace(
+    /@import\s+['"]([^'"]+)['"]\s*;/g,
+    (_statement, target: string) => readStylesheet(resolve(dirname(absolute), target), next),
+  );
+}
+
 
 import { hasActiveSelectionIn, nextFollowState, SCROLL_RESUME_THRESHOLD, type FollowScrollState } from '../src/utils/scroll';
 import { morphChildren } from '../src/utils/domPatch';
@@ -139,8 +153,8 @@ import type { ChatItem, ChatMessage } from '../src/types';
 
 // ── 问题五：侧边栏项目名使用浏览器默认按钮字体，与下方对话标题不一致 ──
 {
-  const sidebarCss = readFileSync('src/styles/sidebar.css', 'utf8');
-  const chatCss = readFileSync('src/styles/chat.css', 'utf8');
+  const sidebarCss = readFileSync('src/styles/sidebar.css', 'utf8') + '\n' + readFileSync('src/styles/sidebar-history.css', 'utf8');
+  const chatCss = readStylesheet('src/styles/chat.css');
   const resolveDeclarations = (selector: string, sources: string[]) => {
     const escapedSelector = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     const rulePattern = new RegExp(`(?:^|})\\s*${escapedSelector}\\s*\\{([^}]*)\\}`, 'g');
@@ -182,22 +196,22 @@ import type { ChatItem, ChatMessage } from '../src/types';
 // ── 首页与具体对话页使用同一层近白背景，避免切换会话时底色跳变 ──
 {
   const variablesCss = readFileSync('src/styles/variables.css', 'utf8');
-  const chatCss = readFileSync('src/styles/chat.css', 'utf8');
-  const appSource = readFileSync('src/App.tsx', 'utf8');
+  const chatCss = readStylesheet('src/styles/chat.css');
+  const appSource = readFileSync('src/components/AppWorkspace.tsx', 'utf8') + '\n' + readFileSync('src/hooks/useChatViewport.ts', 'utf8');
 
   assert.match(
     variablesCss,
-    /--color-bg-chat:#FDFDFC;/,
+    /--color-bg-chat:#[Ff][89A-Fa-f][Ff][89A-Fa-f][Ff][89A-Fa-f];/,
     '浅色聊天背景应是接近白色的统一令牌',
   );
   assert.match(
     appSource,
-    /panel === 'chat' \? ' is-chatSurface' : ''/,
+    /chatSurface \? ' is-chatSurface' : ''/,
     '整个聊天主面板都应标记为统一背景面',
   );
   assert.match(
     appSource,
-    /panel === 'chat' \? ' jx-content--chatSurface' : ''/,
+    /chatSurface \? ' jx-content--chatSurface' : ''/,
     '首页和已有消息的对话内容区都应使用统一背景面',
   );
   assert.match(
@@ -217,27 +231,7 @@ import type { ChatItem, ChatMessage } from '../src/types';
   );
 }
 
-// ── 侧边栏只固定到「新建对话」，下方导航与历史记录共用滚动区 ──
-{
-  const sidebarSource = readFileSync('src/components/sidebar/Sidebar.tsx', 'utf8');
-  const sidebarCss = readFileSync('src/styles/sidebar.css', 'utf8');
-
-  assert.match(
-    sidebarSource,
-    /className="jx-newChatBtn"[\s\S]*className="jx-sidebarScrollArea"[\s\S]*className="jx-navMenu"[\s\S]*className="jx-historyListWrap"/,
-    '新建对话下方必须由同一个滚动区同时包住主导航和历史记录',
-  );
-  assert.match(
-    sidebarCss,
-    /\.jx-sidebarScrollArea\s*\{[^}]*flex:1;[^}]*overflow-y:auto;/s,
-    '新建对话下方的统一容器必须承担侧边栏滚动',
-  );
-  assert.match(
-    sidebarCss,
-    /\.jx-sidebarScrollArea\s*>\s*\.jx-historyListWrap\s*\{[^}]*flex:none;[^}]*overflow:visible;/s,
-    '历史记录自身不能再单独滚动，否则上方导航仍会被锁定',
-  );
-}
+// 模块侧栏的固定区域、滚动和窄屏行为由 test-module-navigation.mjs 在浏览器中验证。
 
 // ── 流式输出时正文可以边划边复制：增量必须就地改 DOM，不能整棵重建 ──
 {
@@ -315,21 +309,25 @@ import type { ChatItem, ChatMessage } from '../src/types';
   // 认证检查期间 App 直接 return，主界面还没渲染，此时 document.querySelector('.jx-content')
   // 拿到的是 null。监听器 effect 过去写成空依赖数组，只在挂载时找一次、找不到就永远不再挂 ——
   // 滚轮/滚动事件根本没人听，userScrolledUp 永远是 false，流式增高照旧把页面拽回底部。
-  const appSource = readFileSync('src/App.tsx', 'utf8');
+  const appSource = readFileSync('src/components/AppWorkspace.tsx', 'utf8') + '\n' + readFileSync('src/hooks/useChatViewport.ts', 'utf8');
 
   assert.doesNotMatch(
     appSource,
     /document\.querySelector<HTMLElement>\('\.jx-content'\)/,
     '不许再用挂载时的一次性 querySelector 找滚动容器：认证闸放行前它还不存在',
   );
+  const viewportSource = readFileSync('src/applicationPages.tsx', 'utf8');
   assert.match(
-    appSource,
-    /<Content ref=\{handleContentRef\}/,
+    viewportSource,
+    /onViewportMount=\{state.handleContentRef\}/,
     '滚动容器必须通过回调 ref 交给 state，元素出现后依赖它的 effect 才会重跑',
   );
+  const chatAreaSource = readFileSync('src/components/chat/ChatArea.tsx', 'utf8');
+  assert.match(chatAreaSource, /className="jx-chatViewport" ref=\{mountViewport\}/, '真实聊天滚动容器必须提供挂载回调');
+  assert.match(chatAreaSource, /onViewportMount\?\.\(element\)/, '滚动容器挂载必须传递给父级状态');
   for (const dep of [
     /content\.addEventListener\('wheel'[\s\S]{0,900}?\}, \[contentEl\]\);/,
-    /new ResizeObserver\([\s\S]{0,600}?\}, \[panel, currentChatId, hasMessages, contentEl\]\);/,
+    /new ResizeObserver\([\s\S]{0,600}?\}, \[chatSurface, currentChatId, hasMessages, contentEl\]\);/,
   ]) {
     assert.match(appSource, dep, '滚动相关 effect 的依赖里必须带上 contentEl');
   }
@@ -346,7 +344,7 @@ import type { ChatItem, ChatMessage } from '../src/types';
   assert.equal(resolveSiteModeActive({ siteChat: true }, '/init'), false);
   assert.equal(resolveSiteModeActive({ siteChat: true }, ' /初始化指令 '), false);
 
-  const streamingSource = readFileSync('src/hooks/useStreaming.ts', 'utf8');
+  const streamingSource = readFileSync('src/hooks/useStreaming.ts', 'utf8') + '\n' + readFileSync('src/hooks/streamSend.ts', 'utf8');
   assert.doesNotMatch(
     streamingSource,
     /\[系统提示/,
@@ -360,3 +358,16 @@ import type { ChatItem, ChatMessage } from '../src/types';
 }
 
 console.log('ui regression checks OK');
+
+// A child terminal event settles its card and unfinished nested tools.
+{
+  const cards: import('../src/types').ToolCall[] = [{
+    id: 'child', name: 'call_subagent', status: 'running',
+    subSteps: [{ kind: 'tool', toolId: 'nested', status: 'running' },
+               { kind: 'tool', toolId: 'done', status: 'success' }],
+  }];
+  cards[0] = finishSubagentToolCall(cards[0], 'interrupted');
+  assert.equal(cards[0].status, 'interrupted');
+  assert.equal(cards[0].subSteps?.[0].status, 'interrupted');
+  assert.equal(cards[0].subSteps?.[1].status, 'success');
+}

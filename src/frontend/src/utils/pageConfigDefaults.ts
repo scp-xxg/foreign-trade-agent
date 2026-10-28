@@ -67,7 +67,7 @@ export interface PageConfig {
 // 当前默认的取舍：能力中心从底部菜单提到一级导航（其四类能力做成二级导航）；定时任务从应用中心、
 // 站点从实验室各自拆出来成一级导航；知识库并入我的空间的 Tab、智能体并入能力中心的二级导航，
 // 因此都不再单列；应用中心与项目反向下沉到用户下拉菜单，主导航只留高频入口。
-export const DEFAULT_SIDEBAR_ITEMS = ['ability_center', 'trade_inquiries', 'trade_content', 'automation', 'sites', 'my_space'];
+export const DEFAULT_SIDEBAR_ITEMS = ['ability_center', 'trade_inquiries', 'trade_content', 'trade_collaboration', 'automation', 'sites', 'my_space'];
 export const DEFAULT_MENU_ITEMS = ['settings', 'app_center', 'projects', 'lab'];
 
 export const DEFAULT_PAGE_CONFIG: PageConfig = {
@@ -77,8 +77,8 @@ export const DEFAULT_PAGE_CONFIG: PageConfig = {
     logo_url: '/home/header.svg',
     favicon_url: '/icon.png',
     page_title: 'HugAgentOS',
-    hero_title: '用对话完成询盘处理与产品上品',
-    hero_subtitle: '核验买家、处理询盘与跟进；上传资料，制作英文文案、商品素材和 FAQ。',
+    hero_title: '用对话完成询盘、上品与跨岗位协同',
+    hero_subtitle: '核验买家、处理报价与产品资料，按岗位分工并人工验收交接。',
     disclaimer: '真实公开资料保留来源；报价目录为模拟数据。所有回复与上品结果均是待审核草稿，不自动发送或发布。',
   },
   homepage: {
@@ -86,6 +86,8 @@ export const DEFAULT_PAGE_CONFIG: PageConfig = {
     logo_url: '/icon.png',
     show_suggestions: true,
     suggested_questions: [
+      '基于我的 LYRECO 演示询盘创建跨岗位协同，安排销售、采购、设计、运营、合规的负责人标签、依赖和验收标准。Raspberry Pi 资料仅作独立参考。',
+      '检查我的跨岗位协同：哪些任务被依赖或来源版本变化阻塞，哪些待人工验收？',
       '核验 LYRECO 法国公司的官网 https://www.lyreco.com/group/ 和公开登记资料，说明已知事实与未核实事项。',
       '查询 DESK-001 的规格、起订量和阶梯价。',
       '创建演示询盘：DESK-001，500 件，标准包装，发往西班牙，计算报价并生成中英文回复草稿。',
@@ -99,6 +101,7 @@ export const DEFAULT_PAGE_CONFIG: PageConfig = {
       ability_center: '能力中心',
       trade_inquiries: '询盘工作台',
       trade_content: '产品内容工作台',
+      trade_collaboration: '跨岗位协同',
       skills: '技能',
       agents: '智能体',
       mcp: '连接器',
@@ -109,7 +112,6 @@ export const DEFAULT_PAGE_CONFIG: PageConfig = {
       settings: '系统设置',
       my_space: '我的空间',
       projects: '项目',
-      project_detail: '项目详情',
       automation: '定时任务',
       sites: '站点',
     },
@@ -117,6 +119,7 @@ export const DEFAULT_PAGE_CONFIG: PageConfig = {
       ability_center: '智能体基础能力管理，包含智能体、技能、连接器与插件',
       trade_inquiries: '核验买家公开资料、处理询盘报价并管理跟进待办。',
       trade_content: '上传产品资料与原图，核对事实，生成英文上品资料、商品素材和客服 FAQ。',
+      trade_collaboration: '当前账号下按角色协调任务，核对依赖、来源版本与人工验收。',
       skills: '启用/停用技能，并查看详细介绍、输入输出与示例。',
       agents: '选择与启用智能体，并查看其职责边界与路由提示。',
       mcp: '管理 MCP连接器服务，并查看其作用范围与可靠性影响。',
@@ -127,7 +130,6 @@ export const DEFAULT_PAGE_CONFIG: PageConfig = {
       settings: '',
       my_space: '',
       projects: '把对话、文件和指令打包成专属工作空间',
-      project_detail: '',
       automation: '按计划自动执行任务，也可随时手动触发；在对话中描述即可快速创建',
       sites: '在对话里描述需求，AI 生成完整网站并一键发布，由平台托管、凭链接即可访问',
     },

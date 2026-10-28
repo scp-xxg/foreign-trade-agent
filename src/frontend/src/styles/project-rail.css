@@ -1,0 +1,239 @@
+/* Right rail */
+.jx-projectRail {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.jx-projectRail-card {
+  position: relative; /* FilesCard 拖拽上传高亮层的定位锚点 */
+  background: var(--color-bg-container);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* FilesCard 拖拽高亮层：复用 .jx-mySpace-dropOverlay，圆角对齐卡片 */
+.jx-projectRail-dropOverlay {
+  border-radius: var(--radius-md);
+}
+
+.jx-projectRail-dropOverlay .jx-mySpace-dropOverlay-card {
+  padding: 12px 20px;
+  font-size: 13px;
+}
+
+.jx-projectRail-cardHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.jx-projectRail-cardTitle {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.jx-projectRail-cardAux {
+  font-size: 12px;
+  color: var(--color-text-tertiary);
+}
+
+.jx-projectRail-cardText {
+  font-size: 14px;
+  color: var(--color-text-secondary);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  line-height: 1.7;
+  max-height: 160px;
+  overflow: auto;
+}
+
+.jx-projectRail-cardEmpty {
+  font-size: 12px;
+  color: var(--color-text-tertiary);
+  line-height: 1.5;
+}
+
+.jx-projectRail-cardHeaderRight {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.jx-projectRail-memoryToggles {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 180px;
+}
+
+.jx-projectRail-memoryPopover .ant-popover-inner-content {
+  padding: 4px 0;
+}
+
+.jx-projectRail-memoryToggleRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.jx-projectRail-memoryToggleLabel {
+  font-size: 12px;
+  color: var(--color-text-secondary);
+}
+
+.jx-projectRail-cardSub {
+  font-size: 12px;
+  color: var(--color-text-tertiary);
+}
+
+.jx-projectRail-fileItem {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 4px;
+  border-bottom: 1px solid var(--color-fill-hover);
+  border-radius: 4px;
+}
+
+.jx-projectRail-fileItem:last-child {
+  border-bottom: 0;
+}
+
+.jx-projectRail-fileInfo {
+  flex: 1;
+  min-width: 0;
+}
+
+.jx-projectRail-fileName {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  color: var(--color-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.jx-projectRail-refTag {
+  display: inline-block;
+  padding: 0 6px;
+  margin-right: 6px;
+  font-size: 11px;
+  color: var(--color-primary);
+  background: var(--color-primary-light);
+  border-radius: 3px;
+}
+
+.jx-projectRail-fileMeta {
+  flex-shrink: 0;
+  font-size: 11px;
+  color: var(--color-text-tertiary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.jx-projectRail-groupHeader {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 4px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-text);
+  cursor: pointer;
+  user-select: none;
+  border-radius: 4px;
+}
+
+.jx-projectRail-groupHeader:hover {
+  background: var(--color-fill-hover);
+}
+
+.jx-projectRail-groupName {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.jx-projectRail-groupCount {
+  font-size: 11px;
+  color: var(--color-text-tertiary);
+  padding: 0 6px;
+  background: var(--color-bg-gray);
+  border-radius: 8px;
+  flex-shrink: 0;
+}
+
+/* Bound DOM work on desktop and mobile. */
+.jx-projectRail-fileTree { min-width: 0; }
+.jx-projectRail-fileTree .ant-tree-node-content-wrapper { min-width: 0; overflow: hidden; }
+.jx-projectRail-fileTree .ant-tree-title { display: block; }
+.jx-projectRail-fileTree .jx-projectRail-fileItem,
+.jx-projectRail-fileTree .jx-projectRail-groupHeader { height: 34px; box-sizing: border-box; }
+.jx-projectRail-filePreview {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+}
+.jx-projectRail-filePreview:focus-visible { outline: 2px solid var(--color-primary); }
+
+.jx-projectRail-fileTree .ant-tree-switcher { display: none; }
+.jx-projectRail-rowActions {
+  display: flex;
+  flex-shrink: 0;
+  gap: 4px;
+  opacity: 0;
+  pointer-events: none;
+}
+.jx-projectRail-fileItem:hover .jx-projectRail-rowActions,
+.jx-projectRail-fileItem:focus-within .jx-projectRail-rowActions,
+.jx-projectRail-groupHeader:hover .jx-projectRail-rowActions,
+.jx-projectRail-groupHeader:focus-within .jx-projectRail-rowActions {
+  opacity: 1;
+  pointer-events: auto;
+}
+@media (hover: none) {
+  .jx-projectRail-rowActions { opacity: 1; pointer-events: auto; }
+}
+
+/* Resources have an independent scrollbar so the conversation retains its width. */
+.jx-mainRow--project { position:relative; }
+.jx-projectWorkspaceRail { flex:0 0 clamp(360px, 32%, 440px); min-width:0; padding:16px 16px 16px 0; overflow-y:auto; }
+.jx-projectWorkspaceRail-toggle.ant-btn { display:none; }
+.jx-projectWorkspaceRail-body { min-width:0; }
+.jx-projectRail-cardHeader { gap:8px; min-width:0; }
+.jx-projectRail-cardTitle { min-width:0; overflow-wrap:anywhere; }
+.jx-projectRail-cardTitle .ant-tag { max-width:100%; overflow:hidden; text-overflow:ellipsis; vertical-align:middle; }
+.jx-projectRail-cardSub { overflow-wrap:anywhere; }
+.jx-projectAutomation-list { max-height:280px; overflow:auto; }
+.jx-projectAutomation-row { display:flex; align-items:flex-start; gap:4px; border-top:1px solid var(--color-border); padding:8px 0; }
+.jx-projectAutomation-chat { display:flex; align-items:flex-start; gap:8px; flex:1; min-width:0; border:0; padding:4px; background:transparent; color:var(--color-text); text-align:left; font:inherit; cursor:pointer; border-radius:6px; }
+.jx-projectAutomation-chat:hover { background:var(--color-fill-hover); }
+.jx-projectAutomation-chat:focus-visible { outline:2px solid var(--color-primary); }
+.jx-projectAutomation-body { display:flex; flex-direction:column; gap:4px; min-width:0; }
+.jx-projectAutomation-name { font-size:13px; font-weight:600; overflow-wrap:anywhere; }
+.jx-projectAutomation-summary { font-size:12px; color:var(--color-text-secondary); display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; overflow-wrap:anywhere; }
+@container conversation-pane (max-width: 900px) {
+  .jx-projectWorkspaceRail { position:absolute; right:12px; top:12px; padding:0; overflow:visible; z-index:15; max-width:calc(100% - 24px); }
+  .jx-projectWorkspaceRail-toggle.ant-btn { display:flex; margin-left:auto; background:var(--color-bg-container); }
+  .jx-projectWorkspaceRail-body { display:none; }
+  .jx-projectWorkspaceRail.is-expanded .jx-projectWorkspaceRail-body { display:block; width:min(440px, calc(100cqw - 24px)); max-height:70dvh; overflow:auto; padding:12px; margin-top:8px; border:1px solid var(--color-border); border-radius:var(--radius-md); background:var(--color-bg-container); box-shadow:var(--shadow-card-hover); }
+  .jx-mainRow--project .jx-projectHeader { padding-right:90px; }
+}

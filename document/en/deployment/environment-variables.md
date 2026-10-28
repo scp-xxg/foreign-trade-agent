@@ -15,15 +15,15 @@ This reference is sourced from `.env.example` and `src/backend/core/config/setti
 | `BACKEND_PORT` | `3001` | Backend listen port + Docker port mapping; also becomes `PORT` inside the container | CE |
 | `FRONTEND_PORT` | `3002` | Frontend nginx host port (80 inside the container) | CE |
 | `VITE_API_BASE_URL` | (empty) | API base URL baked into the frontend JS bundle at build time; **leave empty to use the nginx `/api` proxy (recommended)** | CE |
-| `MCP_OAUTH_PUBLIC_BASE_URL` | (empty) | Browser-visible API base for MCP OAuth callbacks; leave empty for the same-origin nginx/Vite `/api` proxy, or set a cross-origin base such as `https://app.example.com/api` | CE |
+| `MCP_OAUTH_PUBLIC_BASE_URL` | (empty) | Browser-visible API base for MCP OAuth callbacks; leave empty for the same-origin nginx/Vite `/api` proxy, or set a cross-origin base such as `https://app.example.com/api`. An HTTPS value also enables OAuth client ID metadata documents (CIMD); authorization servers must be able to reach it | CE |
 | `ENV` / `ENVIRONMENT` | `dev` | Runtime environment (dev / staging / prod); affects log format and `.env.<ENV>` loading | CE |
 | `TZ` | `Asia/Shanghai` | Timezone for all containers | CE |
 | `SERVICE_NAME` | `hugagent` | Service name (logging / alerting identifier) | CE |
 | `HOST_STORAGE_PATH` | `/var/lib/hugagent-storage` | Host absolute path of the storage directory, bind-mounted into backend/mcp at `/app/storage`; **required**, enforced by compose | CE |
 | `HOST_REPO_PATH` | repo absolute path | Repository root on the host; used when the backend resolves compose-relative paths through docker.sock to rebuild sandbox images | CE |
 | `DOCKER_GID` | `999` | Host docker group GID granting the backend container access to `/var/run/docker.sock` (find with `stat -c '%g' /var/run/docker.sock`) | CE |
-| `COMPOSE_PROFILES` | `script_runner` | Compose profile selection (`script_runner` / `opensandbox`, append `,mem0` as needed); must match `SANDBOX_PROVIDER` | CE |
-| `COMPOSE_FILE` | (unset) | Compose overlay files; set `docker-compose.yml:docker-compose.cube.yml` for CubeSandbox | CE |
+| `COMPOSE_PROFILES` | CE Docker: `opensandbox` | Compose profile selection (`script_runner` / `opensandbox`, append `,mem0` as needed); must match `SANDBOX_PROVIDER` | CE |
+| `COMPOSE_FILE` | (unset) | Compose overlay files; set `docker-compose.yml:docker/sandbox/compose.cube.yml` for CubeSandbox | CE |
 | `MAX_REQUEST_SIZE` | `52428800` (code default, 50 MB) | Maximum request body size (bytes) | CE |
 | `DB_MIGRATION_RETRIES` / `DB_MIGRATION_RETRY_INTERVAL` | `20` / `2` (entrypoint defaults) | Startup migration retry count / interval (seconds) | CE |
 
@@ -57,7 +57,7 @@ This reference is sourced from `.env.example` and `src/backend/core/config/setti
 | `ENABLE_SUMMARY` | `true` | When off, titles fall back to message truncation | CE |
 | `SUMMARY_MAX_ROUNDS` | `3` | Titles stop updating after this many rounds | CE |
 | `OPENAI_API_KEY` / `OPENAI_API_BASE` | (empty) / `https://api.openai.com/v1` | Alternate direct OpenAI configuration (passed through by compose) | CE |
-| `ROUTER_STRATEGY` | `main_only` (code default) | Routing strategy (`orchestration/strategy.py`) | CE |
+| `ROUTER_STRATEGY` | `main_only` (code default) | Routing strategy (`core/agent_runtime/strategy.py`) | CE |
 | `FOLLOWUP_ENABLED` | `true` (code default) | Follow-up suggestion generation | CE |
 
 ## Authentication and login
@@ -130,7 +130,7 @@ These variables are deployment-level fallbacks for the GitHub binding under `/ad
 
 | Variable | Default | Description | Edition |
 |---|---|---|---|
-| `STORAGE_TYPE` | `local` | `local` / `s3` / `oss` | CE (s3 / oss: EE) |
+| `STORAGE_TYPE` | EE Docker: `s3`; CE / local: `local` | `local` / `s3` / `oss` / `obs` | Cloud storage: EE |
 | `STORAGE_PATH` | `./storage` (fixed at `/app/storage` in containers) | Local storage root | CE |
 | `S3_BUCKET` / `S3_REGION` / `S3_ENDPOINT` / `S3_ACCESS_KEY` / `S3_SECRET_KEY` | (empty) / `us-east-1` / … | S3 or compatible service | EE |
 | `S3_CDN_DOMAIN` | (empty) | CDN-accelerated domain | EE |
@@ -183,18 +183,19 @@ the database has no value.
 |---|---|---|---|
 | `MCP_HOST` | `mcp` (compose default) | MCP container hostname; set `127.0.0.1` for local debugging | CE |
 | `MCP_MARKET_REVALIDATE_INTERVAL` | `21600` | Remote MCP marketplace snapshot revalidation interval in seconds (minimum `300`) | CE |
-| `MCP_SELF_SERVICE_ALLOW_PRIVATE_NETWORK` | `false` | Allow users to add MCP endpoints on loopback, RFC1918, or IPv6 ULA addresses; enable only in trusted private deployments. Cloud-metadata/link-local ranges stay blocked, and users cannot submit private endpoints to the marketplace | CE |
-| `INTERNET_SEARCH_ENGINE` | `tavily` (compose default) | Internet search engine: `tavily` / `baidu` / `langsearch` | CE |
+| `MCP_SELF_SERVICE_ALLOW_PRIVATE_NETWORK` | `false` | Allow users to add MCP endpoints on loopback, RFC1918, or IPv6 ULA addresses (including OAuth consent, marketplace submission, review re-check, and marketplace installs); enable only in trusted private deployments. Cloud-metadata/link-local ranges stay blocked, and users cannot submit private endpoints to the marketplace | CE |
+| `INTERNET_SEARCH_ENGINE` | `tavily` (compose default) | Internet search engine: `tavily` / `baidu` / `langsearch` / `deepseek` | CE |
 | `TAVILY_API_KEY` | (empty) | Tavily Search API key; required when Tavily is selected | CE |
 | `BAIDU_API_KEY` | (empty) | Baidu search API key; required when Baidu is selected | CE |
 | `LANGSEARCH_API_KEY` | (empty) | LangSearch Web Search API key; required when LangSearch is selected | CE |
-| `INTERNET_SEARCH_CN_ONLY` / `INTERNET_SEARCH_CN_STRICT` / `INTERNET_SEARCH_COUNTRY` / `INTERNET_SEARCH_AUTO_PARAMETERS` | (empty) | Regional / parameter tuning | CE |
+| `DEEPSEEK_SEARCH_API_KEY` | (empty) | DeepSeek platform API key used for the Search API; required when DeepSeek is selected | CE |
+| `INTERNET_SEARCH_COUNTRY` / `INTERNET_SEARCH_AUTO_PARAMETERS` | (empty) | Tavily country ranking preference (general only; omitted when unset) / automatic parameters | CE |
 | `QUERY_DATABASE_URL` | `http://your-database-api-host:6200` | HTTP backend for the data-warehouse query tool | EE (industry tool) |
 | `QUERY_DATABASE_TIMEOUT_SECONDS` / `QUERY_DATABASE_RETRY_TIMES` / `QUERY_DATABASE_MAX_OUTPUT_TOKENS` | (empty) | Data-warehouse call parameters | EE |
 | `INDUSTRY_URL` / `INDUSTRY_AUTH_TOKEN` | (sample values) | Industry-chain information API | EE (industry tool) |
 | `COMPANY_API_URL` / `COMPANY_AUTH_TOKEN` | (empty) | Company-profile API | EE (industry tool) |
-| `BACKEND_INTERNAL_URL` | `http://backend:3001` | Internal address for MCP servers (e.g. batch_runner) to call back into the backend | CE |
-| `BACKEND_INTERNAL_TOKEN` | (**required for batch execution**) | MCP → backend callback token | CE |
+| `BACKEND_INTERNAL_URL` | `http://backend:3001` | Internal address for MCP servers (e.g. site and browser tools) to call back into the backend | CE |
+| `BACKEND_INTERNAL_TOKEN` | (**required for internal service calls**) | MCP → backend callback token | CE |
 | `HUGAGENT_USER_SKILLS_DIR` / `HUGAGENT_PROJECT_SKILLS_DIR` | `~/.hugagent/skills` / `.hugagent/skills` | Skill directory overrides | CE |
 | `HUGAGENT_DISABLE_USER_SKILLS` / `HUGAGENT_DISABLE_PROJECT_SKILLS` | `0` | Disable user / project skills | CE |
 
@@ -204,33 +205,34 @@ the database has no value.
 
 | Variable | Default | Description | Edition |
 |---|---|---|---|
-| `SANDBOX_PROVIDER` | `script_runner` | `script_runner` / `opensandbox` / `cube` | CE (persistent sandboxes opensandbox/cube: EE) |
+| `SANDBOX_PROVIDER` | CE Docker: `opensandbox` | `script_runner` / `opensandbox` / `cube` | CE / EE; Cube is EE |
 | `SANDBOX_TOOLS_ENABLED` | `false` | Register the `bash` / `sandbox_put_artifact` / `sandbox_get_artifact` tools on the agent | CE |
-| `SANDBOX_MAX_CONCURRENT` | `4` | Concurrent sandbox executions per backend process (reserved) | CE |
 | `SANDBOX_RUNNER_URL` | `http://hugagent-script-runner:8900` | script_runner sidecar address | CE |
-| `SANDBOX_TOOLS_TIMEOUT` / `SANDBOX_TOOLS_MAX_TIMEOUT` | `30` / `120` | Default / maximum timeout per bash command (s) | CE |
+| `SANDBOX_FILE_TRANSFER_TIMEOUT_S` | `120` | File transfer request timeout (seconds); does not limit command runtime | CE |
 | `SANDBOX_IDLE_TTL_S` | `3600` | The one sandbox lifetime parameter (s, minimum 60, shared by every provider): server-side TTL, the idle reclaim threshold and the keepalive interval are all derived from it. A session idle beyond it is snapshotted, then released, and restored from the snapshot on the next turn | CE |
 | `SANDBOX_ARTIFACT_MAX_BYTES` | `104857600` | Single switch for sandbox file size (100 MiB): fetch, auto-collected artifacts, push-in, and `/myspace` write-back share it | CE |
 | `SANDBOX_TOOLS_MAX_MEMORY` | `256` | script_runner memory cap (MB) | CE |
 | `MYSPACE_WRITE_CONFIRM` | `true` (code default) | Sandbox writes to `/myspace` require out-of-band user confirmation | CE |
 
-### OpenSandbox (persistent sandbox, Enterprise Edition)
+### OpenSandbox (shared by CE / EE)
 
 | Variable | Default | Description |
 |---|---|---|
 | `OPENSANDBOX_DOMAIN` | `http://opensandbox:8080` | OpenSandbox server address |
-| `OPENSANDBOX_API_KEY` | (empty = insecure mode) | Must be a strong random string in production |
-| `OPENSANDBOX_IMAGE` | `hugagent-opensandbox-custom:latest` (compose default; code fallback `opensandbox/code-interpreter:v1.0.2`) | Sandbox runtime image; the custom image pre-installs all project dependencies (`docker/Dockerfile.opensandbox`) |
+| `OPENSANDBOX_API_KEY` | Generated by CE initialization | Shared by backend and controller; never logged |
+| `OPENSANDBOX_IMAGE` | `hugagent-opensandbox-custom:latest` (compose default; code fallback `opensandbox/code-interpreter:v1.0.2`) | Sandbox runtime image; the custom image pre-installs all project dependencies (`docker/sandbox/Dockerfile.opensandbox`) |
 | `OPENSANDBOX_READY_TIMEOUT_S` | `90` | Maximum wait for sandbox readiness (s) |
 | `OPENSANDBOX_REQUEST_TIMEOUT_S` | `120` | Per-HTTP-call timeout (s) |
-| `OPENSANDBOX_PORT` | `8910` | Host debug port mapping (fixed 8080 in-container) |
-| `OPENSANDBOX_POOL_JUPYTER_MIN_IDLE` / `MAX_IDLE` | `.env.example` 1/3; compose defaults 2/3 | Jupyter warm pool (persistent-session bucket) |
+| `OPENSANDBOX_PORT` | Full repository: `8910`; CE: no mapping | Controller uses 8080 inside the network |
+| `OPENSANDBOX_POOL_JUPYTER_MIN_IDLE` / `MAX_IDLE` | `.env.example` 1/3; compose defaults 2/3 | User session pool (historical setting name); CE minimum is 0 |
 | `OPENSANDBOX_POOL_LIGHT_MIN_IDLE` / `MAX_IDLE` | `2` / `5` | Light bucket (one-shot executions) |
-| `OPENSANDBOX_POOL_MAX_TOTAL` | `20` | Pool ceiling (idle + in use) |
+| `OPENSANDBOX_POOL_MAX_TOTAL` | CE: `4`; full: `20` | Deployment-wide sandbox capacity (all workers, warm, active and evaluation instances), enforced by the backend's shared admission ledger; read by the backend only |
+| `OPENSANDBOX_CREATE_CONCURRENCY` | `4` | Concurrent creations sent to the controller; protects the Docker daemon |
+| `OPENSANDBOX_ADMISSION_WAIT_S` | `30` | How long an interactive creation waits for a free slot (s); "capacity exhausted" is reported only after a fresh reconciliation |
+| `OPENSANDBOX_USER_HEADROOM` | `2` | Slots pre-warm never takes (capped at capacity minus one) |
 | `OPENSANDBOX_SNAPSHOT_ENABLED` | `true` | Snapshot persistence master switch (snapshot+kill when idle, restore on reconnect) |
 | `OPENSANDBOX_SNAPSHOT_RETENTION_DAYS` | `7` | Snapshot retention (GC sweeps expired rows) |
 | `OPENSANDBOX_SNAPSHOT_WAIT_TIMEOUT_S` | `120` | Maximum poll for snapshot readiness (s) |
-| `OPENSANDBOX_MYSPACE_BIND_MOUNT_ENABLED` | `true` | Direct myspace mount: binds the backend `myspace_cache/{uid}` into the sandbox at `/workspace/myspace/{uid}`, avoiding HTTP PUT sync; `false` falls back to the full-PUT path |
 
 ### CubeSandbox (E2B-compatible MicroVM, Enterprise Edition)
 
@@ -325,16 +327,10 @@ estimate only when it is not.
 
 See the [License mechanism](../editions/license.md) for details.
 
-## Miscellaneous (rate limiting, circuit breakers, security, alerting)
+## Miscellaneous (security, alerting)
 
 | Variable | Default | Description | Edition |
 |---|---|---|---|
-| `RATE_LIMIT_ENABLED` | `true` | API rate limiting | CE |
-| `RATE_LIMIT_STORAGE` | `memory://` | Rate-limit counter store (`redis://...` supported) | CE |
-| `RATE_LIMIT_GLOBAL` / `RATE_LIMIT_PER_USER` | `500/minute` / `50/minute` | Global / per-user limits | CE |
-| `CB_USER_CENTER_THRESHOLD` / `CB_USER_CENTER_TIMEOUT` | `5` / `60` | User-center circuit breaker | EE |
-| `CB_MODEL_API_THRESHOLD` / `CB_MODEL_API_TIMEOUT` | `10` / `30` | Model-API circuit breaker | CE |
-| `CB_STORAGE_THRESHOLD` / `CB_STORAGE_TIMEOUT` | `5` / `60` | Storage circuit breaker | CE |
 | `CORS_ORIGINS` | compose default `http://localhost:3000,http://localhost:5173` | Allowed cross-origin sources | CE |
 | `ENABLE_SECURITY_HEADERS` | (commented; recommended `true` in production) | Security response headers | CE |
 | `AUDIT_LOG_RETENTION_DAYS` / `AUDIT_LOG_EXPORT_ENABLED` | `90` / `true` (commented samples) | Audit-log retention / export | EE |
@@ -348,8 +344,60 @@ See the [License mechanism](../editions/license.md) for details.
 |---|---|
 | Variable samples (deployment starting point) | `.env.example` |
 | Centralized settings (single read point) | `src/backend/core/config/settings.py` |
-| Compose-level injection and defaults | `docker-compose.yml`, `docker-compose.cube.yml` |
+| Compose-level injection and defaults | `docker-compose.yml`, `docker/sandbox/compose.cube.yml` |
 | Sandbox provider selection | `src/backend/core/sandbox/`, `settings.py::SandboxSettings` |
 | Memory settings | `settings.py::MemorySettings`, `src/backend/core/memory/` (service.py / pipeline.py) |
 | Feedback GitHub configuration | `src/backend/edition_ee/services/system_config.py`, `feedback_service.py` |
 | License / edition facade | `settings.py::LicenseSettings / EditionSettings` |
+
+
+## Time and timezone conventions
+
+Persistence, business calculations, and API event timestamps use UTC. ISO timestamp strings include an offset. Database connections explicitly use UTC independently of the host or container `TZ`; SQLite timestamps are normalized at the storage boundary.
+
+Display and date filters use the application display zone (currently Asia/Shanghai). Scheduled tasks retain their configured timezone. `TZ` must not change the instant represented by stored events. Historical timestamps without offsets require source-specific verification, not a blanket eight-hour shift. Repairing legacy team file revisions (EE) requires verification of the cloud object and original content, a backup, and a separate maintenance operation.
+
+## Browser automation plugin
+
+[Configuration, runtime dependencies and usage](../modules/browser-automation.md).
+
+Builtin MCP invocations, including browser automation, require the same `BACKEND_INTERNAL_TOKEN` in backend and mcp services. Generate a separate high-entropy value for each deployment and inject it through protected environment configuration. Never use example placeholders. The local desktop launcher provides its own invocation key.
+
+
+## Application hosting and browser runtime
+
+| Variable | Purpose |
+|---|---|
+| APPLICATION_DATABASE_URL | Dedicated database, non-superuser application_owner; never the platform database |
+| APPLICATION_DB_PASSWORD | Dedicated database bootstrap credential; initialization only |
+| APPLICATION_OWNER_DB_PASSWORD | Different URL-safe runtime credential; required by the hosting Compose overlay |
+| APPLICATION_PROVISION_DATABASE_URL | Bootstrap-only administrator URL for initial owner provisioning; never set in backend runtime |
+| BROWSER_DNS_RESOLVER_URL | Trusted HTTPS JSON DNS resolver for Fake-IP networks; private-address checks remain active |
+| BROWSER_CHROMIUM_SANDBOX | Defaults true; known failures retry only in host-verified isolated containers |
+
+Hosting remains opt-in. See [application deployment](../modules/application-hosting.md) and [browser deployment](../modules/browser-automation.md). Cloud site writes require shared Redis; missing or unavailable Redis rejects writes.
+
+## Personal Agent (CE / EE)
+
+| Variable | Use |
+| --- | --- |
+| PERSONAL_AGENT_ENABLED | Loads the module (default `false`). When off it registers no routes, background worker or channel routing |
+| PERSONAL_AGENT_OPENSANDBOX_DOMAIN | Dedicated authenticated controller address |
+| PERSONAL_AGENT_OPENSANDBOX_API_KEY | Separate controller credential; at least 32 characters |
+| PERSONAL_AGENT_SANDBOX_MAX_TOTAL | Capacity of the Personal Agent computer controller (its own ledger); default 20 |
+| PERSONAL_AGENT_IMAGE | Versioned graphical computer image |
+| PERSONAL_AGENT_VOLUME_ROOT | Absolute host directory for dedicated persistent volumes |
+| PERSONAL_AGENT_LOCAL_VOLUME_ROOT | Matching directory visible inside the backend |
+| PERSONAL_AGENT_HEARTBEAT | `off` stops all heartbeat checks on this backend (default `on`); user settings stay |
+| PERSONAL_AGENT_HEARTBEAT_MIN_MINUTES | Lowest heartbeat interval a user can set, in minutes (default 15) |
+| PERSONAL_AGENT_HEARTBEAT_DAILY_MAX | Maximum heartbeat checks for one agent in one day (default 48) |
+
+With the module enabled, existing authenticated CE users can use Personal Agent. EE additionally checks the **Personal Agent** permission granted per user, role or team in the Config console (default off). Revoking that permission hides the entry and stops queued, scheduled and channel work. A persistent_sandbox license is not required. Both editions enforce ownership and action approvals.
+
+See [Personal Agent](../modules/personal-agent.md). Use docker/personal-agent/compose.personal-agent.yml with the root Compose file and the personal-agent profile.
+
+<!-- End Personal Agent settings -->
+
+`PERSONAL_AGENT_CLI_SERVER` (EE): The backend address reachable from the cloud computer. Default: `http://backend:3001`. No credentials. When the sandbox runs on another server, use a reachable application address such as `http://<application private address>/api`.
+
+`PERSONAL_AGENT_CLI_ALLOW_HTTP` (EE): Whether the cloud-computer CLI may reach the backend over plain HTTP. Default: `true` (suits private networks). Set `false` to require HTTPS.

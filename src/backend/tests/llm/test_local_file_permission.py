@@ -3,26 +3,40 @@
 from __future__ import annotations
 
 import asyncio
-import hashlib
 import json
+import pytest
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from agentscope.message import ToolCallBlock
-from core.llm.tool_permissions import (
-    CURRENT_PERMISSION_TICKET,
-    PermissionRuntime,
-    ToolPermissionRegistry,
-    ToolPermissionService,
-    builtin_tool_permission,
-)
-from core.llm.tools import _myspace_confirm as confirm
-from core.llm.tools._paths import to_physical_path
-from core.llm.tools._state import ReadEntry, ReadStateTracker
+from core.sandbox.permissions.dispatch_models import CURRENT_PERMISSION_TICKET, PermissionRuntime
+from core.sandbox.permissions.tool_specs import ToolPermissionRegistry, builtin_tool_permission
+from core.llm.tool_permissions import ToolPermissionService
+from core.llm.tools import confirmation as confirm
+from core.sandbox.workspace.resolution import to_physical_path
 from core.llm.tools.edit_tool import register_edit
 from core.llm.tools.write_tool import register_write
-from core.sandbox.local_policy import Grant, Policy
+from core.sandbox.permissions.models import Grant
+from core.sandbox.permissions.models import Policy
+
+
+@pytest.fixture(autouse=True)
+def isolated_permission_store(monkeypatch):
+    from core.infra.ephemeral import LocalEphemeralState
+    store = LocalEphemeralState()
+    monkeypatch.setattr("core.infra.ephemeral.get_ephemeral_state", lambda: store)
+    monkeypatch.setattr('core.llm.runtime.interaction_store.get_ephemeral_state', lambda: store)
+    monkeypatch.setattr(confirm.state.process_state(), "CHATS", {})
+
+
+async def _pending_pair(chat_id):
+    for _ in range(100):
+        pending = confirm.get_all_pending(chat_id)
+        if len(pending) == 2:
+            return pending
+        await asyncio.sleep(0.01)
+    raise AssertionError("Expected two independent confirmation requests")
 
 
 def _payload(response) -> dict:
@@ -34,7 +48,9 @@ def _payload(response) -> dict:
 class _Toolkit:
     fn = None
 
-    def register_tool_function(self, fn, **_kwargs):
+    def append(self, tool):
+        fn = tool._func
+        _kwargs = {"func_description": tool.description, "permission": getattr(tool, "dispatch_spec", None)}
         self.fn = fn
 
 
@@ -70,9 +86,9 @@ def _call(name: str, arguments: dict) -> ToolCallBlock:
 async def test_strict_workspace_write_is_blocked_before_file_io():
     with (
         patch("core.config.local_mode.local_mode_enabled", return_value=True),
-        patch("core.services.local_grant_service.grants_for_gate", return_value=[]),
+        patch('features.desktop.local.grants.grants_for_gate', return_value=[]),
         patch(
-            "core.services.local_grant_service.policy_for_gate",
+            'features.desktop.local.grants.policy_for_gate',
             return_value=Policy(workspace_write="block", out_of_scope="block"),
         ),
     ):
@@ -87,9 +103,9 @@ async def test_read_grant_allows_read_but_not_unattended_write():
     grants = [Grant("/data/project", "read")]
     with (
         patch("core.config.local_mode.local_mode_enabled", return_value=True),
-        patch("core.services.local_grant_service.grants_for_gate", return_value=grants),
+        patch('features.desktop.local.grants.grants_for_gate', return_value=grants),
         patch(
-            "core.services.local_grant_service.policy_for_gate",
+            'features.desktop.local.grants.policy_for_gate',
             return_value=Policy(out_of_scope="confirm"),
         ),
     ):
@@ -110,9 +126,9 @@ async def test_read_grant_allows_read_but_not_unattended_write():
 async def test_missing_chat_cannot_turn_confirm_into_an_implicit_grant():
     with (
         patch("core.config.local_mode.local_mode_enabled", return_value=True),
-        patch("core.services.local_grant_service.grants_for_gate", return_value=[]),
+        patch('features.desktop.local.grants.grants_for_gate', return_value=[]),
         patch(
-            "core.services.local_grant_service.policy_for_gate",
+            'features.desktop.local.grants.policy_for_gate',
             return_value=Policy(out_of_scope="confirm"),
         ),
     ):
@@ -123,17 +139,17 @@ async def test_missing_chat_cannot_turn_confirm_into_an_implicit_grant():
     assert outcome.payload["status"] == "blocked_non_interactive"
 
 
-async def test_view_image_file_path_uses_the_same_local_read_gate():
+async def test_read_image_file_path_uses_the_same_local_read_gate():
     with (
         patch("core.config.local_mode.local_mode_enabled", return_value=True),
-        patch("core.services.local_grant_service.grants_for_gate", return_value=[]),
+        patch('features.desktop.local.grants.grants_for_gate', return_value=[]),
         patch(
-            "core.services.local_grant_service.policy_for_gate",
+            'features.desktop.local.grants.policy_for_gate',
             return_value=Policy(out_of_scope="confirm"),
         ),
     ):
-        outcome = await _service("view_image", interactive=False).authorize(
-            _call("view_image", {"file_path": "/outside/secret.png"})
+        outcome = await _service("read_image", interactive=False).authorize(
+            _call("read_image", {"file_path": "/outside/secret.png"})
         )
     assert outcome.proceed is False
     assert outcome.payload["status"] == "blocked_non_interactive"
@@ -159,8 +175,7 @@ async def test_allow_session_is_isolated_between_myspace_and_local_host():
             kind=confirm.KIND_LOCAL_CMD,
         )
     )
-    await asyncio.sleep(0.05)
-    pending = confirm.get_all_pending(chat_id)
+    pending = await _pending_pair(chat_id)
     local_id = next(
         item["confirm_id"] for item in pending if item["kind"] == confirm.KIND_LOCAL_CMD
     )
@@ -199,8 +214,7 @@ async def test_local_read_session_grant_does_not_authorize_local_write():
             kind=f"{confirm.KIND_LOCAL_PATH_PREFIX}write",
         )
     )
-    await asyncio.sleep(0.05)
-    pending = confirm.get_all_pending(chat_id)
+    pending = await _pending_pair(chat_id)
     read_id = next(
         item["confirm_id"]
         for item in pending
@@ -233,7 +247,7 @@ def test_local_physical_path_is_the_canonical_identity_later_opened():
     assert physical == str(outside / "secret.txt")
 
 
-async def test_local_write_detects_existing_host_file_before_overwrite():
+async def test_local_write_overwrites_existing_host_file_without_prior_read():
     with TemporaryDirectory() as tmp:
         target = Path(tmp) / "existing.txt"
         target.write_text("original", encoding="utf-8")
@@ -242,19 +256,18 @@ async def test_local_write_detects_existing_host_file_before_overwrite():
             toolkit,
             chat_id="chat-1",
             user_id="user-1",
-            state=ReadStateTracker(),
-            interactive=False,
         )
         assert toolkit.fn is not None
         provider = MagicMock(name="unused-provider")
+        provider.name = "script_runner"  # local mode always runs on the host script runner
         with (
             patch("core.config.local_mode.local_mode_enabled", return_value=True),
             patch(
-                "core.services.local_grant_service.grants_for_gate",
+                'features.desktop.local.grants.grants_for_gate',
                 return_value=[Grant(tmp, "readwrite")],
             ),
             patch(
-                "core.services.local_grant_service.policy_for_gate",
+                'features.desktop.local.grants.policy_for_gate',
                 return_value=Policy(),
             ),
             patch("core.sandbox.get_sandbox_provider", return_value=provider),
@@ -272,8 +285,10 @@ async def test_local_write_detects_existing_host_file_before_overwrite():
             finally:
                 CURRENT_PERMISSION_TICKET.reset(token)
         payload = _payload(response)
-        assert "必须先 Read" in payload["error"]
-        assert target.read_text(encoding="utf-8") == "original"
+        assert payload["ok"] is True
+        assert payload["type"] == "update"
+        assert "-original" in payload["diff"] and "+replacement" in payload["diff"]
+        assert target.read_text(encoding="utf-8") == "replacement"
         provider.get_file.assert_not_called()
 
 
@@ -286,8 +301,6 @@ async def test_remote_write_treats_missing_sandbox_file_as_a_create():
         toolkit,
         chat_id="chat-remote-write",
         user_id="user-1",
-        state=ReadStateTracker(),
-        interactive=False,
     )
     assert toolkit.fn is not None
 
@@ -319,24 +332,11 @@ async def test_remote_edit_handles_a_sandbox_read_error_without_a_scope_error():
     from core.sandbox import SandboxError
 
     path = "/workspace/scratch/existing.txt"
-    original = b"before"
-    state = ReadStateTracker()
-    state.record(
-        path,
-        ReadEntry(
-            content=original,
-            sha256=hashlib.sha256(original).hexdigest(),
-            offset=None,
-            limit=None,
-        ),
-    )
     toolkit = _Toolkit()
     register_edit(
         toolkit,
         chat_id="chat-remote-edit",
         user_id="user-1",
-        state=state,
-        interactive=False,
     )
     assert toolkit.fn is not None
 
@@ -355,3 +355,17 @@ async def test_remote_edit_handles_a_sandbox_read_error_without_a_scope_error():
 
     payload = _payload(response)
     assert payload["error"] == "读取文件失败: read failed"
+
+
+def test_gate_treats_the_session_directory_as_the_workspace(monkeypatch, tmp_path):
+    """权限闸里的"工作区"就是本次对话的工作目录，不是部署级工作区根。"""
+    from core.sandbox.permissions.dispatch_models import PermissionRuntime
+    from core.sandbox.permissions.tool_specs import ToolPermissionRegistry
+    from core.llm.tool_permissions import ToolPermissionService
+    from core.sandbox.workspace.paths import session_root
+
+    monkeypatch.setattr("core.sandbox.workspace.paths.WORKSPACE", str(tmp_path))
+    runtime = PermissionRuntime(chat_id="chat-1", user_id="u1", interactive=False, approval_available=False)
+    service = ToolPermissionService(ToolPermissionRegistry(), runtime)
+
+    assert service._session_workspace() == session_root(str(tmp_path), "chat-1")

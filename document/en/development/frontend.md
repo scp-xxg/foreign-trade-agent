@@ -45,9 +45,9 @@ src/frontend/src/
 │   └── lab/ memory/ myspace/ projects/ settings/ share/ sidebar/ tool/ apidoc/
 ├── hooks/               # useChatInit / useChatActions / useStreaming / usePlanMode
 │                        # usePageConfig / useDelayedFlag / useStallDetector
-├── stores/              # 18 Zustand stores (authStore, chatStore, catalogStore,
+├── stores/              # Zustand stores (authStore, chatStore, catalogStore,
 │                        # editionStore, uiStore, settingsStore, fileStore, kbStore,
-│                        # agentStore, automationStore, batchStore, canvasStore,
+│                        # agentStore, automationStore, canvasStore,
 │                        # mySpaceStore, projectStore, skillDistillStore, …) + index.ts
 ├── utils/               # citations / markdown / segments / constants / apiError / adminApi …
 └── styles/              # CSS split by feature area (variables.css is the variable source of truth)
@@ -132,6 +132,15 @@ Caveats:
 - When adding new EE UI: ① gate it with the selector on the matching feature bit; ② if the entire page is EE (like /admin, /config), no runtime gating is needed — the CE derived tree physically excludes the component directories and removes the routes via the overlay `main.tsx` (see [CE Build Pipeline](../editions/build-ce.md));
 - When handling API errors, branch on `LicenseError` (402) and show "contact your administrator to update the license" rather than a generic failure message.
 
+## Container-responsive layout
+
+The chat toolbar and project / capability / knowledge cards lay out by the available width of their pane; home,
+conversation, project and split views share the same rules. Containers provide width and descendants respond to the
+container; elements must not query themselves, and CSS breakpoints must not be duplicated in JavaScript. Touch targets
+are real 44px areas. Entry points: `components/chat/ComposerToolbar.tsx`, `styles/chat/toolbar-layout.css`,
+`styles/projects.css`, `styles/catalog/`. After changes, run `npm run test:container-layout-browser` and
+`npm run test:chat-width-browser`.
+
 ## New-feature checklist
 
 - [ ] Components are PascalCase + named export + Props interface
@@ -156,3 +165,29 @@ Caveats:
 | Entry (CE divergence point) | `src/frontend/src/main.tsx`, `ce/overlay/src/frontend/src/main.tsx` |
 
 See also: [Backend Development Guide](backend.md) · [Frontend Architecture](../architecture/frontend.md) · [License Mechanism](../editions/license.md)
+
+### Interface typography
+
+The interface, chat text and component library share `--font-family`. Before the first render, the entry sets `data-font-platform`: Apple platforms prefer PingFang SC, Windows prefers Microsoft YaHei UI / Microsoft YaHei, and other platforms use available Noto, Source Han and system fonts. Code retains monospace fonts; numeric typography uses the shared UI font as its fallback.
+
+Sidebar project and conversation titles use 14px text, 20px line height and weight 400, with weight 500 for the selection. New conversation uses 14px / 500. History layout, titles and actions belong in `sidebar-history.css`; do not duplicate title weights in chat or module navigation styles.
+
+### Personal application navigation
+
+Pinning and ordering in Page settings remain drafts until the user clicks Apply and confirms. The navigation is then saved to the current user's database before refreshing the page or restarting the desktop app. Classic mode shows pinned apps at the top of the sidebar and remaining apps directly in the bottom settings menu. Restore defaults also takes effect after Apply. The same account reads the same navigation across browsers and devices using the same service and runtime environment.
+
+Classic mode retains the collapsible Agents, Skills, Connectors and Plugins categories under Capability center. Scheduled tasks open a separate navigation sidebar to the right of the main sidebar, with its own collapse control. Projects and ordinary conversations remain in the main sidebar.
+
+In classic mode, My Space also uses a separate module sidebar to the right of the main sidebar. It retains cloud documents, knowledge bases, conversation favorites, sharing records and notifications. Capability category labels align with the left edge of the parent label.
+
+In classic mode, New conversation appears directly below the product branding and above application navigation.
+
+### Chat motion
+
+Streamed text reveals by grapheme from a 3px blur over 350ms with ease-out and a normal 65ms stagger. Burst scheduling is capped at 600ms; completion or cancellation reveals all received text immediately. History, restored snapshots, code and formulas do not replay the character animation.
+
+New assistant messages fade up by 10px. New user bubbles enter from scale(.92) and a 6px downward offset. Skeletons use a tilted highlight sweeping over 1.6 seconds. Startup, thinking and running tool labels share a 2.8-second text scan with cubic-bezier(.714,.121,.211,.888) and holds at both ends. The scan uses secondary text with 45% chat-background mixing at its highlight and a subtle 20% primary tint; completed states remove the scan. Elapsed time, tool count and the execution title share one scan; timer ticks do not restart it. Reduced motion shows text and messages immediately while loading and running states retain activity cues.
+
+## Customer UI customization
+
+See [Customer chat customization](frontend-customization.md) for component packages, the independent SDK and build-time selection.

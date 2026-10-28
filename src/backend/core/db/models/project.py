@@ -1,29 +1,20 @@
 """SQLAlchemy ORM models — Projects."""
+from core.db.utc_datetime import UTCDateTime
+from core.infra.time import utc_now
 
-from datetime import datetime, timezone
 
 from core.db.engine import Base
-from core.db.model_extensions import ProjectEditionFields, project_edition_table_args
+from core.db.edition import ProjectEditionFields, project_edition_table_args
 from sqlalchemy import (
-    JSON,
-    TIMESTAMP,
-    BigInteger,
     Boolean,
     CheckConstraint,
     Column,
     ForeignKey,
     Index,
-    Integer,
-    Numeric,
     String,
     Text,
-    UniqueConstraint,
 )
-from sqlalchemy.dialects.postgresql import INET, JSONB
-from sqlalchemy.orm import mapped_column, relationship
-
-JSONType = JSON().with_variant(JSONB(), "postgresql")
-INETType = String(45).with_variant(INET(), "postgresql")
+from core.db.models.column_types import JSONType
 
 
 class Project(ProjectEditionFields, Base):
@@ -45,10 +36,10 @@ class Project(ProjectEditionFields, Base):
     icon_color = Column(String(20))
     pinned = Column(Boolean, nullable=False, default=False)
     extra_data = Column("metadata", JSONType, default={})
-    created_at = Column(TIMESTAMP(timezone=True), default=datetime.utcnow)
-    updated_at = Column(TIMESTAMP(timezone=True), default=datetime.utcnow, onupdate=datetime.utcnow)
-    last_activity_at = Column(TIMESTAMP(timezone=True), default=datetime.utcnow)
-    deleted_at = Column(TIMESTAMP(timezone=True))
+    created_at = Column(UTCDateTime(timezone=True), default=utc_now)
+    updated_at = Column(UTCDateTime(timezone=True), default=utc_now, onupdate=utc_now)
+    last_activity_at = Column(UTCDateTime(timezone=True), default=utc_now)
+    deleted_at = Column(UTCDateTime(timezone=True))
 
     __table_args__ = (
         *project_edition_table_args(),
@@ -72,6 +63,6 @@ class ProjectFavorite(Base):
     user_id = Column(
         String(64), ForeignKey("users_shadow.user_id", ondelete="CASCADE"), primary_key=True
     )
-    created_at = Column(TIMESTAMP(timezone=True), default=datetime.utcnow)
+    created_at = Column(UTCDateTime(timezone=True), default=utc_now)
 
     __table_args__ = (Index("idx_project_favorites_user", "user_id"),)

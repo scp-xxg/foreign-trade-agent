@@ -1,14 +1,13 @@
-# Automation & Batch Execution
+# Automation & Plan Mode
 
-> Last updated: 2026-08-25
+> Last updated: 2026-10-21
 
-HugAgentOS ships three built-in mechanisms for turning a single instruction into repeatable or bulk productivity, all part of the **Community Edition (CE)**:
+HugAgentOS ships two built-in mechanisms for turning a single instruction into repeatable productivity, all part of the **Community Edition (CE)**:
 
 | Capability | One-liner | Backend entry |
 |---|---|---|
-| Scheduled automation | Run a prompt or a plan automatically on a cron schedule (or once / manually) | `api/routes/v1/automations.py` + `orchestration/schedulers/automation_scheduler.py` |
-| Plan mode | AI first decomposes a complex task into structured steps, then executes them after confirmation | `api/routes/v1/plans.py` + `orchestration/subagents/plan_mode.py` |
-| Batch execution | "Do the same thing to each item in a set" packaged as a confirmable batch plan | `api/routes/v1/batch.py` + `orchestration/batch_orchestrator.py` + `mcp_servers/batch_runner_mcp/` |
+| Scheduled automation | Run a prompt or a plan automatically on a cron schedule (or once / manually) | `features/automation/api/automations.py` + `orchestration/automations/automation_scheduler.py` |
+| Plan mode | AI first decomposes a complex task into structured steps, then executes them after confirmation | `api/routes/v1/plans.py` + `orchestration/plans/` |
 
 ## Scheduled automation tasks
 
@@ -18,7 +17,7 @@ Local scheduled tasks belong to the signed-in cloud account. The account mapping
 
 ### Task model
 
-Tasks live in the `scheduled_tasks` table (`ScheduledTask` in `core/db/models/automation.py`). Key fields:
+Tasks live in the `scheduled_tasks` table (`ScheduledTask` in `edition_ee/db/models/automation.py`). Key fields:
 
 | Field | Description |
 |---|---|
@@ -41,24 +40,31 @@ Tasks live in the `scheduled_tasks` table (`ScheduledTask` in `core/db/models/au
 
 ### Scheduling mechanics (automation_scheduler.py)
 
-`orchestration/schedulers/automation_scheduler.py` is an asyncio polling scheduler started with the backend:
+`orchestration/automations/automation_scheduler.py` is an asyncio polling scheduler started with the backend:
 
 - **Polling**: every 15 seconds (plus 0–5 s random jitter) it queries the DB for tasks whose `next_run_at` is due.
-- **Distributed lock**: before firing, it acquires the Redis lock `jx:auto:lock:{task_id}` (TTL 900 s) so multiple instances never double-fire.
+- **Distributed lock**: before firing, it acquires the Redis lock `jx:auto:lock:{task_id}` with continuous renewal throughout execution and token-checked release on completion so multiple instances never double-fire.
 - **Advance before firing**: `next_run_at` is pushed to the next period **before** execution — the schedule moves on regardless of success, failure, or a mid-flight kill (mirroring real cron), eliminating the death spiral where a stuck `running` row leaves `next_run_at` in the past and every poll re-fires the same task.
-- **Execution timeout**: a single run is capped at 800 s wall clock, strictly below the lock TTL so the timeout fires before the lock expires.
+- **Execution duration**: there is no fixed total runtime limit for scheduled or manually triggered Prompt, Plan, or Loop tasks. Their conversations and successors are also exempt from the ordinary chat absolute-age cap.
 - **Failure governance**: when consecutive failures reach `max_failures` (default 3), the task is automatically set to `disabled`.
-- **Startup recovery**: after a restart, runs stuck in `running` for more than 30 minutes are marked `failed` (and their parent task's schedule advanced); missed one-shot tasks are then re-fired.
+- **Orphan recovery**: at startup and on every poll, a worker must acquire execution ownership before resuming observation of the linked durable conversation and saving its final outcome. Only orphan runs without a linked conversation are marked `failed`, with overdue schedules advanced and one-shot tasks finalized. Runtime never determines recovery. The lock renews every 15 seconds; its 60-second lease detects a disconnected worker and does not limit total runtime. Missed one-shot tasks also acquire ownership before firing.
+- **Execution lease shutdown**: shutdown signals stop, cancels renewal, waits at most 2 seconds, and always attempts token-checked deletion. Local ownership markers are removed even on cleanup errors. Renewal also stops when the execution Task finishes. Result delivery has a 60-second total wait budget; failures do not overwrite committed success and do not retry automatically. Running records carry an internal ownership token; completion requires both running status and a matching token. Recovery claims the record under its new token.
 
-Each execution produces a **real chat session**: prompt tasks reuse the main chat workflow `orchestration/workflow.py::astream_chat_workflow`, fully preserving tool calls, citations, and artifact files; plan tasks go through `orchestration/subagents/plan_mode.py::astream_execute_plan` and persist a plan execution snapshot. Session titles are prefixed `[自动化]`, and the run history offers one-click "view conversation". After completion, the user is notified via Redis notifications plus sidebar activation.
+Each execution creates and immediately links a **real conversation** through the shared ChatRun executor. Prompt runs stream text, thinking and tools; plan runs stream step progress. Opening a running conversation or refreshing the page follows and replays the same event stream as ordinary chat. Users can stop execution from the conversation; prompt runs also accept additional instructions through the durable steering queue at the next safe model boundary. Stopping does not increase consecutive failures, and loss of execution ownership or scheduler shutdown cancels the child run. Final messages, artifacts, citations and delivery remain owned by the shared executor and scheduler outcome handler. Conversation titles use the task name without an automation prefix. Older executions started before live-stream support cannot replay events that were never recorded.
+
+Scheduled prompts and ordinary conversations share admission, capability resolution, runtime context construction and the main agent execution loop. If a late instruction starts a successor through the main executor, the scheduled outcome waits for its final result. Loss of execution ownership or scheduler shutdown cancels the current successor.
 
 ### Frontend
 
-The automation management UI lives under the Lab module: `src/frontend/src/components/lab/` contains `AutomationPanel.tsx` (list), `AutomationCreateModal.tsx` (creation, with cron configuration and capability selection), `AutomationCard.tsx`, and `AutomationDetailPage.tsx` (detail + run history). Users can either create directly in the viewport-contained, internally scrolling form or choose “Create through chat” to enter the main conversation. The chat path automatically references the installed Scheduled Task Management plugin and prefills the editable template “我要创建一个定时任务，每【时间间隔】执行【具体任务】”. `src/frontend/src/components/automation/RunTimelinePanel.tsx` renders the date-grouped run timeline on the chat side. State is held in `stores/automationStore.ts` (task management) and `stores/automationChatStore.ts` (sidebar chat groups).
+Scheduled Tasks is a dedicated module under src/frontend/src/components/automation/. Its sidebar groups conversations by task ID and shows one entry per scheduled task, keeping distinct tasks separate even when their names match. New executions update the entry's latest activity time; clicking it opens the newest execution. The right control panel retains individual executions, and choosing a historical run keeps the same task selected in the sidebar. Setup conversations remain separate, and empty setup conversations are hidden. The oldest conversation anchors each entry, preserving its ordering, pin, favorite, and rename actions. Export and delete apply to the selected execution, or the newest execution when the task is not open; deleting one conversation does not delete the scheduled task. All Tasks opens configuration, status, and run history in the content area. Creating through chat first persists a conversation owned by Scheduled Tasks, references the installed task-management plugin, and prefills an editable template. Task conversations are excluded from the ordinary chat sidebar.
+
+Execution conversations use /automation/:taskId/conversations/:chatId, with new as the task segment for setup conversations. Reloads, browser history, search hits, and notifications preserve task ownership. Search opens the exact matching conversation instead of the latest run. RunTimelinePanel groups executions by date. automationStore owns the single task list; automationChatStore owns the current run group and task pin/favorite preferences.
+
+Opening the right-side Canvas in an execution conversation temporarily hides the run timeline to make room for the conversation and Canvas. Collapsing Canvas restores the timeline and preserves the current task, selected execution, and conversation.
 
 ## Plan mode
 
-Plan mode decomposes a complex task into structured steps before executing them, in two phases (`orchestration/subagents/plan_mode.py`):
+Plan mode decomposes a complex task into structured steps before executing them, in two phases (`orchestration/plans/`):
 
 1. **Generate (Phase 1)**: `POST /v1/plans/generate` (SSE streaming) — the AI analyzes the task description and produces a plan draft with a title, description, and step list; each step can declare `expected_tools` / `expected_skills` / `expected_agents`.
 2. **Execute (Phase 2)**: `POST /v1/plans/{plan_id}/execute` (SSE streaming) — steps run sequentially, each with its own agent; step status, tool-call logs, and AI output are persisted incrementally.
@@ -68,36 +74,6 @@ Data model (`core/db/models/agent.py`): `Plan` (state machine `draft → approve
 REST API (`/v1/plans`, `api/routes/v1/plans.py`): `GET ""` list, `GET/PATCH/DELETE /{plan_id}` detail / edit (steps can be edited before confirmation) / delete, `POST /{plan_id}/cancel` cancel. The plan-mode system prompt supports DB version-pool management with a filesystem fallback at `prompts/prompt_text/plan_mode/plan_mode.system.md` — see [Prompt System](prompts.md).
 
 Plans can also be scheduled: after creating an automation task with `task_type=plan`, every trigger resets a completed / failed plan back to `approved`, clears step states, and reruns it from the top.
-
-## Batch execution
-
-Batch execution addresses "do the same thing to N items" (rate 10 companies one by one, analyze every row of an Excel sheet, extract key clauses from each contract). The flow has two phases:
-
-```
-User message (with batch intent)
-  → LLM calls the batch_plan tool (mcp_servers/batch_runner_mcp/server.py)
-    → the MCP process calls back POST /v1/internal/batch/resolve (internal_batch.py, BACKEND_INTERNAL_TOKEN auth)
-       · parse uploaded files (xlsx / word) → structured items
-       · or LLM-split a natural-language enumeration → items
-       · infer a default prompt template (with placeholders) and persist the BatchPlan
-  → backend pauses the SSE stream; frontend shows a confirmation dialog (BatchConfirmModal: review items, edit the template)
-  → POST /v1/batch/{plan_id}/confirm
-  → GET /v1/batch/{plan_id}/stream (SSE) starts the BatchOrchestrator (Phase 2, deterministic execution)
-```
-
-### Phase 1: plan generation (LLM-driven)
-
-The `batch_plan` tool description hard-codes strong trigger rules: whenever the message contains expressions like "批量 / 分别 / 逐个 / 每一个…" or enumerates ≥2 parallel objects in one sentence, the model **must** call the tool instead of answering directly, then end its turn immediately and wait for confirmation. The tool returns the `plan_id`, total item count, a preview of the first 3 items, the inferred default template, and the available placeholders.
-
-### Phase 2: deterministic execution (BatchOrchestrator)
-
-After confirmation, `orchestration/batch_orchestrator.py` iterates `plan.items` serially, **spawning a fresh ReActAgent per item** (with batch_runner disabled to prevent recursion) and persisting each result back to the DB:
-
-- **Refresh survival**: execution runs in a detached background asyncio task; an SSE client disconnect (page refresh, tab switch) does not interrupt it. On reconnect, a still-running task is tailed for new events, while a finished one replays all results from the DB.
-- **Retries & skipping**: a failed item is retried with exponential back-off up to `max_retries`; once exhausted it is recorded as `skipped` and the loop continues.
-- **Cancellation**: `POST /{plan_id}/cancel` sets the `cancelled` flag and the orchestrator stops at the next item boundary; `POST /{plan_id}/cancel-and-resume` (SSE) cancels the batch, deletes the assistant turn that triggered it, and re-streams the original user message with batch_plan disabled — a one-click escape for "actually, I didn't want a batch".
-
-Plan state machine: `pending → confirmed → running → done / failed / cancelled` (`batch_plans` table). Frontend components: `src/frontend/src/components/batch/BatchConfirmModal.tsx` (confirmation / template editing) and `BatchProgressPanel.tsx` (per-item progress stream), with state in `stores/batchStore.ts`.
 
 ## Typical scenarios
 
@@ -115,29 +91,49 @@ POST /v1/automations
 }
 ```
 
-Every morning a `[自动化] Industry morning brief` chat session appears automatically, with notifications in the bell and the sidebar.
+Every morning an Industry morning brief execution conversation is created. The sidebar keeps one task entry, while the right panel lets users choose results from different dates. Notifications appear in the bell.
 
 **Weekly report pipeline (plan automation)**: build and validate a three-step plan ("pull data → aggregate analysis → export Word") in plan mode, then create a task with `task_type=plan` and `cron_expression="0 17 * * 5"` to rerun the whole plan every Friday at 5 p.m.
-
-**Excel batch analysis (batch execution)**: upload a 200-row company list as xlsx and type "give a business-risk assessment for each row's company" — the model calls `batch_plan`, you confirm the template ("Assess the business risk of {{company_name}}…"), and execution proceeds row by row, surviving page refreshes, with automatic retries for failed rows.
 
 ## Source map
 
 | Topic | Path |
 |---|---|
-| Automation REST API | `src/backend/api/routes/v1/automations.py` |
-| Scheduler (polling / locks / recovery) | `src/backend/orchestration/schedulers/automation_scheduler.py` |
-| Automation service (cron computation / state machine) | `src/backend/core/services/automation_service.py` |
-| Task / run-record models | `src/backend/core/db/models/automation.py` |
+| Automation REST API | `src/backend/features/automation/api/automations.py` |
+| Scheduler (polling / locks / recovery) | `src/backend/orchestration/automations/automation_scheduler.py` |
+| Automation service (cron computation / state machine) | `src/backend/features/automation/service.py` |
+| Task / run-record models | `src/backend/features/automation/models.py` |
 | Plan REST API | `src/backend/api/routes/v1/plans.py` |
-| Plan generation / execution orchestration | `src/backend/orchestration/subagents/plan_mode.py`, `src/backend/core/services/plan_service.py` |
+| Plan generation / execution orchestration | `src/backend/orchestration/plans/`, `src/backend/core/chat/plans.py` |
 | Plan / step models | `src/backend/core/db/models/agent.py` |
-| Batch REST + SSE | `src/backend/api/routes/v1/batch.py` |
-| Internal batch resolver | `src/backend/api/routes/v1/internal_batch.py` |
-| batch_plan MCP tool | `src/backend/mcp_servers/batch_runner_mcp/server.py`, `_planner.py` |
-| Batch orchestrator | `src/backend/orchestration/batch_orchestrator.py` |
-| Frontend automation UI | `src/frontend/src/components/lab/AutomationPanel.tsx` etc., `src/frontend/src/components/automation/RunTimelinePanel.tsx` |
-| Frontend batch UI | `src/frontend/src/components/batch/`, `src/frontend/src/stores/batchStore.ts` |
+| Frontend automation UI | `src/frontend/src/components/automation/AutomationPanel.tsx` etc., `src/frontend/src/components/automation/RunTimelinePanel.tsx` |
 | Frontend state | `src/frontend/src/stores/automationStore.ts`, `automationChatStore.ts` |
 
 Further reading: [Chat System](chat.md) · [MCP Tools](mcp-tools.md) · [Canvas & Artifacts](canvas-artifacts.md)
+
+## Multi-process execution and recovery
+
+Scheduled and manual triggers share one loop, scanned every 3 seconds with at most
+8 observed executions. Trigger consumption, schedule advancement and insertion of
+a pending run commit in one transaction. Conditional database updates fence
+concurrent admission. A manual trigger for a busy task remains queued.
+
+Pending means accepted and awaiting execution. Scheduler shutdown or lease loss
+transfers observation without cancelling the accepted conversation. A successor
+observes the same durable execution and its handoffs. User cancellation still
+stops execution. Child linkage and recovery arguments commit with acceptance;
+recovery never restarts a command to obtain its result. Existing notification
+delivery semantics remain; this change does not promise exactly-once delivery
+to external channels.
+
+Apply FULL migration automationqueue01 or CE migration ce_0032 before rollout.
+Local SQLite uses the installed automation module's schema initialization.
+Downgrade refuses pending records rather than discarding accepted work. Stop old
+schedulers, migrate, then start the new version; do not mix scheduling protocols.
+
+Plan/Loop persist all initial arguments with child acceptance. After a crash before
+worker registration, the successor dispatches only pending children. It never
+replays an already-running child from the beginning. Drain old in-flight work
+before upgrading; missing legacy arguments are not reconstructed by a compatibility path.
+
+Task delivery uses delivery_targets exclusively. The upgrade migrates flat channel_id/conversation_id fields into destination lists, removes the old fields, and preserves explicit destinations and unrelated metadata. Request handling no longer reads the old format.

@@ -1,5 +1,12 @@
 // Modified by foreign-trade-agent contributors, 2026-10-21; see CHANGES_FOREIGN_TRADE.md.
 export const FOREIGN_TRADE_CONTENT_DICT: Record<string, string> = {
+  '生成方式': 'Generation mode',
+  'AI翻译与生成': 'AI translation and generation',
+  '本地原文模板（不调用模型）': 'Local original-text template (no model call)',
+  '模板模式只排版已确认的原文，不调用模型，也不翻译。需要英文文案和图片时，请先核对产品事实已为英文。': 'Template mode formats confirmed original text without a model call or translation. For English copy and images, first verify that the product facts are already in English.',
+  '本地模板已整理，未调用模型。请核对原文、图片和事实引用后使用。': 'The local template is ready. No model was called. Review original text, images and fact references before use.',
+  '按原文模板整理资料': 'Format original text with template',
+  '本地原文模板（未调用模型）': 'Local original-text template (no model called)',
   'Raspberry Pi 5 · 真实产品资料示例': 'Raspberry Pi 5 · Real product information example',
   '资料包已在其他页面更新，请刷新记录后重试。': 'This content pack changed elsewhere. Refresh the record and try again.',
   '资料包或文件不存在，或当前账号无权访问。': 'The content pack or file does not exist, or your account cannot access it.',

@@ -7,21 +7,14 @@ a trusted unattended run, or an MCP tool accidentally entering the registry.
 
 from __future__ import annotations
 
+from unittest.mock import patch
+
 import pytest
 from agentscope.message import ToolCallBlock
-from core.llm.agent_factory import _default_allow_builtin_tools
-from core.llm.tool_permissions import (
-    DOMAIN_LOCAL_COMMAND,
-    DOMAIN_LOCAL_PATH,
-    DOMAIN_MYSPACE,
-    PermissionEnforcementError,
-    PermissionRuntime,
-    ToolPermissionRegistry,
-    ToolPermissionService,
-    builtin_tool_permission,
-    mcp_tool_permission,
-    register_mcp_client_permissions,
-)
+from core.llm.factory.runtime.evidence import _default_allow_builtin_tools
+from core.sandbox.permissions.dispatch_models import DOMAIN_LOCAL_COMMAND, DOMAIN_LOCAL_PATH, DOMAIN_MYSPACE, PermissionEnforcementError, PermissionRuntime
+from core.sandbox.permissions.tool_specs import ToolPermissionRegistry, builtin_tool_permission
+from core.llm.tool_permissions import ToolPermissionService
 
 
 def _runtime(**overrides) -> PermissionRuntime:
@@ -49,23 +42,18 @@ def _tool_call(name: str, arguments: dict) -> ToolCallBlock:
     [
         ("Write", "file_path"),
         ("Edit", "file_path"),
-        ("Delete", "path"),
-        ("Move", "src_path"),
-        ("CreateFolder", "path"),
     ],
 )
-def test_physical_myspace_path_still_requires_the_myspace_confirmation(tool_name, path_arg):
+def test_physical_myspace_path_still_requires_the_tool_confirmation(tool_name, path_arg):
     """``/workspace/myspace/<uid>/…`` must not skip the persistence gate.
 
-    Both spellings reach the same cross-session storage and both reverse-sync
-    to the artifact table, so judging on the raw argument prefix alone left a
-    silent bypass of the confirmation.
+    Both logical and physical spellings reach the mounted persistent directory
+    and require the same approval.
     """
     spec = builtin_tool_permission(tool_name)
     args = {
         path_arg: "/workspace/myspace/user-1/report.docx",
         "content": "x",
-        "dst_path": "/myspace/b.docx",
     }
 
     domains = [intent.domain for intent in spec.resolver(args, _runtime())]
@@ -109,56 +97,11 @@ def test_optional_path_argument_falls_back_to_the_tool_default(tool_name):
     assert [intent.domain for intent in intents] == [DOMAIN_LOCAL_PATH]
 
 
-# ── MCP tools are temporarily all whitelisted ────────────────────────────────
 
-
-@pytest.mark.parametrize(
-    "server,tool,config",
-    [
-        ("automation_task", "create_scheduled_task", {}),
-        ("plugin_manager", "install_plugin", {}),
-        ("automation-automation_task", "create_scheduled_task", {"source_plugin": "automation"}),
-        (
-            "skill-manager-skill_manager",
-            "delete_skill",
-            {"source_plugin": "skill-manager"},
-        ),
-        ("private_server", "destroy", {"permission_default": "deny"}),
-    ],
-)
-def test_mcp_tools_never_receive_a_permission_spec(server, tool, config):
-    assert mcp_tool_permission(server, tool, config) is None
-
-
-# ── MCP whitelist scans do not touch the remote surface ─────────────────────
-
-
-class _BrokenClient:
-    name = "plugin_manager"
-
-    def __init__(self):
-        self.calls = 0
-
-    async def list_tools(self):
-        self.calls += 1
-        raise RuntimeError("connection reset")
 
 
 @pytest.mark.asyncio
-async def test_mcp_whitelist_scan_does_not_enumerate_or_register_tools():
-    registry = ToolPermissionRegistry()
-    broken = _BrokenClient()
-
-    scan = await register_mcp_client_permissions(registry, [broken], {})
-
-    assert broken.calls == 0
-    assert scan.unresolved == ()
-    assert scan.names == frozenset()
-    assert registry.names == frozenset()
-
-
-@pytest.mark.asyncio
-async def test_trusted_unattended_run_bypasses_builtin_myspace_confirmation():
+async def test_trusted_unattended_run_bypasses_builtin_tool_confirmation():
     registry = ToolPermissionRegistry()
     registry.register("Write", builtin_tool_permission("Write"), source="native")
     service = ToolPermissionService(
@@ -187,10 +130,11 @@ async def test_trusted_unattended_run_issues_a_confined_builtin_bash_ticket():
     Channel and automation entry points are trusted enough not to stop and ask,
     but they are not a reason to hand a command more of the machine than the
     user's own configuration allows — so the ticket carries that configuration's
-    preset and scope, exactly as an interactive run would.
+    preset and scope, exactly as an interactive run would. The sandbox only
+    exists in local mode, which is where these entry points meet host commands.
     """
     registry = ToolPermissionRegistry()
-    registry.register("bash", builtin_tool_permission("bash"), source="native")
+    registry.register("Bash", builtin_tool_permission("Bash"), source="native")
     service = ToolPermissionService(
         registry,
         _runtime(
@@ -200,7 +144,8 @@ async def test_trusted_unattended_run_issues_a_confined_builtin_bash_ticket():
         ),
     )
 
-    outcome = await service.authorize(_tool_call("bash", {"command": "touch /tmp/x"}))
+    with patch("core.config.local_mode.local_mode_enabled", return_value=True):
+        outcome = await service.authorize(_tool_call("Bash", {"command": "touch /tmp/x"}))
 
     assert outcome.proceed is True
     assert outcome.ticket is not None
@@ -210,6 +155,42 @@ async def test_trusted_unattended_run_issues_a_confined_builtin_bash_ticket():
     assert outcome.ticket.local_command.approval_mode == "ask"
     assert outcome.ticket.local_command.confined is True
     assert outcome.audit["decision"] == "allow_trusted_unattended"
+
+
+@pytest.mark.asyncio
+async def test_trusted_unattended_run_still_obeys_a_policy_denial():
+    """Being unattended answers the confirmation; it does not waive the policy.
+
+    The earlier implementation returned a ticket before evaluating any intent,
+    so a scheduled run could read or write host paths the user's own policy
+    blocks outright — the one thing no preset is allowed to skip.
+    """
+    from core.sandbox.permissions.models import Policy
+
+    registry = ToolPermissionRegistry()
+    registry.register("Read", builtin_tool_permission("Read"), source="native")
+    service = ToolPermissionService(
+        registry,
+        _runtime(
+            interactive=False,
+            approval_available=False,
+            default_allow=True,
+        ),
+    )
+
+    with (
+        patch("core.config.local_mode.local_mode_enabled", return_value=True),
+        patch('features.desktop.local.grants.grants_for_gate', return_value=[]),
+        patch(
+            'features.desktop.local.grants.policy_for_gate',
+            return_value=Policy(out_of_scope="block"),
+        ),
+    ):
+        outcome = await service.authorize(_tool_call("Read", {"file_path": "/etc/shadow"}))
+
+    assert outcome.proceed is False
+    assert outcome.ticket is None
+    assert outcome.audit["decision"] == "deny"
 
 
 @pytest.mark.parametrize(

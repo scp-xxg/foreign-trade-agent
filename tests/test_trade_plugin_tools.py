@@ -11,16 +11,18 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
-from core.db.models import Artifact, ChatMessage, ChatSession, ForeignTradeInquiry, ForeignTradeContentPack
+from core.db.models import Artifact, ChatMessage, ChatSession, ForeignTradeInquiry, ForeignTradeContentPack, ForeignTradeCollaboration, UserFolder, UserShadow
 from core.llm.tools import foreign_trade_tool as adapter
-from core.services import foreign_trade_content as content
-from core.services import foreign_trade_content_generation as generation
-from core.services.artifact_service import store_bytes_as_artifact
+from core.foreign_trade import content as content
+from core.foreign_trade import content_generation as generation
+from core.files.artifacts.service import store_bytes_as_artifact
 
 
-class Collector:
-    def __init__(self): self.tools = {}
-    def register_tool_function(self, fn, **kwargs): self.tools[fn.__name__] = fn
+class Collector(list):
+    def __init__(self): super().__init__(); self.tools = {}
+    def append(self, tool):
+        super().append(tool)
+        self.tools[tool.name] = tool._func
 
 
 class Storage:
@@ -37,15 +39,15 @@ def read(response):
 
 @pytest.fixture
 def ctx(monkeypatch):
-    import core.storage
+    import core.files.storage
     engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
-    for cls in [ChatSession, ChatMessage, Artifact, ForeignTradeInquiry, ForeignTradeContentPack]:
+    for cls in [ChatSession, ChatMessage, Artifact, ForeignTradeInquiry, ForeignTradeContentPack, ForeignTradeCollaboration, UserFolder, UserShadow]:
         cls.__table__.create(bind=engine)
     sessions = sessionmaker(bind=engine)
     monkeypatch.setattr(adapter, "SessionLocal", sessions)
     monkeypatch.setattr(adapter, "_assert_available", lambda user, install: None)
     storage = Storage()
-    for module in (adapter, content, core.storage): monkeypatch.setattr(module, "get_storage", lambda: storage)
+    for module in (adapter, content, core.files.storage): monkeypatch.setattr(module, "get_storage", lambda: storage)
     with sessions() as db:
         db.add_all([ChatSession(chat_id="alice-chat", user_id="alice"), ChatSession(chat_id="bob-chat", user_id="bob")])
         db.commit()
@@ -250,6 +252,27 @@ async def test_content_generate_confirmation_receipt_and_stale_outputs(ctx, monk
 
 
 @pytest.mark.asyncio
+async def test_native_explicit_template_mode_and_strict_generate_data(ctx, monkeypatch):
+    tools, _, _ = ctx
+    model = AsyncMock(side_effect=AssertionError("Offline template must not call a model"))
+    monkeypatch.setattr(generation, "_translate", model)
+    pack = await new_pack(tools)
+    pack = read(await tools["trade_product_content"]("update", pack_id=pack["pack_id"], revision=1,
+        data={"product_name": "Board", "facts": [{"label": "USB", "value": "2 USB 3.0 ports", "source_url": ""}]}))["data"]
+    for invalid in ({"generation_mode": "unknown"}, {"generation_mode": "template", "confirmed": True},
+                    {"generation_mode": "template", "revision": 2}, {"generation_mode": "template", "user_id": "bob"}):
+        result = read(await tools["trade_product_content"]("generate", pack_id=pack["pack_id"], revision=2,
+                                                          confirmed=True, data=invalid))
+        assert result["status"] == 422
+    result = read(await tools["trade_product_content"]("generate", pack_id=pack["pack_id"], revision=2,
+                                                      confirmed=True, data={"generation_mode": "template"}))
+    assert result["ok"] and result["data"]["method"] == "template"
+    assert result["data"]["generation_mode"] == "template"
+    assert result["warnings"][0] == generation.LOCAL_TEMPLATE_NOTICE
+    model.assert_not_awaited()
+
+
+@pytest.mark.asyncio
 async def test_internal_errors_do_not_expose_exception_details(ctx, monkeypatch):
     tools, _, _ = ctx
     def fail(*args): raise RuntimeError("SQL credential private-provider-endpoint")
@@ -267,12 +290,13 @@ async def test_user_identity_is_not_an_accepted_top_level_argument(ctx):
 
 
 def test_real_tool_collector_exports_valid_identity_free_schemas():
-    from core.llm.tool_collector import ToolCollector
-    collector = ToolCollector()
+    from core.llm.factory.tools.definitions import ToolAssembly
+    from core.foreign_trade.tool_names import TRADE_TOOL_NAMES
+    collector = ToolAssembly()
     names = adapter.register_foreign_trade_tools(collector, user_id="alice", chat_id="alice-chat", install_id="trade@alice")
-    assert len(collector.function_tools) == 6
+    assert len(collector) == len(TRADE_TOOL_NAMES)
     for name in names:
-        schema = collector.get_tool(name).input_schema
+        schema = next(tool for tool in collector if tool.name == name).input_schema
         assert schema["type"] == "object"
         assert not {"user_id", "chat_id", "install_id", "headers", "api_key"}.intersection(schema["properties"])
 
@@ -309,7 +333,7 @@ async def test_followup_list_exposes_count_and_truncation_without_fake_links(ctx
     tools, sessions, _ = ctx
     item = await new_inquiry(tools)
     with sessions() as db:
-        from core.services.foreign_trade_inquiry import InquiryService
+        from core.foreign_trade.inquiry import InquiryService
         service = InquiryService(db)
         for index in range(25):
             item = service.create_followup("alice", item["id"], item["revision"], f"Follow {index}", "2026-10-24T09:00:00Z", "UTC")

@@ -4,6 +4,10 @@ This public derivative is based on ZJU-REAL/HugAgentOS Community Edition
 `desktop-v1.0.2`, commit `d16a09be1e408c1acf3ef6ff89523cda1341ef41`.
 The original LICENSE, NOTICE and Git history are retained.
 
+On 2026-10-28 this public derivative was synchronized with upstream main
+`d969492ffb77819a48b34d948b1993a4fc99809b` (2026-10-27). Old core patches that
+are covered by upstream are replaced by the corresponding upstream modules.
+
 ## Added by the foreign-trade-agent contributors (2026-10-21)
 
 - Synthetic eight-SKU product catalog and deterministic Decimal quotation tools.
@@ -33,3 +37,14 @@ Source files changed from the upstream baseline carry a modification notice.
 The temporary repository name is `foreign-trade-agent`; product renaming and a
 new logo are deferred. Model credentials, accounts, databases and conversations
 are local deployment state and are not distributed.
+
+## Public synchronization and collaboration (2026-10-28)
+
+- Adopt the new AgentScope/MCP 2.x runtime, module layout, application registry and frontend architecture.
+- Move trade services to core/foreign_trade; migrate authenticated native tools and preserve strict arguments, skill visibility and record ownership.
+- Add four-skill/seven-native-tool plugin 0.3.0 with source-versioned role coordination, human review and guarded internal handoff downloads.
+- Add explicitly synthetic DESK-001 source material for a single-order demonstration, separate from the real Raspberry Pi example.
+- Add snapshot-first local SQLite upgrades, legacy model protocol preservation and explicit non-deleting duplicate filename repair.
+- Validate real MCP 2.x queries and quotations and preserve existing bilingual exports. Runtime and real-model acceptance are recorded separately from automated checks.
+- Add explicit no-model template mode for confirmed English product facts; include public demo sources and licenses in the plugin archive.
+- Preserve the stored provider protocol in AI helper calls using the upstream resolved configuration contract.

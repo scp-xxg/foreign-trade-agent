@@ -33,6 +33,7 @@ services:
       retries: 5
     networks:
     - hugagent-network
+    restart: unless-stopped
   redis:
     image: redis:7-alpine
     container_name: hugagent-redis
@@ -71,9 +72,10 @@ services:
       BRAND_ORG_NAME: ${BRAND_ORG_NAME:-}
       BRAND_POWERED_BY: ${BRAND_POWERED_BY:-true}
       DATABASE_URL: postgresql://hugagent_user:${DB_PASSWORD:-hugagent_dev_password}@postgres:5432/hugagent
-      DB_POOL_SIZE: ${DB_POOL_SIZE:-100}
-      DB_POOL_MAX_OVERFLOW: ${DB_POOL_MAX_OVERFLOW:-20}
+      APPLICATION_DATABASE_URL: ${APPLICATION_DATABASE_URL:-}
+      WORKER_THREADS: ${WORKER_THREADS:-40}
       DB_POOL_TIMEOUT: ${DB_POOL_TIMEOUT:-30}
+      WEB_CONCURRENCY: ${WEB_CONCURRENCY:-2}
       ENV: ${ENV:-dev}
       PORT: ${BACKEND_PORT:-3001}
       AUTH_MODE: ${AUTH_MODE:-session}
@@ -115,13 +117,16 @@ services:
       MCP_OAUTH_PUBLIC_BASE_URL: ${MCP_OAUTH_PUBLIC_BASE_URL:-}
       MCP_SELF_SERVICE_ALLOW_PRIVATE_NETWORK: ${MCP_SELF_SERVICE_ALLOW_PRIVATE_NETWORK:-false}
       DESKTOP_MODEL_SYNC_SCOPE: ${DESKTOP_MODEL_SYNC_SCOPE:-}
-      STORAGE_TYPE: ${STORAGE_TYPE:-local}
+      STORAGE_TYPE: ${STORAGE_TYPE:-s3}
       STORAGE_PATH: /app/storage
       CATALOG_PATH: /app/storage/catalog.json
       DESKTOP_RELEASE_DIR: ${DESKTOP_RELEASE_DIR:-/app/storage/desktop_release}
+      S3_BUCKET: ${S3_BUCKET:-}
+      S3_REGION: ${S3_REGION:-us-east-1}
+      S3_ENDPOINT: ${S3_ENDPOINT:-}
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY:-}
+      S3_SECRET_KEY: ${S3_SECRET_KEY:-}
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000,http://localhost:5173}
-      RATE_LIMIT_ENABLED: ${RATE_LIMIT_ENABLED:-true}
-      RATE_LIMIT_DEFAULT: ${RATE_LIMIT_DEFAULT:-100/minute}
       LOG_LEVEL: ${LOG_LEVEL:-INFO}
       LOG_FORMAT: ${LOG_FORMAT:-json}
       LOG_TO_FILE: ${LOG_TO_FILE:-false}
@@ -146,6 +151,7 @@ services:
       TAVILY_API_KEY: ${TAVILY_API_KEY:-}
       BAIDU_API_KEY: ${BAIDU_API_KEY:-}
       LANGSEARCH_API_KEY: ${LANGSEARCH_API_KEY:-}
+      DEEPSEEK_SEARCH_API_KEY: ${DEEPSEEK_SEARCH_API_KEY:-}
       MEM0_ENABLED: ${MEM0_ENABLED:-false}
       MEM0_GRAPH_ENABLED: ${MEM0_GRAPH_ENABLED:-false}
       MEMORY_MODEL_URL: ${MEMORY_MODEL_URL:-}
@@ -165,14 +171,43 @@ services:
       MEMORY_OUTBOX_RETRY_BASE_SECONDS: ${MEMORY_OUTBOX_RETRY_BASE_SECONDS:-5}
       MEMORY_OUTBOX_POLL_SECONDS: ${MEMORY_OUTBOX_POLL_SECONDS:-1}
       MCP_HOST: ${MCP_HOST:-mcp}
-      SANDBOX_PROVIDER: ${SANDBOX_PROVIDER:-script_runner}
-      SANDBOX_MAX_CONCURRENT: ${SANDBOX_MAX_CONCURRENT:-4}
+      SANDBOX_PROVIDER: ${SANDBOX_PROVIDER:-opensandbox}
+      SANDBOX_FILE_TRANSFER_TIMEOUT_S: ${SANDBOX_FILE_TRANSFER_TIMEOUT_S:-120}
       SANDBOX_TOOLS_ENABLED: ${SANDBOX_TOOLS_ENABLED:-false}
       SANDBOX_RUNNER_URL: ${SANDBOX_RUNNER_URL:-http://script-runner:8900}
-      SANDBOX_TOOLS_TIMEOUT: ${SANDBOX_TOOLS_TIMEOUT:-30}
-      SANDBOX_TOOLS_MAX_TIMEOUT: ${SANDBOX_TOOLS_MAX_TIMEOUT:-120}
+      BROWSER_DNS_RESOLVER_URL: ${BROWSER_DNS_RESOLVER_URL:-}
+      BROWSER_ALLOWED_HOSTS: ${BROWSER_ALLOWED_HOSTS:-}
+      BROWSER_ALLOW_PRIVATE_NETWORK: ${BROWSER_ALLOW_PRIVATE_NETWORK:-false}
+      BROWSER_CHROMIUM_SANDBOX: ${BROWSER_CHROMIUM_SANDBOX:-true}
+      PLAYWRIGHT_CHROMIUM_EXECUTABLE: ${PLAYWRIGHT_CHROMIUM_EXECUTABLE:-}
+      PLUGIN_RESOURCE_SECRET_KEY: ${PLUGIN_RESOURCE_SECRET_KEY:-}
+      PLUGIN_RESOURCE_MAX_PER_USER: ${PLUGIN_RESOURCE_MAX_PER_USER:-8}
+      PLUGIN_RESOURCE_TTL_SECONDS: ${PLUGIN_RESOURCE_TTL_SECONDS:-86400}
+      PLUGIN_RESOURCE_IDLE_SECONDS: ${PLUGIN_RESOURCE_IDLE_SECONDS:-1800}
+      PLUGIN_RESOURCE_RECONCILE_SECONDS: ${PLUGIN_RESOURCE_RECONCILE_SECONDS:-30}
+      SANDBOX_RUNNER_TOKEN: ${SANDBOX_RUNNER_TOKEN:-}
       SANDBOX_IDLE_TTL_S: ${SANDBOX_IDLE_TTL_S:-3600}
       SANDBOX_ARTIFACT_MAX_BYTES: ${SANDBOX_ARTIFACT_MAX_BYTES:-104857600}
+      OPENSANDBOX_DOMAIN: ${OPENSANDBOX_DOMAIN:-http://opensandbox:8080}
+      OPENSANDBOX_API_KEY: ${OPENSANDBOX_API_KEY:?Initialize CE Docker configuration first}
+      OPENSANDBOX_IMAGE: ${OPENSANDBOX_IMAGE:-hugagent-opensandbox-custom:latest}
+      PERSONAL_AGENT_ENABLED: ${PERSONAL_AGENT_ENABLED:-false}
+      PERSONAL_AGENT_OPENSANDBOX_DOMAIN: ${PERSONAL_AGENT_OPENSANDBOX_DOMAIN:-personal-agent-opensandbox:8080}
+      PERSONAL_AGENT_OPENSANDBOX_API_KEY: ${PERSONAL_AGENT_OPENSANDBOX_API_KEY:-}
+      PERSONAL_AGENT_CLI_SERVER: ${PERSONAL_AGENT_CLI_SERVER:-http://backend:3001}
+      PERSONAL_AGENT_IMAGE: ${PERSONAL_AGENT_IMAGE:-hugagent-personal-agent:v5}
+      PERSONAL_AGENT_VOLUME_ROOT: ${HOST_STORAGE_PATH}/personal-agent
+      PERSONAL_AGENT_LOCAL_VOLUME_ROOT: /app/storage/personal-agent
+      OPENSANDBOX_READY_TIMEOUT_S: ${OPENSANDBOX_READY_TIMEOUT_S:-90}
+      OPENSANDBOX_REQUEST_TIMEOUT_S: ${OPENSANDBOX_REQUEST_TIMEOUT_S:-120}
+      OPENSANDBOX_POOL_JUPYTER_MIN_IDLE: ${OPENSANDBOX_POOL_JUPYTER_MIN_IDLE:-0}
+      OPENSANDBOX_POOL_JUPYTER_MAX_IDLE: ${OPENSANDBOX_POOL_JUPYTER_MAX_IDLE:-3}
+      OPENSANDBOX_POOL_LIGHT_MIN_IDLE: ${OPENSANDBOX_POOL_LIGHT_MIN_IDLE:-0}
+      OPENSANDBOX_POOL_LIGHT_MAX_IDLE: ${OPENSANDBOX_POOL_LIGHT_MAX_IDLE:-5}
+      OPENSANDBOX_POOL_MAX_TOTAL: ${OPENSANDBOX_POOL_MAX_TOTAL:-4}
+      OPENSANDBOX_SNAPSHOT_ENABLED: ${OPENSANDBOX_SNAPSHOT_ENABLED:-true}
+      OPENSANDBOX_SNAPSHOT_RETENTION_DAYS: ${OPENSANDBOX_SNAPSHOT_RETENTION_DAYS:-7}
+      OPENSANDBOX_SNAPSHOT_WAIT_TIMEOUT_S: ${OPENSANDBOX_SNAPSHOT_WAIT_TIMEOUT_S:-120}
       HOST_STORAGE_PATH: ${HOST_STORAGE_PATH:?HOST_STORAGE_PATH must be set in .env (host absolute path to storage dir)}
       CODE_CAPABILITY_ENABLED: ${CODE_CAPABILITY_ENABLED:-false}
       FILE_PARSER_API_URL: ${FILE_PARSER_API_URL:-}
@@ -221,6 +256,7 @@ services:
     networks:
     - hugagent-network
     restart: unless-stopped
+    mem_limit: ${BACKEND_MEM_LIMIT:-6g}
   mcp:
     build:
       context: .
@@ -232,15 +268,15 @@ services:
     environment:
       TZ: ${TZ:-Asia/Shanghai}
       DATABASE_URL: postgresql://hugagent_user:${DB_PASSWORD:-hugagent_dev_password}@postgres:5432/hugagent
-      DB_POOL_SIZE: ${DB_POOL_SIZE:-100}
-      DB_POOL_MAX_OVERFLOW: ${DB_POOL_MAX_OVERFLOW:-20}
+      WORKER_THREADS: ${WORKER_THREADS:-40}
       DB_POOL_TIMEOUT: ${DB_POOL_TIMEOUT:-30}
-      STORAGE_TYPE: ${STORAGE_TYPE:-local}
+      STORAGE_TYPE: ${STORAGE_TYPE:-s3}
       STORAGE_PATH: /app/storage
-      MODEL_URL: ${MODEL_URL:-}
-      API_KEY: ${API_KEY:-}
-      BASE_MODEL_NAME: ${BASE_MODEL_NAME:-}
-      QWEN_MODEL_NAME: ${QWEN_MODEL_NAME:-}
+      S3_BUCKET: ${S3_BUCKET:-}
+      S3_REGION: ${S3_REGION:-us-east-1}
+      S3_ENDPOINT: ${S3_ENDPOINT:-}
+      S3_ACCESS_KEY: ${S3_ACCESS_KEY:-}
+      S3_SECRET_KEY: ${S3_SECRET_KEY:-}
       KNOWLEDGE_BASE: ${KNOWLEDGE_BASE:-}
       DIFY_URL: ${DIFY_URL:-}
       DIFY_API_KEY: ${DIFY_API_KEY:-}
@@ -251,13 +287,12 @@ services:
       RERANKER_MODEL: ${RERANKER_MODEL:-}
       RERANKER_API_KEY: ${RERANKER_API_KEY:-}
       INTERNET_SEARCH_ENGINE: ${INTERNET_SEARCH_ENGINE:-tavily}
-      INTERNET_SEARCH_CN_ONLY: ${INTERNET_SEARCH_CN_ONLY:-}
-      INTERNET_SEARCH_CN_STRICT: ${INTERNET_SEARCH_CN_STRICT:-}
       INTERNET_SEARCH_COUNTRY: ${INTERNET_SEARCH_COUNTRY:-}
       INTERNET_SEARCH_AUTO_PARAMETERS: ${INTERNET_SEARCH_AUTO_PARAMETERS:-}
       TAVILY_API_KEY: ${TAVILY_API_KEY:-}
       BAIDU_API_KEY: ${BAIDU_API_KEY:-}
       LANGSEARCH_API_KEY: ${LANGSEARCH_API_KEY:-}
+      DEEPSEEK_SEARCH_API_KEY: ${DEEPSEEK_SEARCH_API_KEY:-}
       QUERY_DATABASE_URL: ${QUERY_DATABASE_URL:-}
       QUERY_DATABASE_TIMEOUT_SECONDS: ${QUERY_DATABASE_TIMEOUT_SECONDS:-}
       QUERY_DATABASE_RETRY_TIMES: ${QUERY_DATABASE_RETRY_TIMES:-}
@@ -300,6 +335,8 @@ services:
     - '8080'
     - --host
     - 0.0.0.0
+    - --allowed-hosts
+    - dbhub
     - --config
     - /config/dbhub.toml
     environment:
@@ -326,17 +363,17 @@ services:
     - hugagent-network
     restart: unless-stopped
   script-runner:
+    profiles:
+    - script_runner
     build:
       context: .
-      dockerfile: docker/Dockerfile.script-runner
+      dockerfile: docker/sandbox/Dockerfile.script-runner
     container_name: hugagent-script-runner
     logging: *id001
     environment:
       TZ: ${TZ:-Asia/Shanghai}
-      SCRIPT_MAX_TIMEOUT: ${SANDBOX_TOOLS_MAX_TIMEOUT:-120}
-      SCRIPT_DEFAULT_TIMEOUT: ${SANDBOX_TOOLS_TIMEOUT:-30}
-      SCRIPT_MAX_MEMORY_MB: ${SANDBOX_TOOLS_MAX_MEMORY:-256}
       SANDBOX_ARTIFACT_MAX_BYTES: ${SANDBOX_ARTIFACT_MAX_BYTES:-104857600}
+      SANDBOX_RUNNER_TOKEN: ${SANDBOX_RUNNER_TOKEN:-}
       PLAYWRIGHT_BROWSERS_PATH: /ms-playwright
       NODE_PATH: /usr/lib/node_modules
     mem_limit: 1g
@@ -364,15 +401,67 @@ services:
     networks:
     - hugagent-network
     restart: unless-stopped
+  opensandbox-config-init:
+    profiles:
+    - opensandbox
+    image: python:3.12-alpine
+    container_name: hugagent-opensandbox-config-init
+    environment:
+      HOST_REPO_PATH: ${HOST_REPO_PATH:?HOST_REPO_PATH must be an absolute host path}
+      HOST_STORAGE_PATH: ${HOST_STORAGE_PATH:?HOST_STORAGE_PATH must be an absolute host path}
+      COMPOSE_PROJECT_NAME: ${COMPOSE_PROJECT_NAME:?COMPOSE_PROJECT_NAME must be explicit}
+      OPENSANDBOX_API_KEY: ${OPENSANDBOX_API_KEY:-}
+    volumes:
+    - ./docker/opensandbox-server/opensandbox-config.toml.tpl:/tpl/config.toml.tpl:ro
+    - ./docker/opensandbox-server/render-opensandbox-config.py:/tpl/render.py:ro
+    - opensandbox_config:/out
+    command:
+    - python
+    - /tpl/render.py
+    - /tpl/config.toml.tpl
+    - /out/config.toml
+    restart: 'no'
+  opensandbox:
+    profiles:
+    - opensandbox
+    image: hugagent-opensandbox-server:v0.1.13-3
+    build:
+      context: .
+      dockerfile: docker/opensandbox-server/Dockerfile.opensandbox-server
+    container_name: hugagent-opensandbox
+    logging: *id001
+    depends_on:
+      opensandbox-config-init:
+        condition: service_completed_successfully
+    environment:
+      TZ: ${TZ:-Asia/Shanghai}
+      OPENSANDBOX_INSECURE_SERVER: 'NO'
+    volumes:
+    - /var/run/docker.sock:/var/run/docker.sock
+    - opensandbox_config:/etc/opensandbox:ro
+    - opensandbox_data:/var/lib/opensandbox
+    ports: []
+    healthcheck:
+      test:
+      - CMD-SHELL
+      - python3 -c 'import urllib.request,sys; sys.exit(0 if urllib.request.urlopen("http://localhost:8080/health",timeout=2).status==200
+        else 1)'
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    networks:
+    - hugagent-network
+    restart: unless-stopped
   frontend:
     build:
-      context: ./src/frontend
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: src/frontend/Dockerfile
       args:
         VITE_API_BASE_URL: ${VITE_API_BASE_URL}
         SSO_LOGIN_URL: ${SSO_LOGIN_URL:-}
         VITE_EDITION: ${VITE_EDITION:-ce}
         VITE_DEFAULT_LANGUAGE: ${VITE_DEFAULT_LANGUAGE:-zh-CN}
+        HUGAGENT_CHAT_CUSTOMIZATION: ${HUGAGENT_CHAT_CUSTOMIZATION:-}
         VITE_UPLOAD_MAX_MB: ${UPLOAD_MAX_MB:-50}
     container_name: hugagent-frontend
     logging: *id001

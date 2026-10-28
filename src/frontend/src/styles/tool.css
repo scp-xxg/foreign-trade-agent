@@ -42,13 +42,13 @@
   user-select: none;
   transition: background 0.15s;
 }
-.jx-tcr-header[role="button"] {
+.jx-tcr-header:is(button, [role="button"]) {
   cursor: pointer;
 }
-.jx-tcr-header[role="button"]:hover {
+.jx-tcr-header:is(button, [role="button"]):hover {
   background: color-mix(in srgb, var(--color-text) 3%, transparent);
 }
-.jx-tcr-header[role="button"]:focus-visible {
+.jx-tcr-header:is(button, [role="button"]):focus-visible {
   outline: 2px solid color-mix(in srgb, var(--color-primary) 30%, transparent);
   outline-offset: 1px;
 }
@@ -70,25 +70,10 @@
 .jx-tcr-icon--running {
   color: color-mix(in srgb, var(--color-text) 55%, transparent);
 }
-/* Per-step category glyph (replaces the generic success tick) — quiet,
-   thin-stroked, no fill; the kind of step is the signal, not "✓". */
-.jx-tcr-icon--step {
-  color: color-mix(in srgb, var(--color-text) 40%, transparent);
-  font-size: 13px;
-  stroke-width: 0;
-  transition: color 0.15s ease;
-}
-.jx-tcr-header[role="button"]:hover .jx-tcr-icon--step {
-  color: color-mix(in srgb, var(--color-text) 60%, transparent);
-}
-/* Fallback marker for tools with no category icon — a small hollow ring */
-.jx-tcr-dot {
-  display: inline-block;
-  width: 7px;
-  height: 7px;
-  flex-shrink: 0;
-  border-radius: 50%;
-  box-shadow: inset 0 0 0 1.4px color-mix(in srgb, var(--color-text) 30%, transparent);
+/* Step glyphs are the line icons in toolIcons.tsx (.jx-tcr-kind, agent-activity.css);
+   a settled glyph darkens a step on hover like the rest of the row. */
+.jx-tcr-header:is(button, [role="button"]):hover .jx-tcr-kind:not(.jx-tcr-kind--running) {
+  color: var(--color-text-secondary);
 }
 
 /* ── Label: prefix + chip value + count  (NOT flex:1 — arrow sits next to text) ── */
@@ -109,13 +94,11 @@
   color: color-mix(in srgb, var(--color-text) 65%, transparent);
   flex-shrink: 0;
 }
-/* "正在准备调用工具…" 等待文字流光 — 单色灰阶，参数缓冲空窗期的活性信号。
-   隐藏工具调用时那行折叠摘要（--live）、展开后的壳标题（--live）共用同一套：
-   运行中它们是唯一在动的字。 */
+/* 运行中工具行的文字流光 — 单色灰阶。
+   隐藏工具调用时那行折叠摘要（--live）共用同一套：运行中它们是唯一在动的字。 */
 /* motion-keep: 工具运行中的文字流光，定格会变成一段忽深忽浅的灰字 */
 .jx-tcr-prefix--shimmer,
-.jx-inlineSummaryText--live,
-.jx-trs-title--live {
+.jx-inlineSummaryText--live {
   background: linear-gradient(90deg,
     color-mix(in srgb, var(--color-text) 40%, transparent) 0%,
     color-mix(in srgb, var(--color-text) 88%, transparent) 50%,
@@ -127,13 +110,11 @@
   color: transparent;
   animation: jx-kf-shimmer 2.2s linear infinite;
 }
-/* Value rendered as a subtle chip (light gray background pill) */
+/* Argument after the action: plain tertiary text, no chip — the row stays one quiet line */
 .jx-tcr-value {
   display: inline-block;
-  padding: 0 6px;
-  background: color-mix(in srgb, var(--color-text) 4.5%, transparent);
-  border-radius: 4px;
-  color: color-mix(in srgb, var(--color-text) 82%, transparent);
+  padding: 0;
+  color: var(--color-text-tertiary);
   font-weight: 400;
   max-width: 100%;
   overflow: hidden;
@@ -162,8 +143,8 @@
 .jx-tcr-arrow--open {
   transform: rotate(90deg);
 }
-.jx-tcr-header[role="button"]:hover .jx-tcr-arrow,
-.jx-tcr-header[role="button"]:focus-visible .jx-tcr-arrow {
+.jx-tcr-header:is(button, [role="button"]):hover .jx-tcr-arrow,
+.jx-tcr-header:is(button, [role="button"]):focus-visible .jx-tcr-arrow {
   opacity: 1;
   border-left-color: color-mix(in srgb, var(--color-text) 55%, transparent);
 }
@@ -310,10 +291,6 @@
   --fadeInUp-distance: -4px;
   animation: jx-kf-fadeInUp .18s ease-out both;
 }
-/* 标题（执行中 ↔ 已完成）keyed 重挂时淡入 */
-.jx-trs-title {
-  animation: jx-kf-fadeIn .15s ease-out both;
-}
 /* 计时器完成定格：与品牌 loader 同款 settle */
 .jx-trs-dur--settled {
   display: inline-block;
@@ -321,8 +298,7 @@
 }
 /* 历史回放 / 非流式渲染豁免：壳、步骤行、标题一律静态 */
 .jx-trs--static,
-.jx-trs--static .jx-trs-body > *,
-.jx-trs--static .jx-trs-title {
+.jx-trs--static .jx-trs-body > * {
   animation: none;
 }
 
@@ -351,83 +327,11 @@
   outline-offset: 1px;
 }
 
-/* ── Status mark: brand logo (animated draw → settled) for run/done.
-   A soft halo + a one-shot ring on completion
-   give the batch a richer, branded focal point instead of a bare tick. ── */
-.jx-trs-mark {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 24px;
-  height: 24px;
-  flex-shrink: 0;
-  border-radius: 50%;
-}
-/* Soft radial halo behind the brand mark for depth */
-.jx-trs-mark--running::before,
-.jx-trs-mark--success::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  border-radius: 50%;
-  background: radial-gradient(
-    circle at 50% 50%,
-    color-mix(in srgb, var(--color-primary) 14%, transparent) 0%,
-    transparent 70%
-  );
-}
-.jx-trs-mark--success::before {
-  background: radial-gradient(
-    circle at 50% 50%,
-    color-mix(in srgb, var(--color-text) 10%, transparent) 0%,
-    transparent 70%
-  );
-}
-/* One-shot expanding ring the moment the batch settles */
-.jx-trs-mark--success::after {
-  content: "";
-  position: absolute;
-  inset: 2px;
-  border-radius: 50%;
-  border: 1.5px solid color-mix(in srgb, var(--color-text) 28%, transparent);
-  animation: jx-trs-ring 0.55s ease-out forwards;
-}
-@keyframes jx-trs-ring {
-  0%   { transform: scale(0.55); opacity: 0.9; }
-  100% { transform: scale(1.55); opacity: 0; }
-}
-/* motion-stop: 减弱动效下定格在终态（同名关键帧后定义者胜，用到它的规则一起生效） */
-@media (prefers-reduced-motion: reduce) {
-  @keyframes jx-trs-ring { from, to { transform: scale(1.55); opacity: 0 } }
-}
-
-/* Gentle breathing on the live brand GIF for extra life */
-/* motion-keep: 「正在执行」的品牌动图，停下就只剩一枚静止图标，读起来像卡死 */
-.jx-trs-mark--running .jx-brandLoader {
-  animation: jx-trs-breathe 1.8s ease-in-out infinite;
-}
-@keyframes jx-trs-breathe {
-  0%, 100% { transform: scale(1); }
-  50%      { transform: scale(1.08); }
-}
 .jx-trs-title {
   font-size: 13.5px;
   font-weight: 500;
   letter-spacing: 0.01em;
   color: color-mix(in srgb, var(--color-text) 78%, transparent);
-}
-/* 运行中的壳标题跟着一起流光：展开工具调用后这行取代了 .jx-turnStatus-label 的位置，
-   同一段等待却只剩一个静止的标题，读起来像卡住了。渐变本体写在上面那组共用规则里，
-   这里只把 .jx-trs-title 系列压掉的 color / animation 抢回来。
-   选择器必须带 .jx-trs 前缀：标题上还挂着入场 fade，历史回放那条
-   `.jx-trs--static .jx-trs-title{animation:none}` 又是两个类——单写 --live 只有一个类，
-   打不过它们，流光会静默失效（隐藏模式那行没人跟它抢 animation，所以一直好使）。
-   跑完摘掉 --live 落回基础规则，"执行中 → 已完成"那一次翻转照旧淡入。 */
-/* motion-keep: 运行中的标题流光，定格会变成一段忽深忽浅的灰字 */
-.jx-trs .jx-trs-title--live {
-  color: transparent;
-  animation: jx-kf-shimmer 2.2s linear infinite;
 }
 .jx-trs-sep {
   color: color-mix(in srgb, var(--color-text) 25%, transparent);
@@ -438,10 +342,6 @@
   font-size: 12.5px;
   font-variant-numeric: tabular-nums;
   color: color-mix(in srgb, var(--color-text) 50%, transparent);
-}
-.jx-trs-steps {
-  font-size: 12px;
-  color: color-mix(in srgb, var(--color-text) 38%, transparent);
 }
 /* 折叠态里那行实时进度（批量作业 n/m）——比步骤数显眼一档，它是这段时间唯一在动的字 */
 .jx-trs-note {
@@ -496,13 +396,22 @@
 .jx-expandWrap > .jx-trs-body {
   overflow: hidden;
 }
+/* No guide line or step dots: each row is icon · action · argument · time.
+   Tool-less runs keep the 20px agent slot + 9px gap in their header, so the
+   23px inset + the row's 6px padding puts step icons under the header text. */
 .jx-trs-body {
   display: flex;
   flex-direction: column;
-  gap: 1px;
-  margin: 3px 0 2px 17px;
-  padding-left: 13px;
-  border-left: 1px solid color-mix(in srgb, var(--color-text) 8%, transparent);
+  gap: 0;
+  margin: 2px 0 4px 23px;
+}
+/* Runs with tools start their header with the tool-kind chips at x=0: no inset,
+   and a 3px row padding centres the 14px step icons under the first 20px chip. */
+.jx-trs--tools .jx-trs-body {
+  margin-left: 0;
+}
+.jx-trs--tools .jx-trs-body > * > .jx-tcr-header {
+  padding-left: 3px;
 }
 
 /* Rows nested in the shell stay quiet; the shell owns the structure */
@@ -512,9 +421,8 @@
 .jx-trs-body .jx-tcr-label {
   font-size: 13px;
 }
-.jx-trs-body .jx-tcr-value {
-  background: color-mix(in srgb, var(--color-text) 4%, transparent);
-  color: color-mix(in srgb, var(--color-text) 70%, transparent);
+.jx-trs-body .jx-tcr-prefix {
+  color: var(--color-text-secondary);
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
@@ -867,171 +775,6 @@
 .jx-expandIcon{
   font-size:10px;
   color:color-mix(in srgb, var(--color-text) 55%, transparent);
-}
-
-/* ── 文件下载卡片 ─────────────────────────────── */
-.jx-artifactCards{
-  display:flex;
-  flex-direction:column;
-  gap:8px;
-  margin-top:10px;
-}
-.jx-dlCard{
-  display:flex;
-  align-items:center;
-  justify-content:space-between;
-  gap:16px;
-  padding:12px 14px;
-  background:var(--color-bg-container);
-  border:1px solid color-mix(in srgb, var(--color-fill) 72%, transparent);
-  border-radius:16px;
-  box-shadow:0 6px 18px rgba(15,23,42,.05);
-  max-width:460px;
-  transition:border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
-}
-.jx-dlCard:hover{
-  box-shadow:0 10px 24px rgba(15,23,42,.08);
-  border-color:color-mix(in srgb, var(--color-text-placeholder) 90%, transparent);
-  transform:translateY(-1px);
-}
-.jx-dlCard-left{
-  display:flex;
-  align-items:center;
-  gap:12px;
-  min-width:0;
-  flex:1;
-}
-.jx-dlCard-fileBadge{
-  width:42px;
-  height:42px;
-  border-radius:14px;
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  flex-shrink:0;
-  background:linear-gradient(180deg, var(--color-bg-layout) 0%, var(--color-fill-hover) 100%);
-  border:1px solid color-mix(in srgb, var(--color-fill) 72%, transparent);
-  box-shadow:inset 0 1px 0 color-mix(in srgb, var(--color-bg-container) 85%, transparent);
-}
-.jx-dlCard-fileIcon{
-  object-fit:contain;
-}
-.jx-dlCard-meta{
-  display:flex;
-  flex-direction:column;
-  gap:2px;
-  min-width:0;
-}
-.jx-dlCard-name{
-  font-weight:600;
-  font-size:14px;
-  color:color-mix(in srgb, var(--color-text) 88%, transparent);
-  white-space:nowrap;
-  overflow:hidden;
-  text-overflow:ellipsis;
-  max-width:260px;
-  line-height:1.4;
-}
-.jx-dlCard-size{
-  font-size:12px;
-  color:var(--color-text-tertiary);
-}
-.jx-dlCard-actions{
-  display:flex;
-  align-items:center;
-  gap:8px;
-  flex-shrink:0;
-}
-.jx-dlCard-btn{
-  display:inline-flex;
-  align-items:center;
-  gap:6px;
-  height:36px;
-  padding:0 14px;
-  border-radius:10px;
-  border:1px solid color-mix(in srgb, var(--color-primary) 30%, transparent);
-  background:var(--color-primary-light);
-  color:var(--color-primary);
-  font-size:14px;
-  font-weight:500;
-  text-decoration:none;
-  transition:background .15s ease, border-color .15s ease, color .15s ease;
-}
-.jx-dlCard-btn:hover{
-  background:var(--color-primary-bg);
-  border-color:var(--color-primary-disabled);
-  color:var(--color-primary-active);
-}
-
-/* ── 图片卡片（ChatGPT 风格：裸图 + hover 内嵌操作） ─────────── */
-.jx-imgCard{
-  position:relative;
-  display:inline-block;
-  max-width:520px;
-  width:100%;
-  border-radius:12px;
-  overflow:hidden;
-  line-height:0;
-  cursor:zoom-in;
-}
-.jx-imgCard:focus-visible{
-  outline:2px solid color-mix(in srgb, var(--color-text) 30%, transparent);
-  outline-offset:2px;
-}
-.jx-imgCard-img{
-  display:block;
-  width:100%;
-  max-height:480px;
-  object-fit:contain;
-  border-radius:12px;
-  transition:filter .2s ease;
-}
-/* hover 时图片轻微加深，配合遮罩 */
-.jx-imgCard:hover .jx-imgCard-img{
-  filter:brightness(.92);
-}
-/* 半透明遮罩层（不阻断图片点击事件） */
-.jx-imgCard-overlay{
-  position:absolute;
-  inset:0;
-  border-radius:12px;
-  pointer-events:none;
-}
-/* 操作按钮组 */
-.jx-imgCard-overlayBtns{
-  position:absolute;
-  top:10px;
-  right:10px;
-  display:flex;
-  gap:6px;
-  opacity:0;
-  transition:opacity .18s ease;
-}
-.jx-imgCard:hover .jx-imgCard-overlayBtns{
-  opacity:1;
-}
-/* 单个图标按钮 */
-.jx-imgCard-overlayBtn{
-  width:34px;
-  height:34px;
-  border-radius:8px;
-  background:rgba(0,0,0,.52);
-  backdrop-filter:blur(10px);
-  -webkit-backdrop-filter:blur(10px);
-  border:1px solid rgba(255,255,255,.18);
-  color:var(--color-text-white);
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  cursor:pointer;
-  font-size:15px;
-  transition:background .15s ease, transform .1s ease;
-  text-decoration:none;
-}
-.jx-imgCard-overlayBtn:hover{
-  background:rgba(0,0,0,.75);
-  transform:scale(1.08);
-  color:var(--color-text-white);
 }
 
 /* ── 图片全屏预览 ── */
@@ -2817,18 +2560,11 @@
   .jx-askQ-checkbox::before{ transition:none; }
 }
 
-/* ══ 批量执行（BatchConfirmModal / BatchProgressPanel）══ */
-/* 占位符 Tag 点击按压反馈 */
-.jx-batch-phTag{
-  transition:transform var(--motion-duration-instant) var(--motion-ease-standard);
-}
-.jx-batch-phTag:active{
-  transform:scale(.94);
-}
-
 /* 展开工具卡时按需回取完整结果的过渡提示（见 ToolCallRow 的 fetchFullOutput）。 */
 .jx-tcr-loadingFull{
   padding:6px 0;
   font-size:12px;
   color:var(--color-text-tertiary, var(--color-text-tertiary));
 }
+
+.jx-tcr-capabilityIcon { display: inline-flex; flex: 0 0 22px; align-items: center; justify-content: center; }

@@ -1,4 +1,6 @@
+import {logoutViaHostPlatform} from '../desktop/shellLogout';
 import { create } from 'zustand';
+import { rememberDesktopRequest, showDesktopApproval } from './desktopLogin';
 import { message } from 'antd';
 import { checkSession, desktopHandoff, exchangeSsoCredential, getSsoAuthorizeUrl, logout, onUnauthorized, type AuthUser } from '../api';
 import { isEditionAccessError } from '../editionAccessError';
@@ -6,7 +8,6 @@ import { useChatStore } from './chatStore';
 import { useAutomationChatStore } from './automationChatStore';
 import { writeLocal, removeLocal } from '../storage';
 
-export const LOGIN_LANDING_KEY = 'hugagent_login_landing';
 // Desktop client plan B: the system browser opens `<web>/?desktop=1` to start login;
 // this flag survives the SSO round trip in sessionStorage (kept for the whole tab
 // lifetime). After a successful login it is used to hand the session over to the
@@ -50,10 +51,26 @@ function isMockLoginUrl(url?: string | null): boolean {
   return !value || value.includes('/mock-sso/login');
 }
 
+/** 登录完该回到哪一页。 */
+function currentReturnPath(): string {
+  return window.location.pathname + window.location.search;
+}
+
 function fallbackLoginUrl(): string {
   if (SSO_LOGIN_URL && !isMockLoginUrl(SSO_LOGIN_URL)) return SSO_LOGIN_URL;
-  const origin = window.location.origin;
-  return `${origin}/mock-sso/login?redirect=${encodeURIComponent(window.location.pathname + window.location.search)}`;
+  return `${window.location.origin}${withReturnPath('/mock-sso/login')}`;
+}
+
+/** 服务端 401 给回来的登录地址是裸的 `/login`。带上当前地址，登录完能回到原来那一页
+ *  ——会话链接（`/c/<会话id>`）发给同事、对方没登录时，这一步决定他登录后是落回那段
+ *  对话还是掉到首页。登录页本就支持 `?redirect=`，且后端只取其中的路径部分。
+ *  外部 SSO 的授权地址自带 state/nonce，原样不动。 */
+function withReturnPath(url: string): string {
+  if (!url.startsWith('/')) return url;
+  const parsed = new URL(url, window.location.origin);
+  if (parsed.searchParams.has('redirect')) return url;
+  parsed.searchParams.set('redirect', currentReturnPath());
+  return `${parsed.pathname}${parsed.search}`;
 }
 
 /** Resolve the redirect-to-login URL.
@@ -61,7 +78,7 @@ function fallbackLoginUrl(): string {
  * 3) `SSO_LOGIN_URL` env / mock-SSO landing.
  */
 async function resolveLoginUrl(serverUrl?: string | null): Promise<string> {
-  if (serverUrl && !isMockLoginUrl(serverUrl)) return serverUrl;
+  if (serverUrl && !isMockLoginUrl(serverUrl)) return withReturnPath(serverUrl);
 
   if (!authorizeUrlPromise) {
     authorizeUrlPromise = getSsoAuthorizeUrl().catch(() => undefined);
@@ -108,6 +125,10 @@ function inDesktopShell(): boolean {
 /** Desktop logout: have the shell clear the local token and switch the window back to the native login page.
  * Returns true on success (the caller must NOT `window.location`-redirect to external SSO — that blanks the screen). */
 async function logoutViaDesktopShell(): Promise<boolean> {
+  try {
+    const native=await logoutViaHostPlatform();
+    if(native!==null)return native;
+  } catch {return false;}
   if (!inDesktopShell()) return false;
   try {
     const core = (window as unknown as {
@@ -129,13 +150,7 @@ function triggerDesktopDeepLink(deeplink: string): void {
     iframe.style.display = 'none';
     iframe.src = deeplink;
     document.body.appendChild(iframe);
-    window.setTimeout(() => {
-      try {
-        document.body.removeChild(iframe);
-      } catch {
-        // ignore
-      }
-    }, 1500);
+
   } catch {
     try {
       window.location.href = deeplink;
@@ -156,7 +171,7 @@ function showDesktopReturnOverlay(deeplink: string): void {
     'style',
     'position:fixed;inset:0;z-index:2147483647;display:flex;align-items:center;justify-content:center;' +
       'background:radial-gradient(1200px 560px at 50% -12%,#E5EFFF 0%,rgba(229,239,255,0) 62%),linear-gradient(180deg,#FBFCFE 0%,#EEF2F8 100%);' +
-      "font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Microsoft YaHei',sans-serif;color:#262626;",
+      "font-family:var(--font-family);color:#262626;",
   );
   o.innerHTML =
     '<div style="width:400px;max-width:90vw;padding:44px 40px 32px;text-align:center;background:#fff;' +
@@ -184,6 +199,7 @@ function showDesktopReturnOverlay(deeplink: string): void {
  * one-time handoff ticket -> wake the App + show the "you can close this page" screen.
  * Returns true on success (the caller should stay in the bridging state and not render the app). */
 async function bridgeToDesktop(): Promise<boolean> {
+  if (await showDesktopApproval()) return true;
   if (!isDesktopLogin()) return false;
   try {
     const ticket = await desktopHandoff();
@@ -201,16 +217,6 @@ async function bridgeToDesktop(): Promise<boolean> {
     // First switch the page to the clear "login succeeded, closable" state, then wake the App (avoids this page spinning forever).
     showDesktopReturnOverlay(deeplink);
     triggerDesktopDeepLink(deeplink);
-    // If the browser allows it (usually only for script-opened tabs), auto-close this
-    // page after the wake-up; if it cannot be closed, keep the "closable" notice page
-    // above instead of a loading state.
-    window.setTimeout(() => {
-      try {
-        window.close();
-      } catch {
-        // ignore
-      }
-    }, 1500);
     return true;
   } catch {
     // Ticket fetch failed: stay in the browser and render the app as usual (the user
@@ -288,6 +294,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
 
       set({ authChecking: true });
 
+      rememberDesktopRequest();
       const params = new URLSearchParams(window.location.search);
       // Desktop: on first open with `?desktop=1`, record the intent (kept in
       // sessionStorage across the SSO round trip) and strip the param from the address
@@ -332,7 +339,6 @@ export const useAuthStore = create<AuthState>((set, get) => ({
           const user = await exchangeSsoCredential(credentialBody);
           // Desktop: after a successful login, hand the session over to the App and stay in the bridging state (authChecking stays true, keeping the spinner).
           if (await bridgeToDesktop()) return;
-          window.sessionStorage.setItem(LOGIN_LANDING_KEY, '1');
           set({ authUser: user, authChecking: false, wasAuthed: true });
           return;
         } catch (error) {

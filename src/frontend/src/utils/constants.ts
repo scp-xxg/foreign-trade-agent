@@ -44,10 +44,6 @@ export const TOOL_NAME_OVERRIDES: Record<string, string> = {
   load_skill: t('加载技能'),
   load_plugin: t('加载插件'),
   // MySpace tools
-  list_myspace_files: t('浏览我的空间'),
-  stage_myspace_file: t('导入文件到工作区'),
-  list_favorite_chats: t('浏览收藏会话'),
-  get_chat_messages: t('读取会话记录'),
   ...EDITION_TOOL_NAME_OVERRIDES,
 };
 
@@ -97,3 +93,7 @@ export const getApiBase = (): string =>
 /** Build a direct download URL for an artifact file. */
 export const buildFileUrl = (fileId: string): string =>
   `${getApiBase()}/files/${fileId}`;
+
+/** 列表默认每页条数。我的空间面板与从我的空间选文件的弹窗共用这一个值，
+ *  避免同一语义在多处各写一个数字（后端对应 core/db/paging.py 的 DEFAULT_PAGE_SIZE）。 */
+export const LIST_PAGE_SIZE = 20;

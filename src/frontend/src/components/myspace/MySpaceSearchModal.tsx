@@ -3,7 +3,8 @@ import { Input, Modal } from 'antd';
 import type { InputRef } from 'antd';
 import { CloseOutlined, SearchOutlined } from '@ant-design/icons';
 import type { ChatShareRecord } from '../../api';
-import { getArtifacts, getFavoriteChats, listChatShares } from '../../api';
+import { getFavoriteChats, listChatShares } from '../../api';
+import { searchSpaceFiles } from './spaceFilesApi';
 import type { KBItem, ResourceItem } from '../../types';
 import { useMySpaceStore } from '../../stores/mySpaceStore';
 import { useCatalogStore } from '../../stores/catalogStore';
@@ -42,7 +43,6 @@ export function MySpaceSearchModal({ onOpenChat, onPreviewFile }: Props) {
   const globalQuery = useMySpaceStore((s) => s.globalQuery);
   const setGlobalQuery = useMySpaceStore((s) => s.setGlobalQuery);
   const setTab = useMySpaceStore((s) => s.setTab);
-  const setKbTab = useCatalogStore((s) => s.setKbTab);
   const catalog = useCatalogStore((s) => s.catalog);
 
   /** 结果带上它对应的查询词：与当前输入不一致就说明还在路上，据此显示骨架屏 */
@@ -56,15 +56,16 @@ export function MySpaceSearchModal({ onOpenChat, onPreviewFile }: Props) {
   useEffect(() => {
     if (!searchOpen || !keyword) return;
     const seq = ++seqRef.current;
+    const abort = new AbortController();
     const timer = window.setTimeout(() => {
       void (async () => {
         const lower = keyword.toLowerCase();
         const [files, favorites, shares] = await Promise.all([
-          getArtifacts({ keyword, scope: 'all', page_size: PER_GROUP }).then((r) => r.items).catch(() => []),
+          searchSpaceFiles(keyword, PER_GROUP, abort.signal).catch(() => []),
           getFavoriteChats({ keyword, page_size: PER_GROUP }).then((r) => r.items).catch(() => []),
           listChatShares().catch((): ChatShareRecord[] => []),
         ]);
-        if (seq !== seqRef.current) return;
+        if (abort.signal.aborted || seq !== seqRef.current) return;
         setResult({
           query: keyword,
           hits: {
@@ -78,7 +79,7 @@ export function MySpaceSearchModal({ onOpenChat, onPreviewFile }: Props) {
         });
       })();
     }, DEBOUNCE_MS);
-    return () => window.clearTimeout(timer);
+    return () => { window.clearTimeout(timer); abort.abort(); };
   }, [searchOpen, keyword, catalog.kb]);
 
   const hits = result.hits;
@@ -141,10 +142,10 @@ export function MySpaceSearchModal({ onOpenChat, onPreviewFile }: Props) {
               keyword={keyword}
               title={kb.name}
               sub={kb.desc}
-              onClick={() => pick(() => {
-                setKbTab(kb.visibility === 'private' || (!kb.visibility && !kb.is_public) ? 'private' : 'public');
-                setTab('kb');
-              })}
+              onClick={() => pick(() => setTab(
+                'kb',
+                kb.visibility === 'private' || (!kb.visibility && !kb.is_public) ? 'private' : 'public',
+              ))}
             />
           ))}
         </Group>

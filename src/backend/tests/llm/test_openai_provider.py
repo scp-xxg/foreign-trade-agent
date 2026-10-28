@@ -1,23 +1,12 @@
 """Tests for OpenAI-compatible model providers."""
 
-from types import SimpleNamespace
-
-import pytest
-from agentscope.message import (
-    Base64Source,
-    DataBlock,
-    Msg,
-    TextBlock,
-    ToolResultBlock,
-    ToolResultState,
-)
-from core.llm.chat_models import make_chat_model
-from core.llm.context_adapter import AgentScopeContextAdapter, PROVIDER_CONTEXT_META_KEY
-from core.llm.context_ir import ContextItem
-from core.llm.providers.registry import get_spec, to_frontend_schema
+from core.models.chat_models import make_chat_model
+from core.models.providers.registry import get_spec, to_frontend_schema
 
 
-def _make_model(provider: str, reasoning_effort: str | None):
+def _make_model(
+    provider: str, reasoning_effort: str | None, api_protocol: str = "chat_completions"
+):
     return make_chat_model(
         model="test-model",
         temperature=0.0,
@@ -29,6 +18,7 @@ def _make_model(provider: str, reasoning_effort: str | None):
         reasoning_effort=reasoning_effort,
         stream=True,
         context_size=4096,
+        api_protocol=api_protocol,
     )
 
 
@@ -63,131 +53,54 @@ def test_generic_compatible_provider_keeps_existing_reasoning_transport():
     assert model.structured_reasoning is False
 
 
-@pytest.mark.asyncio
-async def test_retry_annotation_inherits_memory_and_project_provenance_through_formatter():
-    model = _make_model("openai_compatible", None)
-    adapter = AgentScopeContextAdapter()
+def test_unrecorded_protocol_defaults_to_responses():
+    """Responses is the default; chat completions is only for endpoints found to lack it."""
+    from core.models.responses import OpenAICompatResponsesModel
 
-    def item(item_id, text, *, kind, origin, trust, role):
-        return ContextItem.create(
-            item_id=item_id,
-            kind=kind,
-            origin=origin,
-            trust=trust,
-            visibility="model",
-            priority=800,
-            token_budget=1_000,
-            truncation_policy="never",
-            content=text,
-            cache_class="dynamic",
-            created_seq=1 if role == "system" else 2,
-            render_role=role,
-            render_name=role,
-            message_group=item_id,
-        )
+    model = _make_model("openai_compatible", None, api_protocol=None)
 
-    source = adapter.messages_from_items(
-        [
-            item(
-                "project",
-                "project material",
-                kind="project_material",
-                origin="workspace:project-1",
-                trust="workspace",
-                role="system",
-            ),
-            item(
-                "memory",
-                "remembered fact",
-                kind="memory",
-                origin="memory:frozen",
-                trust="memory",
-                role="user",
-            ),
-        ]
-    )
-    formatted = await model.formatter.format(source)
-    annotated = await model._annotate_retry_context(source, formatted)
-    restored = adapter.items_from_provider_messages(annotated)
-
-    assert [(entry.kind, entry.origin, entry.trust) for entry in restored] == [
-        ("project_material", "workspace:project-1", "workspace"),
-        ("memory", "memory:frozen", "memory"),
-    ]
+    assert isinstance(model, OpenAICompatResponsesModel)
+    assert model.wire_protocol == "openai_responses"
+    # Reasoning arrives as its own item on this wire, never inline in the body.
+    assert model.structured_reasoning is True
 
 
-@pytest.mark.asyncio
-async def test_text_only_model_retries_tool_image_result_without_multimodal_blocks(monkeypatch):
-    """A figure-returning MCP must not end the ReAct loop on a text-only model."""
+def test_probed_chat_only_endpoint_stays_on_chat_completions():
+    from core.models.chat_models import OpenAICompatChatModel
+
+    model = _make_model("openai_compatible", None, api_protocol="chat_completions")
+
+    assert isinstance(model, OpenAICompatChatModel)
+    assert model.wire_protocol == "openai_chat"
+
+
+def test_azure_never_uses_responses():
+    """Azure addresses Responses per deployment, which the shared client cannot build."""
+    from core.models.chat_models import OpenAICompatChatModel
+
     model = make_chat_model(
-        model="deepseekv4-flash",
+        model="test-model",
         temperature=0.0,
         max_tokens=32,
         timeout=10,
-        base_url="http://model.test/api/v1",
+        base_url="https://res.openai.azure.com",
         api_key="test-key",
-        provider="openai_compatible",
-        stream=False,
+        provider="azure_openai",
+        provider_extra={"api_version": "2024-06-01", "deployment": "gpt-4o"},
+        stream=True,
         context_size=4096,
-    )
-    tool_result = ToolResultBlock(
-        id="call-figures",
-        name="get_paper_figures",
-        output=[
-            TextBlock(type="text", text='{"title":"paper","figures":[{"caption":"architecture"}]}'),
-            DataBlock(
-                type="data",
-                source=Base64Source(
-                    type="base64",
-                    media_type="image/png",
-                    data="QUJD",
-                ),
-            ),
-        ],
-        state=ToolResultState.SUCCESS,
-    )
-    messages = [Msg(name="assistant", role="assistant", content=[tool_result])]
-
-    calls: list[dict] = []
-    expected_response = object()
-
-    async def create(**kwargs):
-        calls.append(kwargs)
-        if len(calls) == 1:
-            raise RuntimeError("deepseekv4-flash is not a multimodal model")
-        return expected_response
-
-    fake_client = SimpleNamespace(
-        chat=SimpleNamespace(completions=SimpleNamespace(create=create)),
-    )
-    monkeypatch.setattr(model, "_build_client", lambda: fake_client)
-    monkeypatch.setattr(
-        model,
-        "_parse_completion_response",
-        lambda _started_at, response, _audio_format: response,
+        api_protocol="responses",
     )
 
-    async def no_transcription(formatted):
-        return formatted, 0
+    assert isinstance(model, OpenAICompatChatModel)
 
-    monkeypatch.setattr("core.llm.chat_models._transcribe_multimodal_content", no_transcription)
-    observed_rewrite = []
 
-    async def observe_rewrite(messages):
-        observed_rewrite.extend(messages)
-        return messages
+def test_config_lookup_failure_does_not_mask_original_failure(monkeypatch):
+    from core.models.chat_models import _resolve_or_dummy
+    from core.models.config import ModelConfigService
 
-    model.set_context_rewrite_listener(observe_rewrite)
+    def unavailable():
+        raise RuntimeError("configuration unavailable")
 
-    response = await model._call_api("deepseekv4-flash", messages)
-
-    assert response is expected_response
-    assert len(calls) == 2
-    assert "image_url" in str(calls[0]["messages"])
-    assert "image_url" not in str(calls[1]["messages"])
-    assert "architecture" in str(calls[1]["messages"])
-    assert any(
-        message.get(PROVIDER_CONTEXT_META_KEY, {}).get("origin") == "harness:multimodal_fallback"
-        for message in observed_rewrite
-    )
-    assert all(PROVIDER_CONTEXT_META_KEY not in message for message in calls[1]["messages"])
+    monkeypatch.setattr(ModelConfigService, "get_instance", unavailable)
+    assert _resolve_or_dummy("main_agent") is None

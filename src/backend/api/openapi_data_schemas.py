@@ -261,6 +261,7 @@ DATA_COMPONENTS: Dict[str, Dict[str, Any]] = {
             "sso_token": {"type": "string"},
             "allowed_apps": {"type": "array", "items": {"type": "string"}},
             "lab_enabled": {"type": "boolean"},
+            "can_use_voice": {"type": "boolean", "default": False},
             "can_use_ontology_validation": {"type": "boolean"},
         },
     },
@@ -287,6 +288,7 @@ DATA_COMPONENTS: Dict[str, Dict[str, Any]] = {
             "default_model": {"type": "string"},
             "language": {"type": "string"},
             "theme": {"type": "string"},
+            "sidebar_layout": {"type": "string", "enum": ["classic", "modern"]},
             "enabled_skills": {"type": "array", "items": {"type": "string"}},
             "enabled_mcps": {"type": "array", "items": {"type": "string"}},
         },
@@ -447,7 +449,7 @@ DATA_SCHEMAS: Dict[Tuple[str, str], Dict[str, Any]] = {
             "follow_up_questions": {"type": "array", "items": {"type": "string"}},
         },
     },
-    ("POST", "/v1/chats/send"): {
+    ("POST", "/v1/agents/responses"): {
         "type": "object",
         "properties": {
             "chat_id": {"type": "string"},
@@ -463,20 +465,15 @@ DATA_SCHEMAS: Dict[Tuple[str, str], Dict[str, Any]] = {
             "warnings": {"type": "array", "items": {"type": "string"}},
         },
     },
-    ("POST", "/v1/chats/stream"): {
-        "type": "object",
-        "additionalProperties": True,
-        "description": "SSE 流式响应；事件类型包含 thinking / content / tool_call / tool_result / meta / error",
-    },
     ("POST", "/v1/chats/{chat_id}/regenerate"): {
         "type": "object",
         "additionalProperties": True,
-        "description": "SSE 流式响应；事件结构同 /v1/chats/stream",
+        "description": "SSE 流式响应；事件结构同 /v1/agents/responses（stream=true）",
     },
     ("POST", "/v1/chats/{chat_id}/edit"): {
         "type": "object",
         "additionalProperties": True,
-        "description": "SSE 流式响应；事件结构同 /v1/chats/stream",
+        "description": "SSE 流式响应；事件结构同 /v1/agents/responses（stream=true）",
     },
     ("POST", "/v1/chats/messages/{message_id}/feedback"): {
         "type": "object",

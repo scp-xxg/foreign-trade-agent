@@ -1,6 +1,6 @@
 """Native, run-bound foreign-trade tools; identity is never a model argument.
 
-Only agent_factory/plugin_loader may register these closures after plugin
+Only the agent factory/plugin activation may register these closures after plugin
 visibility/activation checks. Business records and uploaded artifacts retain
 service-level ownership checks and optimistic revisions on every call.
 """
@@ -17,9 +17,9 @@ from pydantic import BaseModel, ConfigDict, Field, StrictBool, StrictInt, Valida
 
 from core.db.engine import SessionLocal
 from core.db.models import Artifact, ChatMessage, ChatSession
-from core.services.foreign_trade_inquiry import InquiryError, InquiryService
-from core.services.foreign_trade_content import ContentPackError, ContentPackService, MAX_UPLOAD, demo_file
-from core.storage import get_storage
+from core.foreign_trade.inquiry import InquiryError, InquiryService
+from core.foreign_trade.content import ContentPackError, ContentPackService, MAX_UPLOAD, demo_file
+from core.files.storage import get_storage
 from api.routes.v1.foreign_trade import (
     CreateInquiry, UpdateInquiry, RevisionRequest, CreateFollowup, UpdateFollowup,
 )
@@ -32,6 +32,10 @@ class EmptyData(BaseModel):
 
 class ListData(EmptyData):
     limit: StrictInt = Field(default=20, ge=1, le=50)
+
+
+class GenerateData(EmptyData):
+    generation_mode: Literal["ai", "template"] = "ai"
 
 
 class FollowupData(UpdateFollowup):
@@ -128,7 +132,8 @@ def _pack_view(record: dict):
             "product_name": record["product_name"], "generated_at": output["generated_at"],
             "not_published": True, "assets": deepcopy(output.get("assets", [])),
             "listing": deepcopy(output.get("listing", {})), "faq": deepcopy(output.get("faq", [])),
-            "method": output.get("method", "template"), "warnings": deepcopy(output.get("warnings", [])),
+            "method": output.get("method", "template"), "generation_mode": output.get("generation_mode", "ai"),
+            "warnings": deepcopy(output.get("warnings", [])),
             "facts": deepcopy(record["facts"]), "image_credit": record["image_credit"],
             "source_url": record["source_url"], "auxiliary_view": result["auxiliary_view"],
         }
@@ -230,7 +235,7 @@ def register_foreign_trade_tools(toolkit, *, user_id: str, chat_id: str | None, 
                     if action == "verify_buyer":
                         result = await service.verify(actor, inquiry_id, rev)
                     elif action == "interpret":
-                        from core.services.foreign_trade_ai import interpret_inquiry
+                        from core.foreign_trade.ai import interpret_inquiry
                         from foreign_trade.engine import search_products
                         record = service._load(actor, inquiry_id, rev)
                         proposal = await interpret_inquiry(record["raw_inquiry"], search_products(limit=50)["data"]["products"])
@@ -275,6 +280,7 @@ def register_foreign_trade_tools(toolkit, *, user_id: str, chat_id: str | None, 
         facts 每项为label/value/source_url，最多20条；必须由用户核对。import_files只接当前聊天附件file_ids，
         不接本地路径、远程URL或身份。load_demo载入固定公开Pi5产品CSV和授权照片，仅形成suggested_facts，
         不自动确认；可省pack_id创建新资料包，已有pack须为空。generate在事实确认后传confirmed=true。
+        generate的data仅可含generation_mode:"ai"|"template"，默认ai；用户明确选择本地原文模板才传template，完全不调用模型。
         所有现有资料包写操作需最新revision。get/generate成功回执可显示资料包下载卡。
         """
         try:
@@ -285,10 +291,12 @@ def register_foreign_trade_tools(toolkit, *, user_id: str, chat_id: str | None, 
             if action != "import_files" and file_ids:
                 raise ContentPackError(422, "file_ids 仅供 import_files 使用")
             if action == "generate":
-                EmptyData.model_validate(payload)
-                request = GeneratePack.model_validate({"revision": revision, "confirmed": confirmed})
+                mode = GenerateData.model_validate(payload)
+                request = GeneratePack.model_validate({"revision": revision, "confirmed": confirmed,
+                                                       "generation_mode": mode.generation_mode})
                 with SessionLocal() as db:
-                    result = await ContentPackService(db).generate(actor, pack_id, request.revision, request.confirmed)
+                    result = await ContentPackService(db).generate(actor, pack_id, request.revision,
+                                                                  request.confirmed, request.generation_mode)
                 receipt = _pack_view(result)
                 return _response(_success(receipt, warnings=receipt.get("warnings", [])))
 
@@ -317,7 +325,7 @@ def register_foreign_trade_tools(toolkit, *, user_id: str, chat_id: str | None, 
                             raise ContentPackError(422, "请提供 1–10 个不重复的当前聊天附件 ID")
                         uploads = [_attached_file_bytes(db, user_id=actor, chat_id=conversation, file_id=fid) for fid in file_ids]
                         # Validate every file before persisting the first one.
-                        from core.services.foreign_trade_content import parse_upload, MAX_FILES, MAX_TOTAL
+                        from core.foreign_trade.content import parse_upload, MAX_FILES, MAX_TOTAL
                         parsed = [parse_upload(name, content) for name, content in uploads]
                         import hashlib
                         current = service.get(actor, pack_id)
@@ -461,7 +469,7 @@ def register_foreign_trade_tools(toolkit, *, user_id: str, chat_id: str | None, 
             if not isinstance(file_ids, list) or not 1 <= len(file_ids) <= 10 or not all(isinstance(fid, str) and 0 < len(fid) <= 64 for fid in file_ids) or len(set(file_ids)) != len(file_ids):
                 raise ContentPackError(422, "请提供 1–10 个不重复的当前聊天附件ID")
             def preflight():
-                from core.services.foreign_trade_content import parse_upload
+                from core.foreign_trade.content import parse_upload
                 with SessionLocal() as db:
                     if pack_id:
                         ContentPackService(db)._load(actor, pack_id, _revision(revision))
@@ -538,6 +546,20 @@ def register_foreign_trade_tools(toolkit, *, user_id: str, chat_id: str | None, 
 
     tools = [trade_inquiry, trade_calculate_quote, trade_product_content,
              trade_save_inquiry, trade_import_product, trade_confirm_product_facts]
+    from core.llm.factory.tools.definitions import function_tool
+    from core.sandbox.permissions.tool_specs import allow_tool
+
+    existing = {tool.name for tool in toolkit}
+    if existing.intersection(tool.__name__ for tool in tools):
+        raise ValueError("Duplicate foreign-trade tool registration")
     for tool in tools:
-        toolkit.register_tool_function(tool, namesake_strategy="override")
-    return [tool.__name__ for tool in tools]
+        # Identity, revision, skill read and explicit business confirmations are
+        # enforced inside these closures; they expose no arbitrary host paths.
+        toolkit.append(function_tool(tool, dispatch_spec=allow_tool()))
+    from core.llm.tools.foreign_trade_collaboration_tool import register_collaboration_tools
+
+    collaboration = register_collaboration_tools(
+        toolkit, user_id=actor, chat_id=chat_id, install_id=installation,
+        require_skill=require_skill,
+    )
+    return [tool.__name__ for tool in tools] + collaboration

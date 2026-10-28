@@ -11,9 +11,9 @@ import math
 
 from agentscope.message import TextBlock, ToolResultState
 from agentscope.tool._response import ToolChunk, ToolResponse
-from core.ontology.toolkit import OntologyFilteredToolkit
+from core.llm.tools.ontology_toolkit import OntologyFilteredToolkit
 
-from core.llm.foreign_trade_plugin import TRADE_TOOL_NAMES
+from core.foreign_trade.tool_names import TRADE_TOOL_NAMES
 
 
 def _unique_object(pairs):

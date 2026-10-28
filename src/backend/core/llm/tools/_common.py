@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+
+import asyncio
 import base64
 import json
 import logging
@@ -9,23 +11,45 @@ import mimetypes
 import shlex
 from typing import Any, Optional
 
-from agentscope.message import TextBlock
+from agentscope.message import Base64Source, DataBlock, TextBlock
 
-# AgentScope 2.0: tool functions must return ToolChunk; aliased (its fields are a superset of ToolResponse).
-from agentscope.tool._response import ToolChunk as ToolResponse
-from core.llm.tools.edition_myspace_vfs import organization_mutation_blocked
-from core.services.project_scope import ProjectScope
+# AgentScope 2.0: tool functions must return ToolChunk; aliased (its fields are a superset of ToolChunk).
+from agentscope.tool._response import ToolChunk
+from core.projects.edition import ProjectScope
 
 logger = logging.getLogger(__name__)
 
 
-def resp_json(payload: dict[str, Any]) -> ToolResponse:
-    """Wrap a JSON dict as a single-text-block ToolResponse.
+async def resp_image(
+    image_bytes: bytes, mime_type: str, *, name: str, meta: Optional[dict[str, Any]] = None
+) -> ToolChunk:
+    """图片原样交给多模态主模型：一段 JSON 元信息 + 一个图片数据块。
+
+    AgentScope 会把工具结果里的 DataBlock 提升成下一轮的 image 消息；端点不收图时
+    ``chat_models`` 有转写/剥离兜底。base64 编码在线程里做，和上传图片那条路一样
+    不占事件循环。
+    """
+    payload = {"type": "image", "mime_type": mime_type, "size": len(image_bytes), **(meta or {})}
+    data = await asyncio.to_thread(lambda: base64.b64encode(image_bytes).decode("ascii"))
+    return ToolChunk(
+        content=[
+            *resp_json(payload).content,
+            DataBlock(
+                type="data",
+                source=Base64Source(type="base64", media_type=mime_type, data=data),
+                name=name,
+            ),
+        ]
+    )
+
+
+def resp_json(payload: dict[str, Any]) -> ToolChunk:
+    """Wrap a JSON dict as a single-text-block ToolChunk.
 
     Mirrors ``core.llm.tool._resp_json``. Re-implemented here so this package
     has zero cross-imports back to the large monolithic ``tool.py``.
     """
-    return ToolResponse(
+    return ToolChunk(
         content=[
             TextBlock(
                 type="text",
@@ -33,6 +57,13 @@ def resp_json(payload: dict[str, Any]) -> ToolResponse:
             )
         ]
     )
+
+
+def response_metadata(response: ToolChunk, metadata: dict[str, Any]) -> ToolChunk:
+    """Merge file metadata into the existing JSON block, preserving image layout."""
+    block = response.content[0]
+    block.text = json.dumps({**json.loads(block.text), **metadata}, ensure_ascii=False)
+    return response
 
 
 def resolve_sandbox_session(
@@ -48,65 +79,6 @@ def resolve_sandbox_session(
     return sandbox_session_id or chat_id
 
 
-async def myspace_write_guard(
-    *,
-    chat_id: Optional[str],
-    op: str,
-    logical_path: str,
-    is_myspace: bool,
-    interactive: bool,
-    summary: str,
-) -> Optional[ToolResponse]:
-    """§13 gate (Claude Code shape): an unconfirmed /myspace write **suspends the
-    current tool coroutine** to wait for the user's out-of-band decision; approve
-    → return None to let it through (the caller performs the write once in place),
-    reject/timeout/non-interactive → return an intercepting ToolResponse (the
-    caller returns it directly).
-
-    NOTE: this function ``await``s — the caller must ``await myspace_write_guard(...)``.
-    While suspended it only pauses the agent task, it does not block the event
-    loop / SSE (see the _myspace_confirm header note).
-    """
-    # Non-/myspace writes (temporary sandbox artifacts etc.) are not gated — this
-    # is an admission decision unique to the myspace flow, kept here in the caller
-    # layer so the generic gate() stays kind-agnostic.
-    if not is_myspace:
-        return None
-    from core.llm.tool_permissions import preset_answers_confirmation
-
-    # 权限档同样管这条路：bash 把沙盒改动回写「我的空间」是工具自己发起的确认，
-    # 不经过 ToolPermissionMiddleware 的判定，得在这里问一次同一个档位，
-    # 否则用户选了「完全放开」照样被逐个文件拦下来。
-    if preset_answers_confirmation(op=op):
-        return None
-    from core.llm.tools import _myspace_confirm as _mc
-
-    blk = await _mc.gate(
-        chat_id=chat_id,
-        op=op,
-        logical_path=logical_path,
-        interactive=interactive,
-        summary=summary,
-    )
-    return resp_json(blk) if blk is not None else None
-
-
-def myspace_mutation_refusal(
-    scope: Any,
-    logical_path: str,
-    action: str,
-) -> Optional[dict]:
-    """只读作用域（团队等）下的写类操作，在动手之前拒绝；不该拒绝时返回 None。
-
-    ``sync_upsert`` 遇到只读作用域返回 ``None``，而 ``None`` 在它的契约里表示"同步
-    失败"、约定"同步失败不要拦住写入本身"——两件事撞在一个返回值上，于是字节照写、
-    还回 ok，只在用户镜像目录里留下一个谁也看不见的孤儿文件。
-
-    ``action`` 用中文动词，与 myspace_vfs 里删除/移动/建文件夹的拒绝话术一致。
-    """
-    if not organization_mutation_blocked(scope):
-        return None
-    return {"error": f"当前项目范围不支持通过 agent {action}：{logical_path}"}
 
 
 async def sandbox_exec_bash(
@@ -118,7 +90,7 @@ async def sandbox_exec_bash(
 ) -> tuple[int, str, str]:
     """Run a bash script in the sandbox and return ``(exit_code, stdout, stderr)``.
 
-    Wraps ``SandboxProvider.execute`` for the Glob/Grep tools. Errors are
+    Wraps ``provider.run_to_completion`` for the Glob/Grep tools. Errors are
     surfaced as ``(exit_code=-1, stdout="", stderr=str(exc))``.
 
     NOTE: ``chat_id`` here is the *sandbox session id* — callers pass the
@@ -128,12 +100,12 @@ async def sandbox_exec_bash(
     ``user_id`` 必须传：沙箱首次执行时靠它建 ``/myspace`` 软链，漏传会让这个沙箱里
     所有 ``/myspace/...`` 路径都不存在。
     """
-    from core.sandbox import ExecuteRequest, SandboxConnectError, SandboxError, get_sandbox_provider
+    from core.sandbox import ProcessRequest, SandboxConnectError, SandboxError, get_sandbox_provider
 
     try:
         provider = get_sandbox_provider()
-        result = await provider.execute(
-            ExecuteRequest(
+        result = await provider.run_to_completion(
+            ProcessRequest(
                 script_content=script,
                 script_name="_tool_helper.sh",
                 language="bash",
@@ -152,236 +124,44 @@ def shell_quote(value: str) -> str:
     return shlex.quote(value)
 
 
-def upsert_myspace_artifact(
-    *,
-    user_id: str,
-    chat_id: Optional[str],
-    filename: str,
-    content: bytes,
-    scope: Optional[ProjectScope] = None,
+def register_file_artifact(
+    *, user_id: str, chat_id: Optional[str], filename: str,
+    content: bytes, scope: Optional[ProjectScope] = None,
 ) -> Optional[dict[str, Any]]:
-    """Sync ``filename`` (under the user's myspace) to artifact storage in place.
+    """Create an immutable downloadable snapshot of a sandbox file."""
+    from core.files.artifacts.generated import store_generated_files as _store_generated_files
 
-    Behavior:
-      - Looks up the most recent live artifact for this user with the same
-        ``filename`` (chat_id-independent — myspace files persist across chats).
-      - If found: re-upload bytes to its existing ``storage_key``, refresh
-        ``size_bytes`` / ``updated_at`` on the DB row. Reuses the same
-        ``artifact_id`` (a.k.a. file_id) — so Canvas / pin / download URLs stay
-        valid across edits.
-      - If not found: register a new artifact via the legacy
-        ``_store_generated_files`` path (which writes the JSON index + storage).
-        The DB row gets inserted by ``_persist_collected_artifacts`` at the end
-        of the chat run when the returned ref bubbles up.
-      - In **both** cases, mirror the bytes into ``myspace_cache/{user_id}/``
-        so the next sandbox's seed step picks up the change.
-
-    Returns the artifact ref dict (``{file_id, name, url, mime_type, size,
-    storage_key, in_place_update}``) on success, or ``None`` if registration
-    fails (e.g. storage backend down). Callers should surface ``None`` as a
-    soft warning, not block the Write/Edit itself.
-    """
     if not user_id or not filename:
-        logger.warning("[artifact-sync] missing user_id or filename; skip")
         return None
-
-    if organization_mutation_blocked(scope):
-        logger.info(
-            "[artifact-sync] edition scope blocked auto-upsert for filename=%s",
-            filename,
-        )
-        return None
-
-    name = filename.rsplit("/", 1)[-1] or "output"
-    mime, _ = mimetypes.guess_type(name)
-    mime = mime or "application/octet-stream"
-
-    # ── 1. Mirror to myspace_cache so next sandbox seed sees the update ──
-    try:
-        from core.sandbox._common import myspace_cache_dir
-
-        cache_dir = myspace_cache_dir(user_id)
-        cache_dir.mkdir(parents=True, exist_ok=True)
-        (cache_dir / name).write_bytes(content)
-    except Exception as exc:  # noqa: BLE001
-        logger.warning("[artifact-sync] myspace_cache write failed: %s", exc)
-        # Continue — DB/storage is still useful even if cache write fails
-
-    # ── 2. Try in-place update of an existing live artifact ────────────
-    try:
-        from datetime import datetime, timezone
-
-        from core.db.engine import SessionLocal
-        from core.db.models import Artifact
-        from core.storage import get_storage
-    except Exception as exc:  # noqa: BLE001
-        logger.warning("[artifact-sync] deps unavailable: %s", exc)
-        return None
-
-    db = SessionLocal()
-    try:
-        row = (
-            db.query(Artifact)
-            .filter(
-                Artifact.user_id == user_id,
-                Artifact.filename == name,
-                Artifact.deleted_at.is_(None),
-            )
-            .order_by(Artifact.created_at.desc())
-            .first()
-        )
-        if row is not None:
-            try:
-                storage = get_storage()
-                storage.upload_bytes(content, str(row.storage_key))
-            except Exception as exc:  # noqa: BLE001
-                logger.warning(
-                    "[artifact-sync] upload_bytes failed for %s: %s",
-                    row.storage_key,
-                    exc,
-                )
-                return None
-            row.size_bytes = max(len(content), 1)
-            row.updated_at = datetime.now(timezone.utc)
-            row.mime_type = mime  # filename might be same but content type changed
-            db.commit()
-            logger.info(
-                "[artifact-sync] in-place updated artifact %s (user=%s name=%s size=%d)",
-                row.artifact_id,
-                user_id,
-                name,
-                len(content),
-            )
-            return {
-                "file_id": row.artifact_id,
-                "name": name,
-                "url": f"/files/{row.artifact_id}",
-                "mime_type": mime,
-                "size": len(content),
-                "storage_key": row.storage_key,
-                "in_place_update": True,
-            }
-    finally:
-        db.close()
-
-    # ── 3. No existing artifact → register a new one ───────────────────
-    # _store_generated_files writes to storage + the JSON index, but does NOT
-    # insert into the DB ``artifacts`` table. That insert is normally done by
-    # ``_persist_collected_artifacts`` at the end of a chat run, by collecting
-    # tool refs.
-    #
-    # Problem: within the SAME chat run, a 2nd call to upsert_myspace_artifact
-    # for the same filename (e.g. Write → Edit) needs the DB row to exist so
-    # the in-place branch above can find it. Without an immediate DB insert,
-    # consecutive Write/Edit on the same file would create N artifacts instead
-    # of 1, defeating the entire in-place design.
-    #
-    # So: we **also** insert the DB row right here. End-of-run dedup in
-    # _persist_collected_artifacts already skips by artifact_id, so this won't
-    # cause double inserts.
-    try:
-        from core.llm.tools._tool_helpers import _store_generated_files
-    except Exception as exc:  # noqa: BLE001
-        logger.warning("[artifact-sync] _store_generated_files unavailable: %s", exc)
-        return None
-
+    name = filename.rsplit("/", 1)[-1]
+    mime = mimetypes.guess_type(name)[0] or "application/octet-stream"
     refs = _store_generated_files(
-        [
-            {
-                "name": name,
-                "size": len(content),
-                "content_b64": base64.b64encode(content).decode("ascii"),
-                "mime_type": mime,
-            }
-        ],
-        user_id=user_id,
-        source="myspace_sync",
+        [{"name": name, "size": len(content),
+          "content_b64": base64.b64encode(content).decode("ascii"), "mime_type": mime}],
+        user_id=user_id, source="sandbox",
         extra_metadata={"chat_id": chat_id} if chat_id else None,
     )
-    if not refs:
-        return None
-    ref = dict(refs[0])
-    ref["in_place_update"] = False
-    new_file_id = ref.get("file_id")
-
-    # Insert DB row immediately so future in-place lookups (same run, same chat)
-    # find this artifact. Skip if no chat_id (FK requires it).
-    if new_file_id and chat_id:
-        try:
-            from datetime import datetime, timezone
-
-            from core.db.engine import SessionLocal
-            from core.db.models import Artifact
-        except Exception as exc:  # noqa: BLE001
-            logger.warning("[artifact-sync] DB insert deps unavailable: %s", exc)
-        else:
-            # Project-mode auto-placement: under a personal scope, a newly
-            # registered artifact lands under the project-linked folder. The
-            # register_as_artifact path carries no logical path, so sync_upsert's
-            # myspace_rel prefix cannot cover it — we must explicitly set folder here.
-            _proj_folder_id: Optional[str] = (
-                scope.root_folder_id if scope is not None and scope.is_personal else None
-            )
-            db = SessionLocal()
-            try:
-                # Guard against race / duplicate
-                existing = (
-                    db.query(Artifact)
-                    .filter(
-                        Artifact.artifact_id == new_file_id,
-                    )
-                    .first()
-                )
-                if existing is None:
-                    db.add(
-                        Artifact(
-                            artifact_id=new_file_id,
-                            chat_id=chat_id,
-                            user_id=user_id,
-                            user_folder_id=_proj_folder_id,
-                            type="other",
-                            title=name,
-                            filename=name,
-                            size_bytes=max(len(content), 1),
-                            mime_type=mime,
-                            storage_key=ref.get("storage_key") or f"artifacts/{new_file_id}",
-                            storage_url=ref.get("url"),
-                            extra_data={"source": "myspace_sync"},
-                        )
-                    )
-                    db.commit()
-            except Exception as exc:  # noqa: BLE001
-                logger.warning("[artifact-sync] DB insert failed for %s: %s", new_file_id, exc)
-                db.rollback()
-            finally:
-                db.close()
-
-    logger.info(
-        "[artifact-sync] new artifact %s registered (user=%s name=%s)",
-        new_file_id,
-        user_id,
-        name,
-    )
-    return ref
+    return dict(refs[0]) if refs else None
 
 
 def pin_artifact_to_workspace(ref: dict[str, Any]) -> bool:
     """Pin an artifact ref into the per-run workspace state.
 
     The frontend's "attachment card" rendering is gated by ``workspace_files``
-    (see MessageBubble.renderArtifactCards). Without an explicit pin, an
-    in-place Edit or Write produces no visible card in the current turn —
-    the file_id is the same as before, ``workspaceFiles`` is empty for this
-    turn, and the user has no visual confirmation of the change.
+    (see MessageBubble.renderArtifactCards). Without a pin, an in-place Edit or
+    Write produces no visible card in the current turn — the file_id is the same
+    as before, ``workspaceFiles`` is empty for this turn, and the user has no
+    visual confirmation of the change. Pinning right after the write closes that
+    gap without waiting for the model to call ``pin_to_workspace`` itself.
 
-    Auto-pinning every successful myspace upsert solves the UX gap: a fresh
-    card always appears in the same turn as the Edit/Write.
+    **只在写文件的那一轮的异步上下文里挂得上**：ContextVar 那份状态就是"当前这一轮"，
+    卡片因此落在真正写入文件的会话里。没有当前轮次上下文时，不自动挂载卡片。
     """
     file_id = ref.get("file_id") if isinstance(ref, dict) else None
     if not file_id:
         return False
     try:
-        from core.llm import workspace as _workspace
+        from core.llm.runtime import workspace as _workspace
 
         pinned = _workspace.pin(
             file_id=str(file_id),

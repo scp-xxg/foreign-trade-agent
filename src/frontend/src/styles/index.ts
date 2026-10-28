@@ -1,5 +1,8 @@
+import '../platformTypography';
 import './variables.css';
 import './motion.css';
+import './skeleton.css';
+import './panel-loading.css';
 import './sidebar.css';
 import './search-modal.css';
 import './chat.css';
@@ -29,3 +32,7 @@ import './apidoc.css';
 import './share-preview.css';
 import './quickask.css';
 import './mobile.css';
+
+import './sidebar-history.css';
+import './module-navigation.css';
+import './capability-browser.css';

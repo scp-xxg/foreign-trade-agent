@@ -7,6 +7,7 @@ export interface ContentPackInput {
   title: string; product_name: string; brand: string; model: string; source_url: string;
   raw_text: string; facts: ProductFact[]; image_credit: string;
 }
+export type ContentGenerationMode = 'ai' | 'template';
 export type ContentAssetKind = 'square' | 'landscape' | 'spec';
 export type ContentDownloadKind = ContentAssetKind | 'zip' | 'listing' | 'faq';
 export type DemoFileKind = 'txt' | 'csv' | 'photo';
@@ -14,7 +15,7 @@ export interface ContentPackOutputs {
   listing: { title: string; bullets: string[]; description: string };
   faq: { question: string; answer: string; source_refs: number[] }[];
   translated_facts: { label: string; value: string; source_refs: number[] }[];
-  method: 'ai_grounded' | 'template'; warnings: string[];
+  method: 'ai_grounded' | 'template'; generation_mode?: ContentGenerationMode; warnings: string[];
   assets: { kind: ContentAssetKind; filename: string; width: number; height: number }[];
   generated_at: string; not_published: true;
 }
@@ -38,8 +39,8 @@ export const getContentPack = (id: string) => request<ContentPackRecord>(`/${enc
 export const createContentPack = (title: string) => request<ContentPackRecord>('', 'POST', { title });
 export const updateContentPack = (id: string, revision: number, input: ContentPackInput) =>
   request<ContentPackRecord>(`/${encodeURIComponent(id)}`, 'PATCH', { ...input, revision });
-export const generateContentPack = (id: string, revision: number) =>
-  request<ContentPackRecord>(`/${encodeURIComponent(id)}/generate`, 'POST', { revision, confirmed: true });
+export const generateContentPack = (id: string, revision: number, generationMode: ContentGenerationMode = 'ai') =>
+  request<ContentPackRecord>(`/${encodeURIComponent(id)}/generate`, 'POST', { revision, confirmed: true, generation_mode: generationMode });
 export async function uploadContentPackFile(id: string, revision: number, file: File): Promise<ContentPackRecord> {
   const form = new FormData(); form.append('revision', String(revision)); form.append('file', file);
   const response = await authFetch(`${getApiUrl()}${base}/${encodeURIComponent(id)}/upload`, { method: 'POST', body: form });

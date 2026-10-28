@@ -3,7 +3,6 @@
 import io
 import os
 from pathlib import Path
-from types import SimpleNamespace
 
 import cli
 import pytest
@@ -30,23 +29,16 @@ def test_local_bootstrap_installs_recommended_plugins_only_once(tmp_path, monkey
     monkeypatch.setenv("HUGAGENT_HOME", str(home))
     cli.apply_local_env(port=18000)
     installs = []
-    provisions = []
 
     def fake_install(slugs):
         installs.append(list(slugs))
         return list(slugs)
 
     monkeypatch.setattr(cli, "install_plugins", fake_install)
-    monkeypatch.setattr(
-        cli,
-        "provision_site_template",
-        lambda verbose=False: provisions.append(verbose) or True,
-    )
 
     assert cli.ensure_default_plugins_once() is True
     assert cli.ensure_default_plugins_once() is False
     assert installs == [["automation", "skill-manager", "sites"]]
-    assert provisions == [True, False]
     assert (home / ".default-plugins-v1").read_text(encoding="utf-8").splitlines() == [
         "automation",
         "skill-manager",
@@ -68,8 +60,7 @@ def test_local_bootstrap_retries_after_partial_plugin_failure(tmp_path, monkeypa
 
 def test_local_serve_fails_readiness_when_default_plugin_bootstrap_fails(monkeypatch):
     monkeypatch.setenv("HUGAGENT_BOOTSTRAP_DEFAULT_PLUGINS", "1")
-    monkeypatch.setattr(cli, "apply_local_env", lambda _port: {})
-    monkeypatch.setattr(cli, "_ensure_schema_and_seed", lambda: None)
+    monkeypatch.delenv("HUGAGENT_DESKTOP_BRIDGE_SECRET", raising=False)
 
     def fail_bootstrap():
         raise RuntimeError("sites missing")
@@ -77,13 +68,7 @@ def test_local_serve_fails_readiness_when_default_plugin_bootstrap_fails(monkeyp
     monkeypatch.setattr(cli, "ensure_default_plugins_once", fail_bootstrap)
 
     with pytest.raises(RuntimeError, match="sites missing"):
-        cli.cmd_serve(
-            SimpleNamespace(
-                port=18000,
-                host="127.0.0.1",
-                no_browser=True,
-            )
-        )
+        cli.bootstrap_default_plugins_if_needed()
 
 
 def test_ce_installer_pins_compatible_milvus_lite_stack():
@@ -116,18 +101,18 @@ def test_ce_one_command_installer_bootstraps_default_plugins():
 
 def test_desktop_local_server_bootstraps_default_plugins():
     repo_root = Path(__file__).resolve().parents[3]
-    launcher = (repo_root / "desktop" / "src-tauri" / "src" / "local_server.rs").read_text(
-        encoding="utf-8"
-    )
+    launcher = (
+        repo_root / "desktop" / "src-tauri" / "src" / "local_server" / "supervisor.rs"
+    ).read_text(encoding="utf-8")
 
     assert '.env("HUGAGENT_BOOTSTRAP_DEFAULT_PLUGINS", "1")' in launcher
 
 
 def test_desktop_local_server_forces_utf8_python_stdio():
     repo_root = Path(__file__).resolve().parents[3]
-    launcher = (repo_root / "desktop" / "src-tauri" / "src" / "local_server.rs").read_text(
-        encoding="utf-8"
-    )
+    launcher = (
+        repo_root / "desktop" / "src-tauri" / "src" / "local_server" / "supervisor.rs"
+    ).read_text(encoding="utf-8")
 
     assert '.env("PYTHONUTF8", "1")' in launcher
     assert '.env("PYTHONIOENCODING", "utf-8")' in launcher
@@ -161,6 +146,7 @@ def test_cli_reconfigures_redirected_gbk_stream_to_utf8(monkeypatch):
     [
         "desktop/requirements-desktop-windows-py311.lock",
         "desktop/requirements-desktop-linux-x86_64-py311.lock",
+        "desktop/requirements-desktop-linux-aarch64-py311.lock",
         "desktop/requirements-desktop-macos-aarch64-py311.lock",
         "desktop/requirements-desktop-macos-x86_64-py311.lock",
     ],
@@ -172,4 +158,21 @@ def test_desktop_offline_runtime_includes_persistent_memory_stack(relative_path)
     assert "mem0ai==" in lock
     assert "protobuf==" in lock
     assert "pymilvus==2.5.18" in lock
-    assert "milvus-lite==3.1.0" in lock
+    assert "milvus-lite==3.2.2" in lock
+
+
+def test_hybrid_does_not_install_local_default_plugins(monkeypatch):
+    """混合模式：能力一律以云端账号同步下来的为准，本机不自带那套默认插件。
+
+    本机装出来的那份连接器指向没人监听的端口，跑不通，还会和云端同步下来的同名插件
+    在能力中心并排显示。UOS 壳是无条件传引导变量的，判断必须由这里兜住。
+    """
+    monkeypatch.setenv("HUGAGENT_BOOTSTRAP_DEFAULT_PLUGINS", "1")
+    monkeypatch.setenv("HUGAGENT_DESKTOP_BRIDGE_SECRET", "bridge-secret")
+
+    def fail_bootstrap():
+        raise AssertionError("混合模式不该引导本机默认插件")
+
+    monkeypatch.setattr(cli, "ensure_default_plugins_once", fail_bootstrap)
+
+    cli.bootstrap_default_plugins_if_needed()

@@ -24,7 +24,7 @@ Technical shape: a single uvicorn process (serving both the frontend static asse
 | Python | ≥ 3.11 |
 | Node.js | ≥ 20 (the public installer builds the frontend locally) |
 | Rust and Cargo | Required on Linux without a compatible prebuilt `ripgrep` wheel, including x86_64 systems with glibc earlier than 2.39 |
-| OS sandbox | Linux requires `bubblewrap` (`bwrap`; installed automatically by the installer); macOS uses the system `sandbox-exec`; Windows uses a system restricted token and needs no extra install |
+| OS sandbox | Linux requires `bubblewrap` (`bwrap`; installed automatically by the installer); macOS uses the system `sandbox-exec`; Windows runs commands at low integrity level and needs no extra install |
 | Network | Access to the configured LLM API endpoint |
 
 ## Install
@@ -42,7 +42,7 @@ The installer will:
 3. Detect and install `bubblewrap` on Linux, or verify the system `sandbox-exec` on macOS; installation fails when the sandbox backend is unavailable instead of falling back to raw execution;
 4. Detect optional LibreOffice and, when it is missing, explain the unavailable features and ask whether to install it; skipping it or a failed install doesn't block the remaining features;
 5. Create a virtual environment at `~/.hugagent/venv` (using [uv](https://github.com/astral-sh/uv) when available, or `python -m venv` otherwise), and rebuild an incomplete environment left by an interrupted run;
-6. Install `requirements.txt`, the `hugagent` console command, the built-in Agent Skills Python and Node.js dependencies, and optional local knowledge-base dependencies;
+6. Install `requirements.txt`, the `hugagent-server` console command, the built-in Agent Skills Python and Node.js dependencies, and optional local knowledge-base dependencies;
 7. Build the frontend at `src/frontend/dist`;
 8. Enter the interactive first-run wizard.
 
@@ -62,7 +62,7 @@ The chat model is assigned to all 7 chat roles at once. Two more model types can
 
 **Step 2c (optional) · Reranker model** — re-ranks KB hybrid-search results for sharper retrieval. Provide a reranker endpoint (`base_url` / model name / `api_key`); press Enter to skip (retrieval still works, just without re-ranking).
 
-> HugAgentOS has 9 model roles: 7 chat roles (main agent / summarizer / follow-up / memory / chart / planning / code execution — all share the chat model above) + embedding + reranker. Onboard covers all three types; after logging in you can also assign a different model per role under Settings → System → Model Services.
+> HugAgentOS provides chat roles (main agent / summarizer / follow-up / memory / planning / code execution — all share the chat model above) + embedding + reranker. Onboard covers all three types; after logging in you can also assign a different model per role under Settings → System → Model Services.
 
 **Step 3 · Plugin initialization** — a fresh installation automatically
 installs and enables `automation` (scheduled tasks), `skill-manager` (skill
@@ -75,8 +75,8 @@ restore a plugin that a user deliberately removed.
 **Step 4 (optional) · File parser** — parsing uploaded PDFs / scanned documents needs an external parser service (MinerU-compatible); enter its API URL to enable it (written to `file_parser.api_url`), or press Enter to skip. Excel / CSV / PPTX / text parse in-process and need none of this.
 
 **Step 5 (optional) · Internet search** — agent web search needs a search
-engine key. Select `tavily` (default), `baidu` (Qianfan AppBuilder), or
-`langsearch`, and enter the API key for the selected engine. Press Enter to
+engine key. Select `tavily` (default), `baidu` (Qianfan AppBuilder),
+`langsearch`, or `deepseek`, and enter the API key for the selected engine. Press Enter to
 skip this step. You can also configure it later under **Settings → System →
 Service Config**.
 
@@ -84,7 +84,7 @@ At the end the wizard prints a **host-capability summary** (whether Node.js, pan
 
 > **Warning:** The server listens on `127.0.0.1` by default. If the server must
 > accept remote connections, run
-> `hugagent serve --host 0.0.0.0 --port 3001 --no-browser`, and configure a
+> `hugagent-server serve --host 0.0.0.0 --port 3001 --no-browser`, and configure a
 > strong administrator password, a firewall, and HTTPS first. Don't expose the
 > service directly on an untrusted network.
 
@@ -93,7 +93,7 @@ At the end the wizard prints a **host-capability summary** (whether Node.js, pan
 `onboard` accepts bypass flags for scripted installs:
 
 ```bash
-hugagent onboard \
+hugagent-server onboard \
   --username admin --password '<strong-password>' \
   --model-base-url https://api.deepseek.com/v1 \
   --model-api-key '<your-key>' --model-name deepseek-chat \
@@ -109,10 +109,10 @@ hugagent onboard \
 ## Daily use
 
 ```bash
-hugagent            # initialized → start server and open browser; not initialized → enter the wizard
-hugagent serve      # start explicitly (--host to change bind address, --port to change port)
-hugagent onboard    # re-run the wizard / change configuration
-hugagent doctor     # environment self-check (Python version, port availability, data dir, frontend build, deps, …)
+hugagent-server            # initialized → start server and open browser; not initialized → enter the wizard
+hugagent-server serve      # start explicitly (--host to change bind address, --port to change port)
+hugagent-server onboard    # re-run the wizard / change configuration
+hugagent-server doctor     # environment self-check (Python version, port availability, data dir, frontend build, deps, …)
 ```
 
 ## Data directory
@@ -136,9 +136,9 @@ The no-Docker single-machine mode is built to be lightweight. Here is how it dif
 
 **Works out of the box**
 - **Core chat + ReAct tool orchestration + plan mode + reconnect replay + citations.**
-- **Code execution (bash / Python)**: runs as a host subprocess, confined by the operating system's own sandbox — `bubblewrap` on Linux, `sandbox-exec` on macOS, a restricted token on Windows. Every permission preset except *Full access* is sandboxed: writes are limited to the workspace and the folders you authorized, `.git` inside a writable root stays read-only, and scratch space is private to the command. Setting the *network* category to *block* also cuts the command off the network on Linux and macOS. When the backend is unavailable, or the platform cannot enforce the whole policy, the command is refused with the reason instead of degrading to raw execution. Native file tools use the same read/write policy, and the workspace lives at `~/.hugagent/workspace/`. This remains a single-user local profile, not multi-tenant container isolation.
+- **Code execution (bash / Python)**: runs as a host subprocess, confined by the operating system's own sandbox — `bubblewrap` on Linux, `sandbox-exec` on macOS, a low-integrity process on Windows. Every permission preset except *Full access* is sandboxed: writes are limited to the workspace and the folders you authorized, `.git` inside a writable root stays read-only, and scratch space is private to the command. Setting the *network* category to *block* also cuts the command off the network on Linux and macOS. When the backend is unavailable, or the platform cannot enforce the whole policy, the command is refused with the reason instead of degrading to raw execution. Native file tools use the same read/write policy, and the workspace lives at `~/.hugagent/workspace/`. This remains a single-user local profile, not multi-tenant container isolation.
 - **Built-in skills** (the 5 word / excel / ppt / pdf editing skills): synced into the workspace at install time so the sandbox can run their scripts directly.
-- **Built-in tool MCPs**: internet search / web fetch / batch execution / KB retrieval, etc. — the servers run fine (some need a configured external service or key to return data, see below).
+- **Built-in tool MCPs**: internet search / web fetch / KB retrieval, etc. — the servers run fine (some need a configured external service or key to return data, see below).
 - **Data visualization (charts)**: the installer installs matplotlib; works once present.
 - **Projects / My Space / artifacts / data canvas / scheduled automations (created & fired from the UI) / docs & prompts**: all work on SQLite + local storage.
 - **Self-built vector knowledge base**: backed by embedded **Milvus Lite** (a single file, no server), **dense-only** retrieval; requires configuring an embedding model during onboarding. For stronger hybrid retrieval, point `MILVUS_URL` at a real Milvus server (switches back automatically).
@@ -166,16 +166,16 @@ The no-Docker single-machine mode is built to be lightweight. Here is how it dif
 
 | Symptom | Fix |
 |---|---|
-| Startup reports the port is in use | `hugagent serve --port <other-port>`; or run `hugagent doctor` first to check |
+| Startup reports the port is in use | `hugagent-server serve --port <other-port>`; or run `hugagent-server doctor` first to check |
 | The page shows JSON instead of the app | Frontend not built: `cd src/frontend && npm run build`, or set `FRONTEND_DIST_DIR` to a built `dist` |
-| Login reports the model is unavailable | Re-run `hugagent onboard` to reconfigure the model (the wizard tests connectivity) |
+| Login reports the model is unavailable | Re-run `hugagent-server onboard` to reconfigure the model (the wizard tests connectivity) |
 | Startup logs repeatedly report `AllocTimestamp` / `Method not implemented` | Stop the service and rerun the public one-command installer. The installer reconciles PyMilvus and Milvus Lite to compatible versions without deleting `~/.hugagent/milvus.db`. |
-| Want to switch model / change config | Re-run `hugagent onboard`, or log in and adjust under Settings → System → Model Services / Service Config |
+| Want to switch model / change config | Re-run `hugagent-server onboard`, or log in and adjust under Settings → System → Model Services / Service Config |
 | PPT/Word preview reports that LibreOffice isn't installed | Re-run the one-command installer and choose to install it when prompted. On Debian/Ubuntu, you can instead run `sudo apt-get update && sudo apt-get install -y libreoffice-impress libreoffice-writer libreoffice-calc`, then restart HugAgentOS. |
 | bash reports a missing OS sandbox runner | Install `bubblewrap` on Linux (`sudo apt-get install bubblewrap` on Debian/Ubuntu), then restart. Until it is installed, every preset except *Full access* refuses host commands outright — by design, rather than running them unconfined. |
-| bash reports that this system cannot enforce the policy | The preset asks for isolation beyond what this platform provides — a Windows restricted token cannot narrow reads, and cannot cut the network without administrator rights. Relax the corresponding setting (for example move the *network* category from *block* back to *confirm*), or use a platform that offers the capability. |
-| Skill execution repeatedly reports `fork: Resource temporarily unavailable` | Stop the current service, rerun the public installer to upgrade, and start `hugagent` again. If an older version left child processes behind, inspect processes owned by the current user and, when needed, sign out of the login session before retrying. |
-| Is the environment ready | `hugagent doctor` runs a one-shot self-check |
+| bash reports that this system cannot enforce the policy | The preset asks for isolation beyond what this platform provides — the Windows low-integrity sandbox cannot narrow reads, and cannot cut the network without administrator rights. Relax the corresponding setting (for example move the *network* category from *block* back to *confirm*), or use a platform that offers the capability. |
+| Skill execution repeatedly reports `fork: Resource temporarily unavailable` | Stop the current service, rerun the public installer to upgrade, and start `hugagent-server` again. If an older version left child processes behind, inspect processes owned by the current user and, when needed, sign out of the login session before retrying. |
+| Is the environment ready | `hugagent-server doctor` runs a one-shot self-check |
 
 ## Related source
 
@@ -185,7 +185,7 @@ The no-Docker single-machine mode is built to be lightweight. Here is how it dif
 | CLI (onboard / serve / doctor) | `src/backend/cli.py` |
 | Local-mode switch | `src/backend/core/config/settings.py` (`DeploySettings`, `DEPLOY_PROFILE=local`) |
 | Frontend static hosting + `/api` bridge | `src/backend/api/local_hosting.py` |
-| MCP / sandbox subprocess supervision | `src/backend/orchestration/local_subprocess.py` |
-| In-process event log / ephemeral state | `src/backend/orchestration/run_event_stream.py`, `src/backend/core/infra/ephemeral.py` (enabled by leaving `REDIS_URL` empty) |
-| Built-in MCP catalog seed | `src/backend/core/services/mcp_service.py` (`seed_builtin_mcp_servers_if_empty`) |
+| MCP / sandbox subprocess supervision | `src/backend/core/infra/local_runtime/` |
+| In-process event log / ephemeral state | `src/backend/core/runs/events/`, `src/backend/core/infra/ephemeral.py` (enabled by leaving `REDIS_URL` empty) |
+| Built-in MCP catalog seed | `src/backend/core/capabilities/mcp/service.py` (`seed_builtin_mcp_servers_if_empty`) |
 | Environment variables | [environment-variables.md](environment-variables.md) (the "No-Docker local mode" section) |

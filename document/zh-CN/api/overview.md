@@ -59,13 +59,13 @@ HugAgentOS 后端是一个 FastAPI 应用，所有业务接口挂在 `/v1/*` 前
 | 方式 | 凭据携带方法 | 适用范围 | 实现 |
 |---|---|---|---|
 | **会话 Cookie** | `Cookie: jx_session=<token>`（登录后自动种下） | 所有面向最终用户的 `/v1/*` 接口（chats、projects、kb、memories…） | `get_current_user`：Cookie → Redis 会话查找 |
-| **个人 API-Key** | `Authorization: Bearer sk-jx-...` | 与会话 Cookie 等价的用户身份，适合脚本/第三方集成调用 | `sk-jx-` 前缀识别；明文仅创建时返回一次，DB 只存 SHA256（`core/services/api_key_service.py`）；在 `/v1/me/api-keys` 自助管理 |
+| **个人 API-Key** | `Authorization: Bearer sk-jx-...` | 与会话 Cookie 等价的用户身份，适合脚本/第三方集成调用 | `sk-jx-` 前缀识别；明文仅创建时返回一次，DB 只存 SHA256（`core/auth/api_keys.py`）；在 `/v1/me/api-keys` 自助管理 |
 | **Bearer token（mock/remote 模式）** | `Authorization: Bearer <token>` | `AUTH_MODE=mock`（开发：任意 token / 缺省 token 均放行为 mock 用户）或 `remote`（对接用户中心校验） | `get_current_user` 的兜底分支；`AUTH_MODE=session` 下不接受 |
 | **ADMIN_TOKEN** | `Authorization: Bearer <ADMIN_TOKEN>` | `/admin` 管理台后端（`/v1/admin/skills`、`/v1/admin/kb` 等）及内容块写接口 | `require_admin`（环境变量 `ADMIN_TOKEN`） |
 | **CONFIG_TOKEN** | `Authorization: Bearer <CONFIG_TOKEN>` | `/config` 系统配置台后端（`/v1/config/*`、`/v1/models`、`/v1/service-configs`、部分 `/v1/admin/*` 观测接口） | `require_config`（环境变量 `CONFIG_TOKEN`） |
 | **ADMIN 或 CONFIG 任一** | 同上 | 提示词快照导入/导出（`/v1/content/prompts/export|import`） | `require_admin_or_config` |
 | **super_admin 会话** | 会话 Cookie（用户 `extra_data.role == "super_admin"`），合法 ADMIN_TOKEN 可兜底 | 个别跨用户管理操作 | `require_super_admin` |
-| **BACKEND_INTERNAL_TOKEN** | `Authorization: Bearer <token>` | 仅 `/v1/internal/batch/*`（服务间内部调用）；未配置该变量时接口直接 503 拒绝（fail-closed） | `api/routes/v1/internal_batch.py` |
+| **BACKEND_INTERNAL_TOKEN** | `Authorization: Bearer <token>` | 站点、浏览器与安全工具的内部服务调用；未配置时拒绝请求 | `features/sites/api/internal_site_auth.py`、`internal_security.py` |
 
 鉴权优先级（`get_current_user`）：**Cookie 会话 → API-Key Bearer（`sk-jx-` 前缀）→ mock/remote Bearer**。携带了形似 API-Key 的 Bearer 但校验失败时直接 401，绝不静默降级为匿名。
 
@@ -81,26 +81,64 @@ curl http://localhost:3000/api/v1/admin/skills \
   -H "Authorization: Bearer $ADMIN_TOKEN"
 ```
 
+## 统一回复接口
+
+`POST /v1/agents/responses` 使用布尔字段 `stream` 选择输出：默认 `false` 返回完整 JSON；`true` 返回 SSE。旧的两个 POST 地址已移除，客户端必须更新请求地址并显式选择所需模式。下文续播与取消接口保持不变。
+
+子智能体调用在请求体中显式传入 `agent_id`。设置中的个人 API-Key 可指定自己有权访问的子智能体；子智能体详情中创建的专属 Key 仍限定于绑定的 `agent_id` 及该 Key 的 API 会话，缺少或传错 `agent_id` 会被拒绝。智能体在应用中停用后仍可显式通过 API 调用。个人和专属 Key 均受用户的 `can_use_api_key` 权限控制；个人 Key 管理接口不依赖模型网关授权。
+
+### 在项目内调用
+
+
+点击项目页右上角的 **API 图标**。弹窗的 **API-Key** 页支持创建、复制、启停和撤销当前账号的项目专属 Key；**调用示例** 页提供当前项目 ID、接口地址和 JSON/SSE 示例。密钥管理自动路由到项目所在的本机或云端后端。
+
+创建和管理项目 Key 需要项目编辑或管理权限，以及 `can_use_api_key` 权限。密钥的项目绑定不可修改。禁用、撤销、过期、项目删除或失去项目编辑权限后，密钥不可使用。撤销或禁用会取消该 Key 正在执行的任务。
+
+| 接口 | 方法 | 用途 |
+|---|---|---|
+| `/v1/projects/{project_id}/api-keys` | GET / POST | 列出 / 创建项目 Key |
+| `/v1/projects/{project_id}/api-keys/{key_id}/reveal` | GET | 复制完整 Key |
+| `/v1/projects/{project_id}/api-keys/{key_id}` | PATCH / DELETE | 启停 / 撤销 Key |
+
+项目 Key 仅能调用绑定项目的回复接口、该 Key 的 API 会话续播与取消，以及该 API 会话的生成文件。不能访问其他项目、浏览器会话或账号管理接口。创建和复制的响应设置 `Cache-Control: no-store`；列表不返回明文。
+
+`project_id` 未传时自动使用 Key 绑定的项目；传入其他项目返回 403。每个 Key 使用独立的 `chat_id`，重复使用可继续会话。会话引用支持当前项目内可访问的会话，跨项目引用会被拒绝。 项目 API 与页面内的项目对话使用同一套能力配置。Bash、附件、文件工具、记忆和会话模式按项目现有配置运行，不因使用项目 Key 而额外关闭。智能体、插件、连接器和技能按项目配置及用户权限加载。
+
+```bash
+curl -X POST 'https://<HOST>/api/v1/agents/responses' \
+  -H 'Authorization: Bearer <YOUR_PROJECT_API_KEY>' \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "chat_id": "project-api-demo",
+    "project_id": "<PROJECT_ID>",
+    "message": "Hello",
+    "stream": false
+  }'
+```
+
+`stream: false` 返回完整 `ChatResponse` JSON，回复在 `response` 字段。使用 SSE 时改为 `stream: true`，并给 cURL 加上 `-N`。设置中的个人 Key 仍可显式指定有权访问的项目；子智能体专属 Key 不支持项目调用。
+
 ## SSE 流式协议
 
-流式聊天端点 `POST /v1/chats/stream`（`src/backend/api/routes/v1/chats.py`）校验通过后启动一个后台 run，再以 SSE 跟随该 run 实时下发事件；断线后可用 `GET /v1/chats/stream/{run_id}` 从任意偏移续播。事件由 `src/backend/orchestration/workflow.py` 产出、`src/backend/orchestration/chat_run_executor.py` 序列化上 wire。
+流式聊天端点 `POST /v1/agents/responses`（`src/backend/api/routes/v1/agent_responses.py`，`stream: true`）校验通过后启动一个后台 run，再以 SSE 跟随该 run 实时下发事件；断线后可用 `GET /v1/chats/stream/{run_id}` 从任意偏移续播。事件由 `src/backend/core/agent_runtime/runner.py` 产出、`src/backend/core/chat/runtime/` 序列化上 wire。
 
 **Wire 格式**：`Content-Type: text/event-stream`，每个事件一行 `data: {JSON}`，事件类型放在 JSON 的 `type` 字段里（不使用 SSE 的 `event:` 行）；流以 `data: [DONE]` 结束。静默超过 15 秒时发送 SSE 注释行 `: heartbeat` 维持反代连接。
 
 ### 请求
 
 ```bash
-curl -N http://localhost:3000/api/v1/chats/stream \
+curl -N http://localhost:3000/api/v1/agents/responses \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer sk-jx-xxxxxxxx" \
   -d '{
+    "stream": true,
     "chat_id": "chat_abc123",
     "message": "帮我查一下北京今天的天气",
     "chat_mode": "fast"
   }'
 ```
 
-请求体为 `ChatRequest`（`src/backend/api/schemas.py`）：`chat_id`、`message` 必填；可选 `model_name`、`chat_mode`（`turbo`/`fast`/`medium`/`high`/`max`，`turbo` 为极速模式——仅装配联网搜索/网页抓取/知识库检索工具并用独立提示词快速作答）、`attachments`、`enabled_kbs` / `enabled_skills` / `enabled_mcps` / `enabled_agents` 等。每个附件只接收 `file_id`、`name`、`mime_type`，正文由后端按 `file_id` 延迟解析，不能放进请求体。
+请求体为 `ChatRequest`（`src/backend/core/chat/schemas.py`）：`chat_id`、`message` 必填；可选 `model_name`、`chat_mode`（`turbo`/`fast`/`medium`/`high`/`max`，`turbo` 为极速模式——仅装配联网搜索/网页抓取/知识库检索工具并用独立提示词快速作答）、`attachments`、`enabled_kbs` / `enabled_skills` / `enabled_mcps` / `enabled_agents` 等。每个附件只接收 `file_id`、`name`、`mime_type`，正文由后端按 `file_id` 延迟解析，不能放进请求体。
 
 ### 事件类型
 
@@ -119,7 +157,6 @@ curl -N http://localhost:3000/api/v1/chats/stream \
 | `file_confirm` | 工具挂起等待用户确认「我的空间」写操作 | `confirm_id`、`op`、`logical_path`、`message`、`expired`；流不结束，用户带外 `POST /v1/chats/{chat_id}/file-confirm` 后续跑 |
 | `user_question` | 智能体调用 `ask_user_question` 并原地等待 | `request_id`、`questions[]`、`created_at`、`expires_at`、`chat_id` |
 | `user_question_resolved` | 服务端已接受答案、取消或超时 | `request_id`、`outcome`（`answered` / `cancelled` / `timeout`）、`chat_id` |
-| `batch_confirm` | 批量执行计划等待用户确认 | `plan_id`、`total`、`preview`、`default_template`、`placeholder_keys`；确认走 `POST /v1/batch/{plan_id}/confirm` |
 | `meta` | 回答结束的收尾帧 | `route`、`sources`、`artifacts`、`citations`、`warnings`、`is_markdown`、`message_id`、`workspace_files` |
 | `error` | 流式异常 | `error`（用户可读消息）、`chat_id` |
 
@@ -160,15 +197,15 @@ data: [DONE]
 
 答案必须与原问题数量、ID 和顺序完全一致；私有 option ID 必须来自 pending 响应，单选题不能提交多个选项，且每题必须作答或明确 `skipped=true`。后端会先把这些私有 ID 映射回原始选项 label，再向模型返回 DSH 兼容结果 `{"answers":[{"id":"scope","selected":["最小范围"]}]}`。第一个有效回答/取消会原子取得请求，之后的并发提交返回 `stale=true`，不会重复唤醒工具。成功 POST 已代表服务端原子取得请求，当前标签页可立即按 `request_id` 移除；`user_question_resolved` 和周期 pending 权威快照负责同步其他标签页与断线客户端。
 
-正文中的 `[ref:tool_name-N]` 引用标记由 `orchestration/citations.py` 解析为 `citations` 项，前端据此渲染角标（见 [对话模块](../modules/chat.md)）。
+正文中的 `[ref:tool_name-N]` 引用标记由 `core/llm/citations/` 解析为 `citations` 项，前端据此渲染角标（见 [对话模块](../modules/chat.md)）。
 
 ### 续播、Steer 与取消
 
 回答在后台 run 中执行，SSE 只是「跟随」——断开连接不会终止生成：
 
 ```bash
-# 断线后从头续播（from_offset 可指定起始事件偏移）
-curl -N "http://localhost:3000/api/v1/chats/stream/run_9f8e7d?from_offset=0" \
+# 断线后从头续播（from 可指定起始事件偏移）
+curl -N "http://localhost:3000/api/v1/chats/stream/run_9f8e7d?from=0" \
   -H "Authorization: Bearer sk-jx-xxxxxxxx"
 
 # 主动取消生成
@@ -190,7 +227,7 @@ curl http://localhost:3000/api/v1/chat-runs/run_9f8e7d/steers \
 
 ### 其他 SSE 端点
 
-其余 SSE 端点复用同一 wire 格式：`GET /v1/batch/{plan_id}/stream`（批量执行进度）、计划模式相关流会额外出现 `plan_generated` / `plan_error` 等事件。非流式版本为 `POST /v1/chats/send`，一次性返回完整信封。
+其余 SSE 端点复用同一 wire 格式：计划模式相关流会额外出现 `plan_generated` / `plan_error` 等事件。同一端点传 `stream: false`（默认值）时返回完整 `ChatResponse` JSON，字段为 `chat_id`、`response`、`timestamp`、`is_markdown`、`route`、`sources`、`artifacts`、`warnings`，不额外包裹 `data` 信封。
 
 ## 健康检查
 
@@ -213,6 +250,7 @@ curl http://localhost:3000/api/v1/chat-runs/run_9f8e7d/steers \
 | 分组 | 模块（`api/routes/v1/`） | 前缀 | 代表端点 | 鉴权 |
 |---|---|---|---|---|
 | 会话与消息 | `chats.py` | `/v1/chats` | `POST /stream`（SSE）、`GET /stream/{run_id}`（续播）、`POST /send`（非流式）、`GET /`、`GET /{chat_id}/messages`、`POST /{chat_id}/share` | 用户 |
+| 会话与消息 | `chat_forks.py` | `/v1/chats` | `POST /{chat_id}/fork` | 用户 |
 | 会话与消息 | `chat_runs.py` | `/v1/chat-runs` | `POST /{run_id}/cancel`、`POST /{run_id}/steer`、`GET /{run_id}/steers`、`DELETE /{run_id}/steer/{steer_id}` | 用户 |
 | 会话与消息 | `chat_shares.py` | `/v1/chat-shares` | `POST /`、`GET /{share_id}`、`POST /{share_id}/revoke` | 用户 |
 | 会话与消息 | `summary.py` | `/v1/summary` | `POST /`（会话标题摘要） | 用户 |
@@ -232,11 +270,10 @@ curl http://localhost:3000/api/v1/chat-runs/run_9f8e7d/steers \
 | 能力目录 | `agents.py` | `/v1/agents` | `GET/POST /`、`PUT/DELETE /{agent_id}`（个人智能体） | 用户 |
 | 模型 | `models.py` | `/v1/models` | `GET /capabilities`（公开）；`GET/POST /providers`、`PUT /roles/{role_key}` 等管理端点 | 公开 / CONFIG |
 | 文件 | `file_upload.py` | `/v1/file` | `POST /upload`、`PUT /{file_id}` | 用户 |
+| 文件文本 | `file_text.py`（由 file 路由注册） | `/v1/file` | `GET/PUT /{file_id}/text`（UTF-8 正文与版本校验保存） | 用户，保存须有写权限 |
 | 文件 | `file_parse.py` | `/v1/file` | `POST /parse`（文档解析） | 用户 |
 | 内容块 | `content.py` | `/v1/content` | `GET /docs`（公开读）；`PUT /docs/{block_id}`（ADMIN）、`GET /prompts/export` / `POST /prompts/import`（ADMIN 或 CONFIG） | 公开 / ADMIN / CONFIG |
 | 自动化 | `automations.py` | `/v1/automations` | `GET/POST /`、`POST /{task_id}/trigger`、`GET /notifications/list` | 用户 |
-| 批量执行 | `batch.py` | `/v1/batch` | `GET /active`、`POST /{plan_id}/confirm`、`GET /{plan_id}/stream`（SSE） | 用户 |
-| 批量执行 | `internal_batch.py` | `/v1/internal/batch` | `POST /resolve`（服务间内部接口） | BACKEND_INTERNAL_TOKEN |
 | 计划模式 | `plans.py` | `/v1/plans` | `POST /generate`、`POST /{plan_id}/execute`、`POST /{plan_id}/cancel` | 用户 |
 | 系统信息 | `config.py` | `/v1/config` | `GET /tool-names`（工具显示名映射，公开） | 公开 |
 | 系统信息 | `meta.py` | `/v1/meta` | `GET /edition`（版本/模式/能力位布尔表，公开探针，绝不暴露 license 详情） | 公开 |

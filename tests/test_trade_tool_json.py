@@ -13,7 +13,7 @@ from sqlalchemy.pool import StaticPool
 
 from core.db.models import ForeignTradeInquiry
 from core.llm.strict_trade_function import StrictTradeToolkit, TRADE_TOOL_NAMES
-from core.llm.tool_collector import ToolCollector
+from core.llm.factory.tools.definitions import ToolAssembly as ToolCollector
 from core.llm.tools import foreign_trade_tool as adapter
 
 
@@ -121,7 +121,7 @@ async def test_real_native_creation_is_not_repaired_into_empty_or_corrupt_record
     monkeypatch.setattr(adapter, "_assert_available", lambda *args: None)
     collector = ToolCollector()
     adapter.register_foreign_trade_tools(collector, user_id="alice", chat_id="chat", install_id="trade@alice")
-    toolkit = StrictTradeToolkit(tools=collector.function_tools)
+    toolkit = StrictTradeToolkit(tools=collector)
     for raw in BAD_JSON[:5]:
         result = await run(toolkit, "trade_inquiry", raw)
         assert result.state == ToolResultState.ERROR

@@ -1,23 +1,15 @@
-import { authFetch } from '../api';
+import { uploadFile, type UploadedFile } from '../api';
 import { t } from '../i18n';
 
+export type UploadedAttachment = Pick<UploadedFile, 'file_id' | 'download_url' | 'origin'>;
+
 export async function uploadFileToOSS(
-  file: File, apiUrl: string, chatId: string
-): Promise<{ file_id: string; download_url: string }> {
+  file: File, apiUrl: string, chatId?: string, projectId?: string,
+): Promise<UploadedAttachment> {
   if (!apiUrl) return { file_id: '', download_url: '' };
   try {
-    const form = new FormData();
-    form.append('file', file);
-    form.append('chat_id', chatId);
-    const resp = await authFetch(`${apiUrl}/v1/file/upload`, {
-      method: 'POST',
-      body: form,
-    });
-    if (resp.ok) {
-      const data = await resp.json();
-      return { file_id: data.file_id ?? '', download_url: data.download_url ?? '' };
-    }
-  } catch { /* 上传失败不阻断 */ }
+    return await uploadFile(file, chatId, undefined, { apiUrl, projectId });
+  } catch { /* The composer reports the failed upload and preserves the draft. */ }
   return { file_id: '', download_url: '' };
 }
 
@@ -36,6 +28,7 @@ export function normalizeArtifactOutput(raw: unknown): Record<string, unknown> |
     ? artifact.type.trim()
     : t('附件');
   const output: Record<string, unknown> = {
+    ...(artifact.origin === 'local' || artifact.origin === 'cloud' ? { origin: artifact.origin } : {}),
     ok: true,
     file_id: fileId,
     url,
@@ -57,29 +50,35 @@ export function extractArtifactOutputs(raw: unknown): Record<string, unknown>[] 
   const results: Record<string, unknown>[] = [];
   const seen = new Set<string>();
 
-  const pushOutput = (candidate: unknown) => {
+  const pushOutput = (candidate: unknown, origin?: 'local' | 'cloud') => {
     const output = normalizeArtifactOutput(candidate);
     if (!output) return;
+    if (!output.origin && origin) output.origin = origin;
     const fileId = String(output.file_id);
     if (seen.has(fileId)) return;
     seen.add(fileId);
     results.push(output);
   };
 
-  const visit = (candidate: unknown) => {
+  const visit = (candidate: unknown, inheritedOrigin?: 'local' | 'cloud') => {
     if (!candidate) return;
     if (Array.isArray(candidate)) {
-      for (const item of candidate) visit(item);
+      for (const item of candidate) visit(item, inheritedOrigin);
       return;
     }
     if (typeof candidate !== 'object') return;
 
-    pushOutput(candidate);
-
     const record = candidate as Record<string, unknown>;
-    if (Array.isArray(record.artifacts)) visit(record.artifacts);
-    if (Array.isArray(record.files)) visit(record.files);
-    if (record.result && record.result !== candidate) visit(record.result);
+    const metadata = record.metadata && typeof record.metadata === 'object'
+      ? record.metadata as Record<string, unknown> : {};
+    const explicitOrigin = record.origin || metadata.origin;
+    const origin = explicitOrigin === 'local' || explicitOrigin === 'cloud' ? explicitOrigin : inheritedOrigin;
+    pushOutput(candidate, origin);
+    if (Array.isArray(record.artifacts)) visit(record.artifacts, origin);
+    if (Array.isArray(record.files)) visit(record.files, origin);
+    if (record.result && record.result !== candidate) visit(record.result, origin);
+    // MCP CallToolResult envelope (history stored 2026-10-22 onward): the tool's value lives here.
+    if (record.structuredContent && record.structuredContent !== candidate) visit(record.structuredContent, origin);
   };
 
   visit(raw);

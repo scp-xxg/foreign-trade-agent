@@ -2,9 +2,12 @@
 
 import logging
 import os
+from dataclasses import dataclass
+from pathlib import Path
 from typing import Generator
 
 from core.config.settings import settings
+from core.db.connection import utc_connect_args
 from sqlalchemy import create_engine, event
 from sqlalchemy.engine import make_url
 from sqlalchemy.ext.declarative import declarative_base
@@ -28,6 +31,40 @@ def _resolve_database_url() -> str:
             )
             return fallback
     return url
+
+
+@dataclass(frozen=True)
+class ThreadBudget:
+    """How many threads of one process can hold a database connection at once.
+
+    Database work runs on threads, never on the event loop, and a process has two
+    pools of them: anyio's default limiter (sync routes and dependencies, and
+    ``core.db.threads.run_db``) and the event loop's default executor
+    (``asyncio.to_thread``). The connection pool is one connection per thread of
+    both, plus a little overflow for the few dedicated threads outside them
+    (sub-agent runs, index workers, schedulers), which otherwise queue on
+    ``DB_POOL_TIMEOUT``. A pool larger than this only reserves Postgres
+    connections no thread can use; a smaller one makes threads wait for each
+    other inside a request.
+    """
+
+    request_threads: int
+    background_threads: int
+    overflow: int = 10
+
+    @property
+    def pool_size(self) -> int:
+        return self.request_threads + self.background_threads
+
+
+def thread_budget() -> ThreadBudget:
+    """The one place the per-process thread limits and the pool size come from."""
+    return ThreadBudget(
+        request_threads=settings.db.worker_threads,
+        # CPython's own default for the loop executor, made explicit so the
+        # pool is sized against the number the executor will really use.
+        background_threads=min(32, (os.cpu_count() or 1) + 4),
+    )
 
 
 # Database URL from environment variable
@@ -55,16 +92,17 @@ if DATABASE_URL.startswith("sqlite://"):
     else:
         engine_kwargs["poolclass"] = NullPool
 else:
-    engine_kwargs["pool_size"] = settings.db.pool_size
-    engine_kwargs["max_overflow"] = settings.db.pool_max_overflow
+    engine_kwargs["pool_size"] = thread_budget().pool_size
+    engine_kwargs["max_overflow"] = thread_budget().overflow
     engine_kwargs["pool_timeout"] = settings.db.pool_timeout
     # 等锁必须有上界：无上界的行锁等待会把持有它的工作线程（或误写成 async 的路由的
     # 事件循环）无限期占住，另一侧又要等这条请求收尾才能释放锁，形成互相干等的死结。
     # 等锁与等连接同属「等数据库资源」，共用 DB_POOL_TIMEOUT 一个阈值。
     if make_url(DATABASE_URL).get_backend_name() == "postgresql":
-        engine_kwargs["connect_args"] = {
-            "options": f"-c lock_timeout={settings.db.pool_timeout * 1000}"
-        }
+        engine_kwargs["connect_args"] = utc_connect_args(DATABASE_URL)
+        engine_kwargs["connect_args"]["options"] += (
+            f" -c lock_timeout={settings.db.pool_timeout * 1000}"
+        )
 
 
 def apply_sqlite_concurrency_pragmas(target, busy_timeout_seconds: int) -> None:
@@ -121,17 +159,63 @@ def get_db() -> Generator[Session, None, None]:
         db.close()
 
 
+def _merge_duplicate_identities() -> None:
+    """合并历史遗留的重复影子用户。
+
+    桌面本机库没有 alembic，数据修复只能挂在启动上；必须跑在调和器建索引之前，因为
+    ``users_shadow.user_center_id`` 的唯一索引在库里还有重复行时建不起来。装了唯一
+    索引之后就直接返回，稳态下不再扫表。这一步永远不能拦住启动——合并失败就带着重复
+    继续跑，索引随后也会被跳过，下次启动再试。
+    """
+    try:
+        from core.db.identity_dedup import merge_duplicate_user_shadows
+
+        report = merge_duplicate_user_shadows(engine)
+        if report.get("groups"):
+            logger.warning("Duplicate user shadows merged: %s", report)
+    except Exception as error:  # noqa: BLE001 - 启动路径，任何失败都只记录
+        logger.error("Duplicate user shadow merge failed, leaving rows untouched: %s", error)
+
+
 def init_db():
     """Initialize or reconcile the database schema for the active edition."""
+    if engine.dialect.name == "sqlite":
+        from core.db.batch_retirement import retire_batch_execution
+        from sqlalchemy import inspect
+
+        with engine.begin() as connection:
+            if inspect(connection).has_table("batch_plans"):
+                retire_batch_execution(connection)
+    if settings.deploy.is_local and engine.dialect.name == "sqlite":
+        from core.db.resource_owner_upgrade import reconcile_resource_owners
+
+        from core.db.audio_model_upgrade import reconcile_audio_model_type
+
+        reconcile_audio_model_type(engine)
+        reconcile_resource_owners(engine)
+        from core.db.site_storage_retirement import retire_site_storage
+        from core.harness.registry.schema_lifecycle import initialize_local_schema
+
+        directory = settings.storage.root / "migration-backups"
+        directory = Path(os.getenv("SITE_STORAGE_BACKUP_DIR", str(directory)))
+        retire_site_storage(engine, directory)
+        initialize_local_schema()
     if settings.edition.edition == "ce":
         if settings.deploy.is_local:
             from core.db.local_schema_upgrade import reconcile_local_chat_sequences
 
+            # 本机库的数据修复都在这里，且都排在下面的 schema 调和之前。
+            _merge_duplicate_identities()
+            from core.db.local_personal_file_upgrade import reconcile_local_personal_filenames
+
+            file_report = reconcile_local_personal_filenames(engine)
+            if file_report['renamed']:
+                logger.info('Local historical personal filenames repaired: %s', file_report)
             local_report = reconcile_local_chat_sequences(engine)
             if any(local_report.values()):
                 logger.info("Local database compatibility schema reconciled: %s", local_report)
 
-        from core.db.edition_tables import ce_reconcile_schema
+        from core.db.edition import ce_reconcile_schema
 
         report = ce_reconcile_schema(engine)
         if any(report.values()):

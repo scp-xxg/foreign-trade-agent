@@ -19,20 +19,21 @@ from agentscope.tool._response import ToolResponse
 
 from core.db.models import ForeignTradeInquiry
 from core.llm.strict_trade_function import StrictTradeToolkit
-from core.llm.tool_collector import ToolCollector
-from core.services.foreign_trade_content import ContentPackError, ContentPackService
-from core.services import foreign_trade_content_generation as generation
+from core.llm.factory.tools.definitions import ToolAssembly, function_tool
+from core.foreign_trade.tool_names import TRADE_TOOL_NAMES
+from core.foreign_trade.content import ContentPackError, ContentPackService
+from core.foreign_trade import content_generation as generation
 from test_trade_plugin_tools import ctx, add_file
 
 
 @pytest.fixture
 def dispatched(ctx):
     functions, sessions, storage = ctx
-    collector = ToolCollector()
+    collector = ToolAssembly()
     for function in functions.values():
-        collector.register_tool_function(function)
-    assert len(collector.function_tools) == 6
-    toolkit = StrictTradeToolkit(tools=collector.function_tools)
+        collector.append(function_tool(function))
+    assert len(collector) == len(TRADE_TOOL_NAMES)
+    toolkit = StrictTradeToolkit(tools=collector)
     state = AgentState()
     calls = []
     async def call(name, **kwargs):

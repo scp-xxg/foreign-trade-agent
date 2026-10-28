@@ -35,7 +35,8 @@ def test_unknown_result_id_does_not_take_an_earlier_same_name_pending_call():
     duration = attach_tool_result(log, "new", "trade_inquiry", {"ok": True})
     assert duration is None
     assert "result" not in log[0]
-    assert log[1] == {"tool_name": "trade_inquiry", "tool_id": "new", "result": {"ok": True}, "status": "success"}
+    assert log[1] == {"tool_name": "trade_inquiry", "tool_id": "new", "result": {"ok": True},
+                      "status": "success", "call_missing": True}
     assert "started_at" not in log[1]
 
 
@@ -49,16 +50,22 @@ def test_new_id_result_preserves_settled_same_name_call():
     assert log[2]["result"] == {"latest": True}
 
 
-def test_orphan_result_accepts_later_arguments_for_its_exact_id_only():
+def test_late_call_starts_a_new_entry_and_preserves_the_orphan_receipt(monkeypatch):
+    monkeypatch.setattr("core.chat.tool_log.now_ms", lambda: 2000)
     log = [entry("pending", "create")]
-    attach_tool_result(log, "new", "trade_inquiry", {"reply_for": "new"})
+    attach_tool_result(log, "new", "trade_inquiry", {"reply_for": "orphan"})
     upsert_tool_call(log, {**entry("new", "get"), "tool_display_name": "Inquiry"})
-    assert len(log) == 2
+    assert len(log) == 3
     assert "result" not in log[0]
-    assert log[1]["tool_args"] == {"action": "get"}
-    assert log[1]["tool_display_name"] == "Inquiry"
-    assert log[1]["result"] == {"reply_for": "new"}
-    assert "started_at" not in log[1]  # no honest start time was observed
+    assert log[1]["result"] == {"reply_for": "orphan"} and log[1]["call_missing"] is True
+    assert "tool_args" not in log[1] and "started_at" not in log[1]
+    assert log[2]["tool_args"] == {"action": "get"}
+    assert log[2]["tool_display_name"] == "Inquiry" and log[2]["started_at"] == 2000
+    assert "result" not in log[2]
+    # A later result closes the new open call, without rewriting the earlier receipt.
+    attach_tool_result(log, "new", "trade_inquiry", {"reply_for": "new call"})
+    assert log[1]["result"] == {"reply_for": "orphan"}
+    assert log[2]["result"] == {"reply_for": "new call"}
 
 
 def test_known_new_id_matches_exactly_after_it_is_appended():
@@ -68,11 +75,17 @@ def test_known_new_id_matches_exactly_after_it_is_appended():
     assert log[1]["result"] == {"version": "new"}
 
 
-def test_legacy_result_without_id_can_settle_an_unfinished_same_name_call():
+def test_result_without_id_remains_orphaned_instead_of_matching_by_name():
     log = [{**entry("completed"), "result": {"done": True}}, entry("pending")]
-    attach_tool_result(log, "", "trade_inquiry", {"legacy": True})
+    duration = attach_tool_result(log, "", "trade_inquiry", {"legacy": True})
+    assert duration is None and len(log) == 3
     assert log[0]["result"] == {"done": True}
-    assert log[1]["result"] == {"legacy": True}
+    assert "result" not in log[1]
+    assert log[2] == {
+        "tool_name": "trade_inquiry", "tool_id": "", "result": {"legacy": True},
+        "status": "success", "call_missing": True,
+    }
+    assert "tool_args" not in log[2] and "started_at" not in log[2]
 
 
 def test_identity_wins_even_if_result_has_a_different_display_name():

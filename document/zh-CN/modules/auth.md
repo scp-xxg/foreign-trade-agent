@@ -56,7 +56,7 @@ HugAgentOS 的认证与权限体系覆盖三条互相独立的链路：**终端�
 - 完成状态存放在当前管理员的 `users_shadow.metadata` 中，并带版本号。刷新或重新登录
   后不会重复进入已完成的向导。
 
-一键安装器的终端 `hugagent onboard` 已经完成账号和模型配置，因此成功结束时会写入
+一键安装器的终端 `hugagent-server onboard` 已经完成账号和模型配置，因此成功结束时会写入
 同一个完成标记，不会再重复显示网页向导。
 
 ### Mock SSO（开发联调）
@@ -68,17 +68,19 @@ GET  /mock-sso/login            → 生成一次性 ticket 并带 ?ticket=... �
 POST /mock-sso/ticket/exchange  → 校验 ticket，返回用户信息
 ```
 
-票据存储在进程内的 `core/auth/mock_ticket_store.py`，供 `core/auth/sso.py` 在 mock 模式下消费。手工验证流程：浏览器打开 `http://localhost:3001/mock-sso/login?redirect=/`。
+票据存储在进程内的 `core/auth/mock_ticket_store.py`，供 `edition_ee/auth/sso.py` 在 mock 模式下消费。手工验证流程：浏览器打开 `http://localhost:3001/mock-sso/login?redirect=/`。
 
 ### 企业 SSO（商业版 EE）
 
-生产 SSO 走 ticket 交换流程，由 `core/auth/sso.py` 实现，**受 License 能力位 `Feature.SSO` 门控**：
+生产 SSO 走 ticket 交换流程，由 `edition_ee/auth/sso.py` 实现，**受 License 能力位 `Feature.SSO` 门控**：
 
-- `POST /v1/auth/ticket/exchange` — 用一次性 ticket 换取会话（`api/routes/v1/auth.py`）
+- `POST /v1/auth/ticket/exchange` — 用一次性 ticket 换取会话（`edition_ee/routes/auth.py`）
 - `GET /v1/auth/sso/authorize-url` — 代理 SSO 提供方的 OAuth 授权地址，路由级挂 `requires_feature(Feature.SSO)`
 - `GET /v1/auth/session/check` / `POST /v1/auth/logout` — 会话检查与注销（基础设施，不受 License 限制）
 
 `SSO_EXCHANGE_MODE` 区分真实模式（`GET {SSO_TICKET_EXCHANGE_URL}?{callback_param}={credential}`）与 mock 模式；`SSO_CALLBACK_PARAM` 支持 `ticket`（旧版）与 `code`（OAuth2 风格的省级新版 SSO）两种参数名。
+
+SSO 提供方响应必须是 JSON 对象，且成功码必须为有限数值 0（包括 0.0；布尔值不算成功码）。无效 JSON、响应结构或登录/注销地址结构返回受控错误。网络异常、响应正文和提供方错误消息不进入日志或浏览器响应；SSO 客户端日志不保留任何票据字节。此检查保留 ticket / code 交换及已支持的用户信息格式。
 
 ### 会话管理
 
@@ -109,7 +111,7 @@ POST /mock-sso/ticket/exchange  → 校验 ticket，返回用户信息
 
 ### 接口层（CE/EE 拆分接缝）
 
-`core/auth/permissions_iface.py` 是权限符号的**唯一导入入口**：主干代码（deps / files / chats / projects / kb 等）一律从这里导入，不直接引用具体实现。EE 主仓中它纯转发三个真实现；CE 派生树用单租户 stub 整体替换本文件，三个真实现物理不存在：
+`core/auth/personal_permissions_iface.py` 是权限符号的**唯一导入入口**：主干代码（deps / files / chats / projects / kb 等）一律从这里导入，不直接引用具体实现。EE 主仓中它纯转发三个真实现；CE 派生树用单租户 stub 整体替换本文件，三个真实现物理不存在：
 
 | 实现文件 | 职责 |
 |---|---|
@@ -174,7 +176,9 @@ POST /mock-sso/ticket/exchange  → 校验 ticket，返回用户信息
 | `PATCH /v1/me/api-keys/{key_id}` | 启用 / 禁用 |
 | `DELETE /v1/me/api-keys/{key_id}` | 撤销 |
 
-Key 形如 `sk-jx-...`，在**所有 AUTH_MODE 下**都可作为 Bearer 调用业务 API（外部程序化调用通常没有 Cookie）。校验逻辑（启用 / 未撤销 / 未过期 / 用户权限位仍开启）集中在 `core/services/api_key_service.py::resolve_api_key`。
+Key 形如 `sk-jx-...`，在**所有 AUTH_MODE 下**都可作为 Bearer 调用业务 API（外部程序化调用通常没有 Cookie）。校验逻辑（启用 / 未撤销 / 未过期 / 用户权限位仍开启）集中在 `core/auth/api_keys.py::resolve_api_key`。
+
+禁用或撤销 API Key 会拒绝新请求，并取消该 Key 已接收且仍在等待、运行或暂停待处理的对话任务。取消会停止后台执行并结束 SSE 流；已完成的外部工具操作不会撤回。重新启用 Key 不会恢复已取消任务。调用记录进入“需要处理”等停止状态后，耗时固定在停止时间。
 
 ## 团队与邀请码（商业版 EE）
 
@@ -194,16 +198,16 @@ Key 形如 `sk-jx-...`，在**所有 AUTH_MODE 下**都可作为 Bearer 调用�
 |---|---|
 | 认证后端（三种模式 + 判定优先级） | `src/backend/core/auth/backend.py` |
 | 会话管理（Redis） | `src/backend/core/auth/session.py` |
-| SSO 票据交换 | `src/backend/core/auth/sso.py`、`src/backend/api/routes/v1/auth.py` |
+| SSO 票据交换 | `src/backend/edition_ee/auth/sso.py`、`src/backend/edition_ee/routes/auth.py` |
 | Mock SSO / 本地登录注册页 | `src/backend/api/routes/v1/mock_sso.py`、`src/backend/core/auth/mock_ticket_store.py` |
 | 密码哈希 | `src/backend/core/auth/password.py` |
-| 权限接口层（CE/EE 接缝） | `src/backend/core/auth/permissions_iface.py` |
+| 权限接口层（CE/EE 接缝） | `src/backend/core/auth/personal_permissions_iface.py` |
 | 团队角色 / 文件权限（EE） | `src/backend/edition_ee/auth/roles.py`、`src/backend/edition_ee/auth/team_permissions.py` |
 | 项目 / 会话分享权限（EE） | `src/backend/edition_ee/auth/project_permissions.py`、`src/backend/edition_ee/auth/chat_share_permissions.py` |
 | 管理凭证依赖 | `src/backend/api/deps.py` |
 | 用户资料 / 偏好 | `src/backend/api/routes/v1/users.py` |
 | 用户权限位管理 | `src/backend/edition_ee/routes/config_users.py` |
-| 个人 API-Key | `src/backend/api/routes/v1/api_keys.py`、`src/backend/core/services/api_key_service.py` |
+| 个人 API-Key | `src/backend/api/routes/v1/api_keys.py`、`src/backend/core/auth/api_keys.py` |
 | 能力中心自助（owner 隔离） | `src/backend/api/routes/v1/me_capabilities.py` |
 | 邀请码 | `src/backend/edition_ee/auth/invite.py`、`src/backend/edition_ee/routes/config_invites.py` |
 | 团队管理 | `src/backend/edition_ee/routes/config_teams.py`、`src/backend/edition_ee/routes/me_teams.py` |

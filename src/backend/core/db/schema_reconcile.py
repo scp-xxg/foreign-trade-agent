@@ -7,18 +7,22 @@ with the version that originally created it.
 
 from __future__ import annotations
 
+import logging
 from contextlib import contextmanager
 from typing import Any, Iterator, Mapping, Optional, Tuple
 
-from sqlalchemy import Column, MetaData, inspect
+from sqlalchemy import Column, Computed, MetaData, inspect
 from sqlalchemy.engine import Connection, Engine
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.schema import CreateColumn
+
+logger = logging.getLogger(__name__)
 
 SchemaItem = Tuple[str, str]
 
 
 @contextmanager
-def _connection(bind: Engine | Connection) -> Iterator[Connection]:
+def connection_scope(bind: Engine | Connection) -> Iterator[Connection]:
     if isinstance(bind, Connection):
         yield bind
         return
@@ -58,6 +62,58 @@ def _patch_projects_kind_constraint_sqlite(connection: Connection) -> bool:
     return True
 
 
+def _patch_file_edit_constraints_sqlite(connection: Connection) -> list[str]:
+    """Upgrade desktop checks without rewriting file bytes or credential rows.
+
+    Desktop SQLite startup does not run Alembic. Use the same schema-cookie
+    reload as the legacy project-kind repair, after missing columns are added.
+    Only the two known constraint definitions may change.
+    """
+    import re
+
+    if connection.dialect.name != "sqlite":
+        return []
+    patched = []
+    for table in ("artifacts", "user_api_keys"):
+        row = connection.exec_driver_sql(
+            "SELECT sql FROM sqlite_master WHERE type='table' AND name=?", (table,)
+        ).fetchone()
+        if not row or not row[0]:
+            continue
+        old_sql = row[0]
+        new_sql = old_sql
+        if table == "artifacts":
+            new_sql = re.sub(r"CHECK\s*\(\s*size_bytes\s*>\s*0\s*\)",
+                             "CHECK (size_bytes >= 0)", old_sql, flags=re.IGNORECASE)
+        else:
+            columns = {item["name"] for item in inspect(connection).get_columns(table)}
+            if not {"agent_id", "project_id"}.issubset(columns):
+                continue
+            if "ck_user_api_keys_single_scope" in old_sql:
+                continue
+            invalid = connection.exec_driver_sql(
+                "SELECT count(*) FROM user_api_keys WHERE agent_id IS NOT NULL AND project_id IS NOT NULL"
+            ).scalar()
+            if invalid:
+                raise RuntimeError("Cannot upgrade API credentials with conflicting resource scopes")
+            if not old_sql.rstrip().endswith(")"):
+                raise RuntimeError("Unsupported SQLite credential table definition")
+            new_sql = old_sql.rstrip()[:-1] + ", CONSTRAINT ck_user_api_keys_single_scope CHECK (agent_id IS NULL OR project_id IS NULL))"
+        if new_sql == old_sql:
+            continue
+        connection.exec_driver_sql("PRAGMA writable_schema=ON")
+        try:
+            connection.exec_driver_sql(
+                "UPDATE sqlite_master SET sql=? WHERE type='table' AND name=?", (new_sql, table)
+            )
+            version = connection.exec_driver_sql("PRAGMA schema_version").scalar()
+            connection.exec_driver_sql(f"PRAGMA schema_version = {int(version) + 1}")
+        finally:
+            connection.exec_driver_sql("PRAGMA writable_schema=OFF")
+        patched.append(table)
+    return patched
+
+
 def reconcile_metadata_schema(
     bind: Engine | Connection,
     metadata: MetaData,
@@ -73,9 +129,15 @@ def reconcile_metadata_schema(
     """
 
     defaults = dict(bootstrap_server_defaults or {})
-    report: dict[str, list[str]] = {"tables": [], "columns": [], "indexes": [], "constraints": []}
+    report: dict[str, list[str]] = {
+        "tables": [],
+        "columns": [],
+        "indexes": [],
+        "constraints": [],
+        "skipped_indexes": [],
+    }
 
-    with _connection(bind) as connection:
+    with connection_scope(bind) as connection:
         before_tables = set(inspect(connection).get_table_names())
         metadata.create_all(bind=connection, checkfirst=True)
         after_tables = set(inspect(connection).get_table_names())
@@ -96,7 +158,9 @@ def reconcile_metadata_schema(
                     continue
 
                 server_default = (
-                    column.server_default.arg if column.server_default is not None else None
+                    column.server_default.arg
+                    if column.server_default is not None and column.computed is None
+                    else None
                 )
                 if server_default is None:
                     server_default = defaults.get((table_name, column.name))
@@ -106,9 +170,19 @@ def reconcile_metadata_schema(
                         f"{table_name}.{column.name}"
                     )
 
+                # SQLite cannot ALTER ADD a STORED generated column. A VIRTUAL
+                # projection has the same read semantics and preserves old rows.
+                generated = []
+                if column.computed is not None:
+                    generated.append(Computed(
+                        column.computed.sqltext,
+                        persisted=False if connection.dialect.name == "sqlite"
+                        else column.computed.persisted,
+                    ))
                 migration_column = Column(
                     column.name,
                     column.type,
+                    *generated,
                     nullable=column.nullable,
                     server_default=server_default,
                 )
@@ -125,8 +199,19 @@ def reconcile_metadata_schema(
             for index in sorted(table.indexes, key=lambda item: item.name or ""):
                 if not index.name or index.name in existing_indexes:
                     continue
-                index.create(bind=connection, checkfirst=True)
+                # 建不上就跳过，别拖垮启动：这是一个自愈式的调和器，存量数据可能还
+                # 违反某条后加的约束（历史上没有它才写进去的重复行）。跳过的索引记进
+                # report["skipped_indexes"]，调用方看得见，数据修干净后下次启动补上。
+                try:
+                    with connection.begin_nested():
+                        index.create(bind=connection, checkfirst=True)
+                except SQLAlchemyError as error:
+                    logger.error("Skipping index %s: %s", index.name, error)
+                    report["skipped_indexes"].append(index.name)
+                    continue
                 report["indexes"].append(index.name)
+
+        report["constraints"].extend(_patch_file_edit_constraints_sqlite(connection))
 
     for values in report.values():
         values.sort()

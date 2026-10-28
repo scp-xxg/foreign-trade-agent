@@ -1,17 +1,17 @@
 """Health-check, readiness, and liveness endpoints."""
+from core.infra.time import utc_now
 
 from datetime import datetime
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter
 from fastapi.responses import JSONResponse
-from sqlalchemy.orm import Session
 from sqlalchemy import text
 
-from api.schemas import HealthResponse
+from core.chat.schemas import HealthResponse
 from core.config.settings import settings
-from core.db.engine import get_db
+from core.db.threads import run_in_session
 from core.infra.logging import get_logger
-from core.storage import get_storage
+from core.files.storage import get_storage
 
 logger = get_logger(__name__)
 
@@ -29,12 +29,12 @@ async def health_check():
     return HealthResponse(
         status="healthy",
         service="hugagent",
-        timestamp=datetime.now().isoformat(),
+        timestamp=utc_now().isoformat(),
     )
 
 
 @router.get("/ready", summary="就绪探针")
-async def readiness_check(db: Session = Depends(get_db)):
+async def readiness_check():
     """
     就绪检查（包含依赖检查）
 
@@ -45,7 +45,7 @@ async def readiness_check(db: Session = Depends(get_db)):
 
     # Check database
     try:
-        db.execute(text("SELECT 1"))
+        await run_in_session(lambda db: db.execute(text("SELECT 1")))
         checks["database"] = True
     except Exception as e:
         logger.error("database_health_check_failed", error=str(e))
@@ -90,7 +90,7 @@ async def readiness_check(db: Session = Depends(get_db)):
         content={
             "ready": all_ready,
             "checks": checks,
-            "timestamp": datetime.now().isoformat(),
+            "timestamp": utc_now().isoformat(),
         },
     )
 
@@ -103,4 +103,4 @@ async def liveness_check():
     最简单的存活检查，仅返回服务存活状态。
     用于 Kubernetes liveness probe。
     """
-    return {"alive": True, "timestamp": datetime.now().isoformat()}
+    return {"alive": True, "timestamp": utc_now().isoformat()}

@@ -19,6 +19,7 @@ from typing import Any, Dict
 from contextvars import ContextVar
 
 from core.config.settings import settings
+from core.infra.log_redaction import protect_log_sinks
 
 try:
     import structlog
@@ -43,6 +44,23 @@ except ImportError:
 trace_id_var: ContextVar[str] = ContextVar("trace_id", default="")
 user_id_var: ContextVar[str] = ContextVar("user_id", default="")
 chat_id_var: ContextVar[str] = ContextVar("chat_id", default="")
+
+
+_QUIET_ACCESS_LOG = "__quiet_access_log__"
+
+
+def quiet_access_log(endpoint):
+    """标记一个被客户端定时敲的接口：它的每次请求不写访问日志。
+
+    就绪探测、通知拉取这类接口一天会被敲上万次，逐条记录只会把真正有用的
+    请求淹掉，日志文件也会失控增长。标记挂在路由函数上，判定不靠路径名单。
+    """
+    setattr(endpoint, _QUIET_ACCESS_LOG, True)
+    return endpoint
+
+
+def is_quiet_access_log(endpoint) -> bool:
+    return bool(getattr(endpoint, _QUIET_ACCESS_LOG, False))
 
 
 def generate_trace_id() -> str:
@@ -207,6 +225,7 @@ def setup_logging() -> None:
             level=log_level,
             force=True,
         )
+        protect_log_sinks(handlers)
         logging.getLogger(__name__).warning(
             "structlog_not_installed_fallback_to_stdlib_logging"
         )
@@ -257,10 +276,7 @@ def setup_logging() -> None:
         force=True,
     )
 
-    # Set log levels for noisy libraries
-    logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
-    logging.getLogger("httpx").setLevel(logging.WARNING)
-    logging.getLogger("httpcore").setLevel(logging.WARNING)
+    protect_log_sinks(handlers)
 
 
 class _FallbackLogger:

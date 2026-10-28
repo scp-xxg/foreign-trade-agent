@@ -6,6 +6,43 @@
 
 All HugAgentOS services are orchestrated by a single `docker-compose.yml` at the repository root, split by profiles into always-on core services, mutually exclusive sandbox sidecars (`script_runner` / `opensandbox`), and the optional memory infrastructure (`mem0`). This guide covers the full service topology, volumes and persistence, profile usage, and the rebuild flow after code changes.
 
+
+## Default sandbox in Docker CE
+
+Docker CE defaults to OpenSandbox. No-Docker installation and desktop local mode keep local execution.
+For a new deployment:
+
+```bash
+python3 scripts/configure-ce-docker.py
+docker build -f docker/sandbox/Dockerfile.opensandbox -t hugagent-opensandbox-custom:latest .
+docker compose build backend
+docker compose up -d --build
+```
+
+The initializer generates absolute host paths, an explicit project name and a random controller key.
+It refuses to overwrite an existing .env. Use --project-name and --storage to select those values.
+The controller network follows the project name. CE publishes no controller host port.
+The backend retains its existing management socket mount; CE has no sandbox rebuild management API.
+Build the runtime image first: ordinary compose build does not build on-demand sandbox images.
+Validate SDK, controller, execd, egress and runtime image together using repository versions.
+This change does not upgrade upstream components.
+
+For an existing deployment, edit its existing .env explicitly: set SANDBOX_PROVIDER=opensandbox,
+COMPOSE_PROFILES=opensandbox and SANDBOX_TOOLS_ENABLED=true. Supply absolute HOST_REPO_PATH and
+HOST_STORAGE_PATH, a strong random OPENSANDBOX_API_KEY and an explicit COMPOSE_PROJECT_NAME.
+Preserve storage and database volumes. Existing script-runner workspaces are not migrated automatically.
+Follow deployment authorization rules to stop the old runner, build the runtime, and start the controller and backend.
+Verify /health, /ready, files across commands, user isolation, restart adoption and idle snapshot recovery.
+Initialization and dependency failures raise errors without changing the provider.
+OpenSandbox preserves session files and snapshots. Python/JS commands use separate processes and do not retain variables.
+
+
+Each sandbox has an independent object-mount service. The controller does not own its FUSE connections.
+Initial mounting and recovery use one lifecycle. Controller restarts preserve connections; sandbox restarts require a live authorization and mount check.
+Host shared-propagation directories are unnecessary. Only the mount service needs `/dev/fuse` and mount privileges.
+Existing sandboxes with FUSE host binds have immutable Docker startup settings.
+Preserve their workspaces and volumes before a separate migration. Do not restart or delete them during an unplanned upgrade.
+
 ## Service topology
 
 ### Core services (always started)
@@ -15,7 +52,7 @@ All HugAgentOS services are orchestrated by a single `docker-compose.yml` at the
 | `postgres` | hugagent-postgres | `postgres:15-alpine` | `${POSTGRES_HOST_PORT:-5432}:5432` | Primary relational DB (business data, content_blocks, usage logs) |
 | `redis` | hugagent-redis | `redis:7-alpine` | `${REDIS_HOST_PORT:-6380}:6379` | Session store, streaming follower (Redis Streams), rate limiting |
 | `backend` | hugagent-backend | `docker/Dockerfile` (target `production`) | `${BACKEND_HOST_PORT:-3001}:${BACKEND_PORT:-3001}` | FastAPI app; runs alembic migrations automatically at startup |
-| `mcp` | hugagent-mcp | `docker/Dockerfile.mcp` | none exposed | CE starts 9 general MCP servers; EE also starts commercial MCP servers such as database query. The backend calls them at `http://mcp:91XX/mcp/` |
+| `mcp` | hugagent-mcp | `docker/Dockerfile.mcp` | none exposed | CE starts the general MCP processes; EE also starts commercial MCP servers such as database query. The backend calls them at `http://mcp:91XX/mcp/` |
 | `frontend` | hugagent-frontend | `src/frontend/Dockerfile` | `${FRONTEND_PORT:-3002}:80` | nginx serving the frontend static bundle + `/api` reverse proxy to the backend |
 
 `BACKEND_PORT` is the container-internal listen port used by nginx, MCP, and the health check, and should normally remain `3001`. If host ports are occupied, adjust only `BACKEND_HOST_PORT`, `POSTGRES_HOST_PORT`, or `REDIS_HOST_PORT`; do not change the container-internal ports. For example, publish the backend on `13003` while keeping its internal port at `3001`.
@@ -31,9 +68,9 @@ Enterprise Edition (EE).
 
 | Service | Profile | Container | Image / build | Role |
 |---|---|---|---|---|
-| `script-runner` | `script_runner` | hugagent-script-runner | `docker/Dockerfile.script-runner` | Lightweight sandbox: 1 GB RAM / 1 CPU / read-only rootfs + tmpfs; skill directory mounted read-only at `/workspace/skills` |
-| `opensandbox-config-init` | `opensandbox` | hugagent-opensandbox-config-init | `alpine:3.19` | One-shot init: renders `@@HOST_REPO_PATH@@` / `@@HOST_STORAGE_PATH@@` in `docker/opensandbox-config.toml.tpl` into the named volume `opensandbox_config` |
-| `opensandbox` | `opensandbox` | hugagent-opensandbox | `opensandbox/server:v0.1.13` | Persistent sandbox controller (Enterprise Edition capability): starts/stops sandbox containers on demand via the host `docker.sock`; a Jupyter kernel keeps context across turns; debug port `${OPENSANDBOX_PORT:-8910}:8080` |
+| `script-runner` | `script_runner` | hugagent-script-runner | `docker/sandbox/Dockerfile.script-runner` | Lightweight sandbox: 1 GB RAM / 1 CPU / read-only rootfs + tmpfs; skill directory mounted read-only at `/workspace/skills` |
+| `opensandbox-config-init` | `opensandbox` | hugagent-opensandbox-config-init | `python:3.12-alpine` | One-shot init: renders `@@HOST_REPO_PATH@@` / `@@HOST_STORAGE_PATH@@` in `docker/opensandbox-server/opensandbox-config.toml.tpl` into the named volume `opensandbox_config` |
+| `opensandbox` | `opensandbox` | hugagent-opensandbox | `hugagent-opensandbox-server:v0.1.13-3` | Shared CE / EE controller: manages containers through Docker socket; execd runs commands and session files persist. CE publishes no host port; the full repository has a configurable debug port |
 
 ### mem0 memory infrastructure (profile `mem0`, optional)
 
@@ -58,7 +95,7 @@ mcp ──depends_on──► postgres (healthy)
 milvus ──depends_on──► etcd (healthy) + minio (healthy)
 ```
 
-All services join the same bridge network `hugagent-network`; containers reach each other by service name (e.g. `http://backend:3001`, `http://mcp:9102/mcp/`, `http://milvus:19530`). Every container shares a json-file log-rotation policy (50 MB × 5 = 250 MB cap per container) to keep logs from filling the disk.
+The base Compose services join the same bridge network `hugagent-network`; containers reach each other by service name (e.g. `http://backend:3001`, `http://mcp:9102/mcp/`, `http://milvus:19530`). Every container shares a json-file log-rotation policy (50 MB × 5 = 250 MB cap per container) to keep logs from filling the disk.
 
 ## Volumes and persistence
 
@@ -78,7 +115,7 @@ All services join the same bridge network `hugagent-network`; containers reach e
 Profiles are driven by `COMPOSE_PROFILES` in `.env` (or the `--profile` CLI flag):
 
 ```bash
-# Default: lightweight sandbox
+# Full repository default: lightweight sandbox; Docker CE defaults to opensandbox
 COMPOSE_PROFILES=script_runner
 
 # Switch to the OpenSandbox persistent sandbox (also set SANDBOX_PROVIDER=opensandbox)
@@ -182,12 +219,100 @@ make migrate-new msg="describe change"
 
 | Feature | Files |
 |---|---|
-| Service orchestration | `docker-compose.yml` (CubeSandbox overlay: `docker-compose.cube.yml`) |
+| Service orchestration | `docker-compose.yml` (CubeSandbox overlay: `docker/sandbox/compose.cube.yml`) |
 | Backend image | `docker/Dockerfile` (multi-stage, target `production`) |
 | MCP image | `docker/Dockerfile.mcp` |
-| Sandbox images | `docker/Dockerfile.script-runner`, `docker/Dockerfile.opensandbox` |
+| Sandbox images | `docker/sandbox/Dockerfile.script-runner`, `docker/sandbox/Dockerfile.opensandbox` |
 | Frontend image + nginx proxy | `src/frontend/Dockerfile`, `src/frontend/nginx.conf`, `src/frontend/default.conf.template` |
 | Backend entrypoint (auto migration) | `src/backend/scripts/backend_entrypoint.sh` |
-| OpenSandbox config template | `docker/opensandbox-config.toml.tpl` |
+| OpenSandbox config template | `docker/opensandbox-server/opensandbox-config.toml.tpl` |
 | Migrations | `alembic.ini`, `src/backend/alembic/` |
-| MCP port single source of truth | `src/backend/mcp_servers/_ports.py` |
+| MCP port single source of truth | `src/backend/extensions/mcp_servers/_ports.py` |
+
+### OpenSandbox command latency and controller image
+
+The controller is built from `docker/opensandbox-server/Dockerfile.opensandbox-server` as
+`hugagent-opensandbox-server:v0.1.13-3`. Based on a pinned upstream release,
+it inspects known sandboxes by name and verifies ownership labels. Synchronous
+Docker lookups in lifecycle and proxy routes run in a thread pool so other requests
+remain responsive. Builds verify upstream source hashes and run regression tests;
+review the patch before upgrading upstream. Offline deliveries must include this
+controller image, rather than only the original `opensandbox/server` image.
+
+The backend direct connection updates both SDK endpoint metadata and cached HTTP
+base URLs for commands, files and health checks. Status polling and incremental
+logs no longer return through the proxy. Unreachable direct endpoints or unsupported
+SDK layouts retain the proxy. Initial rollout requires rebuilding the controller
+image and restarting the backend and controller under the deployment authorization
+process. Verify repeated commands, backend restart recovery and concurrent requests.
+
+## Site data and browser deployment checks
+
+Ordinary Compose startup neither enables application hosting nor rebuilds the on-demand OpenSandbox runtime image.
+Complete the [application database upgrade](../modules/application-hosting.md) and [browser image checks](../modules/browser-automation.md) before deployment.
+Set different APPLICATION_DB_PASSWORD and APPLICATION_OWNER_DB_PASSWORD values.
+Configure shared Redis and an appropriate BROWSER_DNS_RESOLVER_URL.
+Use application_owner for runtime data access.
+Rerun application-database-init for existing volumes too.
+Update backend, MCP, frontend and sandbox images.
+Validate a fresh browser session.
+
+### Bound build resources when WSL memory is scarce
+
+Create a dedicated BuildKit builder from the WSL project directory:
+
+    printf '[worker.oci]\n  max-parallelism = 1\n' > /tmp/hugagent-buildkit.toml
+    docker buildx create --name hugagent-limited --driver docker-container \
+      --driver-opt memory=3g --driver-opt memory-swap=4g \
+      --driver-opt cpu-period=100000 --driver-opt cpu-quota=200000 \
+      --buildkitd-config /tmp/hugagent-buildkit.toml
+    BUILDX_BUILDER=hugagent-limited COMPOSE_PARALLEL_LIMIT=1 docker compose build backend
+    BUILDX_BUILDER=hugagent-limited COMPOSE_PARALLEL_LIMIT=1 docker compose build mcp
+    BUILDX_BUILDER=hugagent-limited COMPOSE_PARALLEL_LIMIT=1 docker compose build frontend
+    docker buildx build --builder hugagent-limited --load \
+      -f docker/sandbox/Dockerfile.opensandbox -t hugagent-opensandbox-custom:latest .
+    docker buildx stop hugagent-limited
+
+Reuse the builder if it already exists. Stop it after builds; its cache remains available.
+Application hosting still requires the application-hosting Compose overlay.
+Avoid running full builds alongside several browser test suites. Size WSL memory limits for other containers and editor processes too.
+
+## Model gateway startup and troubleshooting (EE)
+
+The model gateway uses the separate `litellm` service and the `gateway` profile.
+Setting `MODEL_GATEWAY_ENABLED=true` alone does not start the container. Append
+`gateway` to the existing `COMPOSE_PROFILES` list in `.env`, preserving other
+profiles. The backend admin URL is `http://litellm:4000` on the shared Docker network.
+
+To restore a deployment with an existing gateway database and key:
+
+```bash
+docker compose --profile gateway up -d --no-deps litellm
+docker compose ps litellm
+docker compose exec backend getent hosts litellm
+```
+
+PostgreSQL must already be healthy. Wait for LiteLLM startup migrations and its
+healthy status, then verify usage statistics and call logs in the console.
+Preserve the existing `litellm` database and `LITELLM_MASTER_KEY`; do not clear
+data or rotate keys to restore connectivity.
+
+For `Name or service not known`, check that the container exists, shares the
+backend network, and matches `LITELLM_ADMIN_URL`. External DNS may return a proxy
+address for a missing service name, so successful resolution alone does not
+prove that the gateway container exists.
+
+### Shared sandbox network
+
+Sandboxes again use the controller's configured shared Docker network. Creation,
+lookup, adoption, deletion and expiration do not create temporary networks or
+connect/disconnect backend and controller endpoints. No Docker or Compose
+upgrade is required. Discovery and cleanup remain scoped to the configured network.
+Sandbox-to-sandbox reachability and upstream direct-mode host port mappings are
+restored; this topology does not provide network isolation between sandboxes.
+
+Existing sandboxes on independent networks are not migrated or deleted automatically.
+Before deployment, inventory their files, mounts and snapshots, then authorize
+session downtime and recreation while preserving workspaces and data volumes.
+Do not force recovery by deleting networks. This cloud-controller change does not
+require a desktop client release.

@@ -2,8 +2,8 @@
 import sys
 import unittest
 from pathlib import Path
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from extensions.foreign_trade.engine import calculate_quote
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "extensions"))
+from foreign_trade.engine import calculate_quote
 
 class QuotePresentationTests(unittest.TestCase):
     def test_custom_packaging_is_not_folded_into_goods_price(self):

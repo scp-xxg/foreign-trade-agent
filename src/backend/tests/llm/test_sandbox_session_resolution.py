@@ -1,6 +1,7 @@
 from types import SimpleNamespace
+import pytest
 
-from core.llm.subagent_tool import _run_subagent_in_thread
+from core.llm.subagents.tool import _run_subagent_in_thread
 from core.llm.tools._common import resolve_sandbox_session
 
 
@@ -10,7 +11,11 @@ def test_empty_override_falls_back_to_chat_session():
     assert resolve_sandbox_session("explicit", "chat-1") == "explicit"
 
 
-def test_custom_subagent_reuses_parent_session(monkeypatch):
+@pytest.mark.parametrize("local_project", [False, True])
+def test_custom_subagent_reuses_parent_session(monkeypatch, local_project):
+    project_ctx = {"project_id": "p", "project_is_local": local_project,
+                   "project_local_path": "/tmp/project", "project_name": "Example"}
+    monkeypatch.setattr("core.config.local_mode.local_mode_enabled", lambda: True)
     captured = {}
 
     class FakeDbContext:
@@ -59,15 +64,15 @@ def test_custom_subagent_reuses_parent_session(monkeypatch):
 
     monkeypatch.setattr("core.db.engine.SessionLocal", lambda: FakeDbContext())
     monkeypatch.setattr(
-        "core.services.user_agent_service.UserAgentService",
+        'core.capabilities.agents.edition.UserAgentService',
         FakeUserAgentService,
     )
-    monkeypatch.setattr("core.llm.builtin_subagents.get_builtin_subagent", lambda _id: None)
+    monkeypatch.setattr('core.capabilities.agents.builtin.get_builtin_subagent', lambda _id: None)
     monkeypatch.setattr(
-        "core.llm.agent_factory.create_agent_executor",
+        "core.llm.factory.create_agent_executor",
         fake_create_agent_executor,
     )
-    monkeypatch.setattr("core.llm.mcp_manager.close_clients", no_op)
+    monkeypatch.setattr('core.llm.mcp.manager.close_clients', no_op)
     monkeypatch.setattr("core.infra.redis.close_redis", no_op)
     ok, text, _pinned, _messages = _run_subagent_in_thread(
         "custom-1",
@@ -81,12 +86,14 @@ def test_custom_subagent_reuses_parent_session(monkeypatch):
             "run_id": "root-run",
             "journal_owner": "ledger-owner",
             "capability_scope": "child-scope",
+            "project_ctx": project_ctx,
         },
     )
 
     assert ok is True
     assert text == "done"
     assert captured["sandbox_session_id"] == "chat-sandbox-1"
+    assert captured["project_ctx"] == (project_ctx if local_project else None)
 
     assert captured["run_id"] == "root-run"
     assert captured["journal_owner"] == "ledger-owner"
