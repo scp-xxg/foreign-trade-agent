@@ -58,6 +58,35 @@ class TeamBootstrapTests(unittest.TestCase):
                 execute.assert_not_called()
             self.assertFalse(home.exists())
 
+    def test_quick_check_selects_unittest_only_and_preserves_python_for_frontend(self):
+        selected_python = Path("/tmp/selected-public-venv/bin/python")
+        home = Path("/tmp/not-used-by-quick-check")
+        output = io.StringIO()
+        with patch.object(team, "PYTHON", selected_python), patch.object(team, "run") as run:
+            with redirect_stdout(output):
+                team.check(argparse.Namespace(dry_run=False, running=False), team.runtime_env(home))
+        calls = run.call_args_list
+        python_calls = [call for call in calls if str(call.args[0][0]) == str(selected_python)]
+        self.assertEqual(len(python_calls), 5)
+        patterns = [call.args[0][call.args[0].index("-p") + 1] for call in python_calls]
+        self.assertEqual(set(patterns), {
+            "test_foreign_trade_engine.py", "test_foreign_trade_env_isolation.py",
+            "test_foreign_trade_quote_identity.py", "test_foreign_trade_quote_presentation.py",
+            "test_foreign_trade_team.py",
+        })
+        self.assertTrue(all("*" not in pattern and "collaboration" not in pattern for pattern in patterns))
+        self.assertTrue(all(call.args[0][1:4] == ["-m", "unittest", "discover"] for call in python_calls))
+        frontend_calls = [call for call in calls if call.args[0][0] == "npm"]
+        self.assertEqual([call.args[0][-1] for call in frontend_calls], [
+            "test:foreign-trade-quote", "test:foreign-trade-content-card",
+            "test:foreign-trade-collaboration", "test:foreign-trade-content-mode",
+        ])
+        self.assertTrue(all(call.kwargs["env"]["FOREIGN_TRADE_TEST_PYTHON"] == str(selected_python)
+                            for call in frontend_calls))
+        self.assertEqual(len(calls), 9)
+        self.assertIn("未运行完整 pytest", output.getvalue())
+        self.assertIn("真实模型对话", output.getvalue())
+
     def test_start_refuses_existing_backend_before_starting_mcp(self):
         with tempfile.TemporaryDirectory() as temp:
             home = Path(temp)

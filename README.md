@@ -21,12 +21,12 @@
 
 ## 队友快速部署（Linux / WSL2）
 
-本次升级在 [PR #3](https://github.com/scp-xxg/foreign-trade-agent/pull/3) 审阅。PR 合并前，体验此版请在 clone 后执行 `git switch --track origin/codex/foreign-trade-chat-plugin`，再执行 setup；直接拉取 main 不会得到此升级。
+团队统一从 `main` 获取公开版本，无需切换历史功能分支。首次部署见 [队友部署指南](docs/TEAM_SETUP.md)，现场操作见 [三个场景逐步演示](docs/DEMO_WALKTHROUGH.md)。
 
-先准备 **Python 3.11+、Node.js 22（至少 22.12）、Git**；推荐 Python 3.11。Node 20.19+ 也满足当前前端要求。Windows 队员请进入 WSL2 Linux 终端执行。
+先准备 **Python 3.11+（内置 SQLite ≥ 3.38）、Node.js 22（至少 22.12）、Git**；推荐 Python 3.11。Node 20.19+ 也满足当前前端要求。Windows 队员请进入 WSL2 Linux 终端执行。
 
 ```bash
-git clone https://github.com/scp-xxg/foreign-trade-agent.git
+git clone --branch main https://github.com/scp-xxg/foreign-trade-agent.git
 cd foreign-trade-agent
 python3.11 extensions/foreign_trade/team.py setup
 .venv/bin/python extensions/foreign_trade/team.py init
@@ -41,7 +41,9 @@ python3.11 extensions/foreign_trade/team.py setup
 
 默认地址 **http://127.0.0.1:3001**；个人数据位于 `~/.foreign-trade-agent`。
 
-首次登录进入 **系统设置 → 模型服务 → 添加模型**，填写自己的模型服务地址、API Key、模型名及上下文长度，保存并测试。将对话模型指派给 **主智能体推理 main_agent**，其他使用的对话角色也按页面提示指派。模型须支持工具调用；仓库不附带开发者的模型密钥。
+暂不配置模型也可登录并按 [演示手册](docs/DEMO_WALKTHROUGH.md) 完成三条工作台流程。产品资料生成须明确选择“本地原文模板（不调用模型）”，使用已确认的英文事实。
+
+需要聊天编排或 AI 翻译时，再进入 **系统设置 → 模型服务 → 添加模型**，填写自己的模型服务地址、API Key、模型名及上下文长度，保存并测试。将对话模型指派给 **主智能体推理 main_agent**，其他使用的对话角色也按页面提示指派。模型须支持工具调用；仓库不附带开发者的模型密钥。
 
 团队入口使用本机 SQLite，报价场景无需 Docker、PostgreSQL、Redis 或外部向量库。首次安装需要网络；老版本 Linux 可能需要 Rust/Cargo 编译依赖，setup 会提前检查。
 
@@ -51,7 +53,7 @@ python3.11 extensions/foreign_trade/team.py setup
 |---|---|
 | 首页、外贸文案、6 条推荐问题、当前 Logo | 同一版本及初始化配置，保持一致 |
 | 模拟目录、报价规则、PDF / Excel 下载卡 | 同一版本保持一致 |
-| 询盘工作台、产品内容工作台、公开演示素材 | 同一版本保持一致；每人自行上传和创建演示记录 |
+| 询盘、产品内容、跨岗位协同工作台及公开演示素材 | 同一版本保持一致；每人自行上传和创建演示记录 |
 | 外贸业务助手（演示）插件 | init 自动安装四个技能到你的账号，原报价工具保留 |
 | 账号密码、模型 Key、聊天历史、上传文件 | 每台机器独立，不通过 Git 同步 |
 | 模型措辞、速度与推理质量 | 取决于所配模型，金额以计算工具为准 |
@@ -60,10 +62,16 @@ python3.11 extensions/foreign_trade/team.py setup
 
 ## 日常更新
 
-停止自己运行的服务，保存本地改动后执行。旧数据升级会在自己的 app-home 下建立 SQLite 回滚快照，不复制其他队员的账号与模型配置。升级说明见 [2026-10-28 上游同步](docs/UPSTREAM_SYNC_20261028.md)。
+**首次从旧版公共实例升级时，先走 [部署指南](docs/TEAM_SETUP.md) 的旧库升级路径，不能先运行下面的通用 install。** 旧库所需的协议兼容参数必须在第一次迁移前确认；以下简版适用于已完成该迁移的实例。
+
+下面简版仅适用于团队默认数据目录 `~/.foreign-trade-agent`；已有实例使用其他目录时，先按 [部署指南](docs/TEAM_SETUP.md) 核对并给所有数据命令传入同一个 `--app-home`。
+
+停止自己运行的网页及 MCP，提交或另存本地改动后执行。旧数据升级会在自己的 app-home 下建立 SQLite 回滚快照，不复制其他队员的账号与模型配置。升级说明见 [2026-10-28 上游同步](docs/UPSTREAM_SYNC_20261028.md)。
 
 ```bash
-git pull --ff-only
+git fetch origin
+git switch main
+git pull --ff-only origin main
 python3.11 extensions/foreign_trade/team.py setup
 .venv/bin/python extensions/foreign_trade/team.py install --username YOUR_USERNAME
 .venv/bin/python extensions/foreign_trade/team.py start
@@ -77,7 +85,9 @@ install 更新外贸插件、首页和默认提示词，保留原账号密码与
 .venv/bin/python extensions/foreign_trade/team.py check
 ```
 
-网页验收：先查询 DESK-001，再报价“1000 件、定制包装、目的国西班牙”。预期货值 **USD 4800.00**、包装费 **USD 300.00**、不含运费及税费小计 **USD 5100.00**，并能下载两种报价单。
+无可用模型时按 [演示手册](docs/DEMO_WALKTHROUGH.md) 从工作台操作；聊天验收需另外配置并验证模型。
+
+报价验收：先查询 DESK-001，再报价“1000 件、定制包装、目的国西班牙”。预期货值 **USD 4800.00**、包装费 **USD 300.00**、不含运费及税费小计 **USD 5100.00**，并能下载两种报价单。
 
 ## 四人协作
 

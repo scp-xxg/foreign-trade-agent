@@ -213,8 +213,27 @@ def start(args, home: Path, env: dict[str, str]) -> None:
 
 
 def check(args, env: dict[str, str]) -> None:
-    run([PYTHON, "-m", "unittest", "discover", "-s", ROOT / "tests", "-p", "test_foreign_trade*.py"], env=env, dry_run=args.dry_run)
-    run(["npm", "--prefix", FRONTEND, "run", "test:foreign-trade-quote"], env=env, dry_run=args.dry_run)
+    # Deliberately enumerate unittest suites: the similarly named collaboration
+    # module uses pytest fixtures and must not be imported or silently skipped.
+    for filename in (
+        "test_foreign_trade_engine.py",
+        "test_foreign_trade_env_isolation.py",
+        "test_foreign_trade_quote_identity.py",
+        "test_foreign_trade_quote_presentation.py",
+        "test_foreign_trade_team.py",
+    ):
+        run([PYTHON, "-m", "unittest", "discover", "-s", ROOT / "tests", "-p", filename],
+            env=env, dry_run=args.dry_run)
+    frontend_env = dict(env, FOREIGN_TRADE_TEST_PYTHON=str(PYTHON))
+    for script in (
+        "test:foreign-trade-quote",
+        "test:foreign-trade-content-card",
+        "test:foreign-trade-collaboration",
+        "test:foreign-trade-content-mode",
+    ):
+        run(["npm", "--prefix", FRONTEND, "run", script],
+            env=frontend_env, dry_run=args.dry_run)
+    print("快速离线自检完成：unittest 与前端报价、资料、协同和生成模式检查；未运行完整 pytest、真实模型对话或完整工作台验收。")
     if args.running:
         run([PYTHON, HERE / "smoke_test.py"], env=env, dry_run=args.dry_run)
         if not args.dry_run:

@@ -17,14 +17,22 @@
 
 新版 Python 服务命令是 `hugagent-server`；`hugagent` 是上游新增的终端客户端。团队脚本已适配该变化。使用仓库中的完整依赖和锁文件重新 setup，不将旧 AgentScope 虚拟环境视为兼容。
 
-更新前停止自己运行的后端和 MCP，保留源码改动，再执行团队部署指南中的 setup 和 install。升级程序在明确的 app-home 下先创建不覆盖已有文件的 SQLite 快照，再运行 Alembic 与本地 schema 初始化。失败即停止，不通过手工 stamp 跳过迁移限制。
+团队部署统一使用本仓库的 `origin/main`，无需切换历史 PR 分支。新队友按 [队友部署指南](TEAM_SETUP.md) 执行 clone main → setup → init → start → check。已有队友先保存源码改动并停止自己运行的后端和 MCP，再切换 main、`git pull --ff-only origin main` 和 setup；首次从旧公共版本升级时，先按该指南确认旧库及协议并执行 upgrade，成功后再对同一 app-home 执行 install/start。不能先 install 到新版后再补 legacy 参数，也不使用 init 或 `--allow-create` 补空库。
 
-旧版公共演示可能由本地 `create_all` 建库、没有 Alembic 版本标记。只有明确来自旧版 Chat Completions 环境时，升级使用 `--legacy-chat-completions`，将升级前已存在且未显式设置协议的对话模型保留为 Chat Completions；已指定的协议、新模型和非对话模型不被覆盖。该参数不设置地址、密钥、模型名或采样参数。
+新实例默认目录为 `~/.foreign-trade-agent`；已有实例每条命令都传原 `--app-home`，不能猜默认目录。另选虚拟环境时，每条 team.py 命令也传同一个 `--venv`。Python 需 3.11+，其 SQLite 需 3.38+；Node 支持 20.19+（20.x）或 22.12+，推荐 22 LTS。仅 setup 构建不会安装外贸首页与插件，首次还须 init；已有账号使用 install。
+
+升级程序在明确的 app-home 下先创建不覆盖已有文件的 0600 SQLite 快照，再运行 Alembic 与本地 schema 初始化。失败即停止，不通过手工 stamp 跳过迁移限制。
+
+旧版公共演示可能由本地 `create_all` 建库、没有 Alembic 版本标记。只有明确来自旧版 Chat Completions 环境时，升级使用 `--legacy-chat-completions`，将升级前已存在、未显式设置协议且适用两种 OpenAI 传输选择的对话模型保留为 Chat Completions；已指定的协议、新版迁移后新增的模型、非对话模型及不适用的厂商不被覆盖。该参数不设置地址、密钥、模型名或采样参数。
+
+旧文件重名修复须显式使用 `--repair-legacy-filenames --expected-filename-repairs N`，N 以本实例报告为准。修复保留文件身份、归属、存储引用、字节和原名审计，不删除或移动物理文件。升级成功后不再重复传仍期待 N 条修复的参数。SQLite 快照不是上传文件和能力目录的完整备份，回滚也须保留原文件及匹配的源码、依赖。
 
 备份和恢复文件均是本机部署数据，包含私人账户状态，禁止提交 Git、发送给队员或放入插件 ZIP。队友应自行初始化账号与模型。
 
 ## 验收要求
 
-自动化测试应同时覆盖三个业务服务、真实 Toolkit 调用、用户隔离、版本冲突、资料变化、人工确认和实际导出文件；浏览器还需单独验证真实模型编排、登录、刷新与下载。
+`team.py check` 是快速离线自检；`--running` 仅额外检查网页和 MCP。两者都不代表全量 pytest 或模型成功。完整自动化测试应同时覆盖三个业务服务、真实 Toolkit 调用、用户隔离、版本冲突、资料变化、人工确认和实际导出文件；浏览器还需单独验证真实模型编排、登录、刷新与下载。
+
+本地原文模板不调用模型，也不翻译；英文文案和图片须先核对原始事实已为英文。通过聊天驱动技能及 AI 翻译生成，需要另行配置并验证可用模型，不能将本地模板输出称为 AI 成功。
 
 升级不能把 2026-10-21 的部分通过记录改成完整通过。当前现场结果在验收记录中单独记录；在三条完整聊天业务流程和实际下载核对完成之前，不因编译或单元测试通过就宣称整体发布通过。

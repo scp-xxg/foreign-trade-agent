@@ -48,3 +48,10 @@ are local deployment state and are not distributed.
 - Validate real MCP 2.x queries and quotations and preserve existing bilingual exports. Runtime and real-model acceptance are recorded separately from automated checks.
 - Add explicit no-model template mode for confirmed English product facts; include public demo sources and licenses in the plugin archive.
 - Preserve the stored provider protocol in AI helper calls using the upstream resolved configuration contract.
+
+## Team handoff and main deployment (2026-10-29)
+
+- Document main-branch setup, existing-instance updates, old-database migration order and concrete three-scenario demonstrations.
+- Keep no-model workbench demonstrations separate from model-dependent chat acceptance.
+- Make the quick-check command select explicit unittest suites and the configured Python environment; retain full business regression in CI.
+- Include the deployment and walkthrough guides in the public plugin archive.
