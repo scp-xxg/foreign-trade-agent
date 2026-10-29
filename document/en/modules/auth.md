@@ -64,7 +64,7 @@ ontology validation.
   `users_shadow.metadata`. Refreshing or signing in again doesn't repeat a
   completed setup flow.
 
-The terminal-based `hugagent onboard` command already configures the account
+The terminal-based `hugagent-server onboard` command already configures the account
 and model. After it finishes successfully, it writes the same completion
 marker so the browser doesn't repeat the setup.
 
@@ -77,17 +77,19 @@ GET  /mock-sso/login            → generates a one-time ticket and redirects ba
 POST /mock-sso/ticket/exchange  → validates the ticket and returns user info
 ```
 
-Tickets are stored in the in-process `core/auth/mock_ticket_store.py`, consumed by `core/auth/sso.py` in mock mode. To test manually, open `http://localhost:3001/mock-sso/login?redirect=/` in a browser.
+Tickets are stored in the in-process `core/auth/mock_ticket_store.py`, consumed by `edition_ee/auth/sso.py` in mock mode. To test manually, open `http://localhost:3001/mock-sso/login?redirect=/` in a browser.
 
 ### Enterprise SSO (Enterprise Edition)
 
-Production SSO uses a ticket-exchange flow implemented in `core/auth/sso.py`, **gated by the license feature `Feature.SSO`**:
+Production SSO uses a ticket-exchange flow implemented in `edition_ee/auth/sso.py`, **gated by the license feature `Feature.SSO`**:
 
-- `POST /v1/auth/ticket/exchange` — exchange a one-time ticket for a session (`api/routes/v1/auth.py`)
+- `POST /v1/auth/ticket/exchange` — exchange a one-time ticket for a session (`edition_ee/routes/auth.py`)
 - `GET /v1/auth/sso/authorize-url` — proxies the SSO provider's OAuth authorize URL; guarded at the route level with `requires_feature(Feature.SSO)`
 - `GET /v1/auth/session/check` / `POST /v1/auth/logout` — session check and logout (infrastructure, never license-gated)
 
 `SSO_EXCHANGE_MODE` switches between real mode (`GET {SSO_TICKET_EXCHANGE_URL}?{callback_param}={credential}`) and mock mode; `SSO_CALLBACK_PARAM` supports both `ticket` (legacy) and `code` (the OAuth2-style provincial SSO) parameter names.
+
+The SSO provider must return a JSON object with finite numeric success code 0 (including 0.0; Boolean values are not success codes). Invalid JSON, response shapes, or authorization/logout address shapes produce controlled errors. SSO client logs and browser errors exclude network exception text, provider bodies/messages, and credential bytes. The supported ticket / code exchange and identity formats remain unchanged.
 
 ### Session management
 
@@ -118,7 +120,7 @@ User-facing endpoints:
 
 ### Interface layer (CE/EE split seam)
 
-`core/auth/permissions_iface.py` is the **single import point** for permission symbols: mainline code (deps / files / chats / projects / kb, etc.) imports only from here, never from the concrete implementations. In the EE main repo it purely re-exports three real implementations; in the CE-derived tree the whole file is replaced by a single-tenant stub and the three implementation files do not physically exist:
+`core/auth/personal_permissions_iface.py` is the **single import point** for permission symbols: mainline code (deps / files / chats / projects / kb, etc.) imports only from here, never from the concrete implementations. In the EE main repo it purely re-exports three real implementations; in the CE-derived tree the whole file is replaced by a single-tenant stub and the three implementation files do not physically exist:
 
 | Implementation file | Responsibility |
 |---|---|
@@ -183,7 +185,9 @@ The actual gating, verified against each route file's dependencies:
 | `PATCH /v1/me/api-keys/{key_id}` | Enable / disable |
 | `DELETE /v1/me/api-keys/{key_id}` | Revoke |
 
-Keys look like `sk-jx-...` and can be used as a Bearer token to call business APIs **in every AUTH_MODE** (external programmatic callers usually have no cookies). Validation (enabled / not revoked / not expired / user flag still on) is centralized in `core/services/api_key_service.py::resolve_api_key`.
+Keys look like `sk-jx-...` and can be used as a Bearer token to call business APIs **in every AUTH_MODE** (external programmatic callers usually have no cookies). Validation (enabled / not revoked / not expired / user flag still on) is centralized in `core/auth/api_keys.py::resolve_api_key`.
+
+Disabling or revoking an API key rejects new requests and cancels its admitted chat tasks that are pending, running, or awaiting attention. Cancellation stops background execution and terminates the SSE stream; completed external tool effects cannot be undone. Re-enabling the key does not resume cancelled tasks. Call duration stays fixed after execution stops, including the needs-attention state.
 
 ## Teams & invite codes (Enterprise Edition)
 
@@ -203,16 +207,16 @@ Key authentication events all land in the audit table (`audit_logs`): login succ
 |---|---|
 | Auth backend (three modes + resolution priority) | `src/backend/core/auth/backend.py` |
 | Session management (Redis) | `src/backend/core/auth/session.py` |
-| SSO ticket exchange | `src/backend/core/auth/sso.py`, `src/backend/api/routes/v1/auth.py` |
+| SSO ticket exchange | `src/backend/edition_ee/auth/sso.py`, `src/backend/edition_ee/routes/auth.py` |
 | Mock SSO / local login & registration page | `src/backend/api/routes/v1/mock_sso.py`, `src/backend/core/auth/mock_ticket_store.py` |
 | Password hashing | `src/backend/core/auth/password.py` |
-| Permission interface layer (CE/EE seam) | `src/backend/core/auth/permissions_iface.py` |
+| Permission interface layer (CE/EE seam) | `src/backend/core/auth/personal_permissions_iface.py` |
 | Team roles / file permissions (EE) | `src/backend/edition_ee/auth/roles.py`, `src/backend/edition_ee/auth/team_permissions.py` |
 | Project / chat-share permissions (EE) | `src/backend/edition_ee/auth/project_permissions.py`, `src/backend/edition_ee/auth/chat_share_permissions.py` |
 | Administrative credential dependencies | `src/backend/api/deps.py` |
 | Profile / preferences | `src/backend/api/routes/v1/users.py` |
 | Per-user permission flags | `src/backend/edition_ee/routes/config_users.py` |
-| Personal API keys | `src/backend/api/routes/v1/api_keys.py`, `src/backend/core/services/api_key_service.py` |
+| Personal API keys | `src/backend/api/routes/v1/api_keys.py`, `src/backend/core/auth/api_keys.py` |
 | Capability-center self-service (owner isolation) | `src/backend/api/routes/v1/me_capabilities.py` |
 | Invite codes | `src/backend/edition_ee/auth/invite.py`, `src/backend/edition_ee/routes/config_invites.py` |
 | Team management | `src/backend/edition_ee/routes/config_teams.py`, `src/backend/edition_ee/routes/me_teams.py` |

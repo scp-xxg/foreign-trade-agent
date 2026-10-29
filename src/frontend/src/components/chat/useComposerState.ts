@@ -1,0 +1,189 @@
+import { chatDraftKey, useComposerDraft, useComposerStore } from '../../stores/composerStore';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useChatStore, useUIStore, useCatalogStore, useAuthStore, usePluginStore, usePluginUiStore, useEditionStore } from '../../stores';
+import { useProjectStore } from '../../stores/projectStore';
+import { projectCreationTargets, useDeploymentModeStore } from '../../stores/deploymentModeStore';
+import { useAgentStore } from '../../stores/agentStore';
+import { useModelCapabilitiesStore } from '../../stores/modelCapabilitiesStore';
+import { createLocalProject, getProject } from '../../api';
+import type { ProjectDetail } from '../../types';
+import { resolveWorkflowModeActive } from '../../utils/chatMode';
+import { canInitializeProject } from '../../utils/projectCommands';
+import type { ComposerOptions } from './composerTypes';
+
+export function useComposerState({
+  abort,
+}: ComposerOptions) {
+  const {
+    sending: storeSending,
+    planMode, loopMode, setLoopMode, currentChat, enterChatMode, exitChatMode,
+    currentChatId, bindChatProject, unbindChatProject,
+    queuedMessages, updateQueuedMessage, activeRuns,
+  } = useChatStore();
+  // Autonomous-loop capability bit (enabled by default): without permission the "autonomous loop" toggle is hidden
+  const loopCapEnabled = useAuthStore((s) => s.authUser?.can_run_autonomous_loop);
+  // Lab permission (undefined defaults to enabled): the autonomous loop is an experimental ability, only shown in lab users' chats
+  const labEnabled = useAuthStore((s) => s.authUser?.lab_enabled);
+  // Which apps are open to the current user (same allowed_apps gate as the "App Center")
+  const allowedApps = useAuthStore((s) => s.authUser?.allowed_apps ?? null);
+  const isAppAllowed = (id: string) => !Array.isArray(allowedApps) || allowedApps.includes(id);
+  const planModeAllowed = !Array.isArray(allowedApps) || allowedApps.includes('plan_mode');
+  // Skill list (for the skills submenu of the "+" menu)
+  const skills = useCatalogStore((s) => s.catalog.skills);
+  // Enabled MCP servers are user-facing "connectors" in the composer.
+  const connectors = useCatalogStore((s) => s.catalog.mcp);
+  // Project list (for the toolbar "Project" selector dropdown)
+  const projects = useProjectStore((s) => s.list);
+  const fetchProjects = useProjectStore((s) => s.fetchProjects);
+  const setProjectCreateModalOpen = useProjectStore((s) => s.setCreateModalOpen);
+  // Sub-agent list (for the "@sub-agent" submenu of the "+" menu)
+  const agents = useAgentStore((s) => s.agents);
+  const fetchAgents = useAgentStore((s) => s.fetchAgents);
+  // Installed plugins (for the "Plugins" submenu of the "+" menu + the / slash popup).
+  // Uses the shared store: the capability center forces a refresh after install/uninstall,
+  // so this syncs immediately (avoids fetching only on mount, which would hide newly installed plugins).
+  const installedPlugins = usePluginStore((s) => s.installed);
+  useEffect(() => {
+    void usePluginStore.getState().fetchInstalled();
+    // 插件贡献的工具卡片/画布声明也在这里首次拉取：对话面板是它们的主要出场位置。
+    void usePluginUiStore.getState().fetchContributions();
+  }, []);
+  const sending = storeSending;
+  const draftKey = chatDraftKey(currentChatId);
+  const visibleKey = useComposerStore(s => s.activeKey);
+  useLayoutEffect(() => {
+    if (visibleKey !== draftKey) useComposerStore.getState().activate(draftKey);
+  }, [draftKey, visibleKey]);
+  const {
+    input, setInput, quotedFollowUp, setQuotedFollowUp,
+    activeSkill, setActiveSkill, activePlugin, setActivePlugin,
+    activeConnector, setActiveConnector, activeMention, setActiveMention,
+    activeCommand, setActiveCommand, referencedChats, addReferencedChat,
+    removeReferencedChat, uploadedFiles, uploadingFiles, importedSpaceFiles,
+  } = useComposerDraft(draftKey);
+  const { promptHubOpen, setPromptHubOpen } = useUIStore();
+  const isCE = useEditionStore((s) => s.edition === 'ce');
+  const _currentChat = currentChat();
+  const workflowModeOn = resolveWorkflowModeActive(_currentChat);
+  const isSiteChat = !!_currentChat?.siteChat;
+  // Whether the "autonomous loop" entry is shown: normal chat (not plan/project page)
+  // + has the loop capability bit + has lab permission. When eligible it no longer occupies
+  // the toolbar but is tucked into the "+" attachment menu, visible to lab users only.
+  const showLoopEntry =
+    !planMode && loopCapEnabled !== false && labEnabled !== false;
+  // 当前部署能否读图：主模型原生多模态，或后台配了「图像理解（视觉桥）」角色。
+  // 未加载完成时按 true 处理，避免首屏闪出一句「不识图」又立刻收回。
+  const canReadImage = useModelCapabilitiesStore(
+    (s) => !s.loaded || s.capabilities.can_read_image !== false,
+  );
+  const imageInputRef = useRef<HTMLInputElement | null>(null);
+  const [mySpaceImportOpen, setMySpaceImportOpen] = useState(false);
+  // 工具条各下拉的展开态：只用于让 chip 亮起 + 箭头翻转，让"按钮/浮层"读起来是一体的
+  const [projectOpen, setProjectOpen] = useState(false);
+  const [attachOpen, setAttachOpen] = useState(false);
+  // Module C: no My Space in local mode → hide "从我的空间导入".
+  const activeLocalMode = useDeploymentModeStore((s) => s.activeLocal);
+  const provisionMode = useDeploymentModeStore((s) => s.provisionMode);
+  const isDesktopShell = useDeploymentModeStore((s) => s.isDesktop);
+  const {
+    cloud: canCreateCloudProject,
+    local: canCreateLocalProject,
+  } = projectCreationTargets(isDesktopShell, provisionMode);
+  // 混合架构：双模式=云端身份 + 本机执行面，本地项目能力在 dual 下同样可用。
+  const localCapable = canCreateLocalProject;
+  // 项目下拉里的「新建本地项目」：跳壳的文件夹选择器（/__desktop/pick-local-folder），
+  // 壳选完把路径以 hugagent:local-folder 事件回抛到页面；这里建项目、刷新列表并
+  // 文件夹菜单创建项目后，绑定当前统一会话。
+  useEffect(() => {
+    if (!isDesktopShell || !localCapable) return;
+    const onFolder = (e: Event) => {
+      const path = (e as CustomEvent<string>).detail;
+      if (!path) return;
+      const name = path.split(/[/\\]/).filter(Boolean).pop() || '本地项目';
+      createLocalProject({ name, local_path: path })
+        .then((proj) => {
+          void useProjectStore.getState().fetchProjects();
+          const { currentChatId: chatId, bindChatProject: bind } = useChatStore.getState();
+          if (chatId) bind(chatId, proj.project_id, proj.name);
+        })
+        .catch((err) => {
+          alert('新建本地项目失败：' + (err?.message || err));
+        });
+    };
+    window.addEventListener('hugagent:local-folder', onFolder as EventListener);
+    return () => window.removeEventListener('hugagent:local-folder', onFolder as EventListener);
+  }, [isDesktopShell, localCapable]);
+
+  const commandProjectId = _currentChat?.projectId;
+  const [loadedCommandProject, setLoadedCommandProject] = useState<ProjectDetail | null>(null);
+  const listedCommandProject = projects.find((p) => p.project_id === commandProjectId);
+  // Existing chats can refer to projects outside the paginated selector list.
+  useEffect(() => {
+    if (!commandProjectId || listedCommandProject) return;
+    let cancelled = false;
+    void getProject(commandProjectId).then((project) => {
+      if (!cancelled) setLoadedCommandProject(project);
+    }).catch(() => { if (!cancelled) setLoadedCommandProject(null); });
+    return () => { cancelled = true; };
+  }, [commandProjectId, listedCommandProject]);
+  const commandProject = listedCommandProject
+    ?? (loadedCommandProject?.project_id === commandProjectId ? loadedCommandProject : null);
+  const canInitProject = canInitializeProject({
+    projectId: commandProjectId,
+    permission: commandProject?.permission,
+    busy: sending,
+    hasCapability: !!(activeSkill || activePlugin || activeConnector || activeMention
+      || _currentChat?.agentId),
+    specialMode: !!(planMode || workflowModeOn || loopMode),
+  });
+
+  // ── Project binding (toolbar "Project" selector dropdown, to the right of the Prompt Hub) ──
+  const boundProjectId = _currentChat?.projectId;
+  const boundProjectName =
+    _currentChat?.projectName ||
+    projects.find((p) => p.project_id === boundProjectId)?.name ||
+    '';
+
+  function onPickProject(projectId: string, projectName: string) {
+    bindChatProject(currentChatId, projectId, projectName);
+  }
+
+  function isModeOn(mode: 'plan' | 'workflow') {
+    if (mode === 'plan') return planMode;
+    return workflowModeOn;
+  }
+
+  function onEnterMode(mode: 'plan' | 'workflow') {
+    enterChatMode(mode, { inPlace: true });
+  }
+
+  function onCloseMode(mode: 'plan' | 'workflow') {
+    // 关掉计划模式的同时得真的把正在跑的计划停下来。原来这里只翻了个
+    // planModeActive 标志位：后端的计划和 run 继续跑，卡片也一直挂在「执行中」，
+    // 用户以为已经关掉了（问题 31）。abort() 会取消 run、取消计划、并把卡片落成已中断。
+    if (mode === 'plan' && sending) {
+      abort?.();
+    }
+    exitChatMode(mode);
+  }
+
+
+  return {
+    draftKey,
+    input, setInput, quotedFollowUp, setQuotedFollowUp, activeSkill, setActiveSkill,
+    activePlugin, setActivePlugin, activeConnector, setActiveConnector, activeMention,
+    setActiveMention, activeCommand, setActiveCommand, planMode, loopMode, setLoopMode,
+    currentChatId, bindChatProject, unbindChatProject, queuedMessages, updateQueuedMessage,
+    activeRuns, referencedChats, addReferencedChat, removeReferencedChat,
+    isAppAllowed, planModeAllowed, skills, connectors, projects,
+    fetchProjects, setProjectCreateModalOpen, agents, fetchAgents, installedPlugins,
+    sending, uploadedFiles, uploadingFiles, importedSpaceFiles, promptHubOpen, setPromptHubOpen,
+    isCE, _currentChat, workflowModeOn, isSiteChat, showLoopEntry, canReadImage,
+    imageInputRef, mySpaceImportOpen, setMySpaceImportOpen, projectOpen, setProjectOpen,
+    attachOpen, setAttachOpen, activeLocalMode, isDesktopShell, canCreateCloudProject,
+    canCreateLocalProject, canInitProject, boundProjectId, boundProjectName,
+    onPickProject, isModeOn, onEnterMode, onCloseMode,
+  };
+}
+
+export type ComposerState = ReturnType<typeof useComposerState>;

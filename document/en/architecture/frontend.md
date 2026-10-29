@@ -1,8 +1,8 @@
 # Frontend Architecture
 
-> Last updated: 2026-06-11
+> Last updated: 2026-10-18
 
-The frontend lives in `src/frontend/` and is a React 19 + TypeScript single-page application: built with Vite, styled with Ant Design, state-managed with Zustand, and deliberately router-framework-free — the entry module switches between five independent app shells by URL path. Production builds are served by the Nginx container, and every backend call funnels through one typed client, `api.ts`.
+The frontend lives in `src/frontend/` and is a React 19 + TypeScript single-page application: built with Vite, styled with Ant Design, state-managed with Zustand, and uses React Router in the main workspace — the entry module switches between five independent app shells by URL path. Production builds are served by the Nginx container, and every backend call funnels through one typed client, `api.ts`.
 
 ## Multiple App Shells
 
@@ -18,15 +18,31 @@ The frontend lives in `src/frontend/` and is a React 19 + TypeScript single-page
 
 The CE derived tree physically removes `AdminApp.tsx` / `ConfigApp.tsx` together with `components/admin/` and `components/config/` (declared in `ce/manifest.yaml`) and ships a slimmed-down `main.tsx` via overlay.
 
+## Module navigation and responsibilities
+
+The main workspace uses a module icon rail, a contextual sidebar, and a content area. Chat lists ordinary and project conversations. The capability sidebar selects agents, plugins, skills, and connectors; installed capabilities and their actions stay in the content area. My Space navigation covers files, knowledge bases, favorites, shares, and notifications. Scheduled-task setup and execution conversations remain in Scheduled Tasks, with consistent URLs across search, notifications, reloads, and browser history.
+
+App.tsx connects useAppController, AppAuthGate, and AppWorkspace. useAppBootstrap, useChatRecovery, useChatSearch, and useChatViewport own initialization, stream recovery, search, and scrolling. Sidebar components separate module menus, conversation rows, project groups, and account tools. My Space separates its controller, folder actions, knowledge picker, header, content, and dialogs. Routes own module location; automationStore owns the task list.
+
+## Module page scrolling and App Center
+
+AppWorkspace owns vertical scrolling for ordinary module pages. The scroll viewport spans the available page width, placing the scrollbar at that page's right edge. Maximum widths on project cards, My Space files and application cards only constrain reading content; they do not create page scroll containers. Module URL changes return to the top. The My Space header remains sticky. Chat, Canvas and plugin workspaces retain their dedicated layouts. Dialogs, editors and bounded previews can still own internal scrolling.
+
+Shared layout styles live in `styles/workspace-layout.css`. My Space and Automation styles are split by layout, files, assets, detail, creation and responsive responsibilities. Their entry files only import those modules. New pages must not combine full-page percentage heights and auto overflow inside a constrained reading column.
+
+App Center restores the icon/name/description card grid for mode commands such as Plan Mode, plugin applications and external scenario applications. Shell navigation modules are excluded. The server directory and launch checks still control discovery, availability and opening. Retired batch execution and token-in-URL behavior are not restored.
+
+Run `npm run test:module-pages` to verify nine modules across classic/modern layouts and wide/medium/narrow viewports, actual mouse wheel scrolling, scrollbar geometry, centered reading widths, application cards and keyboard Plan Mode launch. This command also runs chat/Canvas width regressions. `npm run test:sidebar-navigation` continues to cover More and secondary navigation.
+
 ## api.ts — the typed API client
 
-`src/api.ts` (~2,200 lines) is the single gateway to the backend:
+`src/api.ts` is the single gateway to the backend:
 
 - **Base URL**: `getApiUrl()` returns `import.meta.env.VITE_API_BASE_URL || '/api'` — the Vite proxy in development, same-origin `/api` behind Nginx in production;
 - **Envelope unwrapping**: the backend uniformly returns `{ code, message, data, trace_id, timestamp }`; `isApiEnvelope` + `unwrapData<T>` extract `data` automatically, so callers receive plain business types;
 - **Auth integration**: `onUnauthorized(handler)` registers the 401 callback; `authStore` uses it to centralize the login redirect;
 - **Friendly errors**: helpers like `uploadErrorMessage` recognize non-JSON failures such as Nginx 413 (`client_max_body_size` exceeded) and produce readable messages;
-- **Domain functions**: hundreds of named functions — session CRUD / streaming and resume / message feedback / knowledge base / artifacts / automation / batch / projects / memories / capability center — each typed against the shared definitions in `types.ts`.
+- **Domain functions**: hundreds of named functions — session CRUD / streaming and resume / message feedback / knowledge base / artifacts / automation / projects / memories / capability center — each typed against the shared definitions in `types.ts`.
 
 SSE streams bypass the JSON channel of `api.ts`; they are consumed directly from `fetch` streams by `hooks/useStreaming.ts`.
 
@@ -37,8 +53,7 @@ SSE streams bypass the JSON channel of `api.ts`; they are consumed directly from
 | `admin/` (Enterprise Edition, EE) | Content-console panels: skill / KB / agent managers, page-config editor, icon picker |
 | `agent/` | Sub-agent creation page, forms, @-mention popup, panel |
 | `apidoc/` | API documentation panel |
-| `automation/` | Automation run-timeline panel |
-| `batch/` | Batch-execution confirmation modal and progress panel |
+| `automation/` | Scheduled-task list, creation, details, setup conversations, and run timeline |
 | `canvas/` | Data canvas: Univer online-spreadsheet panel |
 | `catalog/` | Capability center: skills / MCP pages, catalog panel, skill-marketplace modal, icon picker |
 | `chat/` | The chat core: message bubbles, input area, artifact cards, thinking panels, plan cards, skill slash-popup, file-confirm bar |
@@ -57,7 +72,7 @@ SSE streams bypass the JSON channel of `api.ts`; they are consumed directly from
 | `sidebar/` | Sidebar, global search modal, navigation item definitions |
 | `tool/` | Tool-call timeline: call rows, thinking rows, output renderer, result panel, inline progress |
 
-## Zustand State (18 stores)
+## Zustand State
 
 | Store | Responsibility |
 |---|---|
@@ -71,7 +86,6 @@ SSE streams bypass the JSON channel of `api.ts`; they are consumed directly from
 | `kbStore` | KB spaces / documents / chunks |
 | `mySpaceStore` | MySpace resource tree and favorites |
 | `projectStore` | Project list, detail, in-project sessions |
-| `batchStore` | Batch-plan state (keyed by plan_id, tracks the pending-confirmation modal) |
 | `automationStore` / `automationChatStore` | Automation task list / automation chat run state |
 | `canvasStore` | Data-canvas document state |
 | `skillDistillStore` | Personal skill-distillation job state |
@@ -94,7 +108,7 @@ SSE streams bypass the JSON channel of `api.ts`; they are consumed directly from
 
 ## Styles and Other Directories
 
-- `styles/`: global CSS split by feature area (`chat.css`, `catalog.css`, `automation.css`, `canvas.css`, `myspace.css`, `projects.css`, `config.css`, `team-folder.css` — 18 files), with `variables.css` for design tokens and `index.ts` importing them all;
+- `styles/`: global CSS split by feature area (`chat.css`, `catalog.css`, `automation.css`, `canvas.css`, `myspace.css`, `projects.css`, `config.css`, `team-folder.css`), with `variables.css` for design tokens and `index.ts` importing them all;
 - `types.ts` + `types/`: shared types (`ChatMessage`, `CitationItem`, `Catalog`…); team-file domain types in `types/teamFiles.ts`;
 - `utils/`: `citations.ts` (citation parsing), `markdown.ts`, `segments.ts` (stream segmentation), `fileParser.ts`, `adminApi.ts`, `pageConfigDefaults.ts` — 22 utility modules;
 - `storage.ts`: localStorage persistence and defaults; `appTheme.ts`: antd theme tokens; `preloadReload.ts`: auto-reload on chunk preload failures.
@@ -119,11 +133,11 @@ InputArea (components/chat/)
    ▼
 useStreaming.send
    │ 1. chatStore appends the optimistic user message
-   │ 2. fetch POST /v1/chats/stream (attachments carry only file_id/name/mime_type)
+   │ 2. fetch POST /v1/agents/responses (attachments carry only file_id/name/mime_type)
    │ parses data: {json} line by line
    │ ├─ content/thinking → appended into segments (utils/segments.ts)
    │ ├─ tool_call_start/tool_call_delta/tool_call/tool_result → update the tool timeline in place by tool_id (components/tool/)
-   │ ├─ file_confirm/batch_confirm → confirm bar / modal (hard pause)
+   │ ├─ file_confirm → confirm bar / modal (hard pause)
    │ └─ meta → citation sources and artifact list written onto the message
    ▼
 chatStore update → MessageBubble re-render
@@ -160,3 +174,29 @@ The frontend's edition awareness is concentrated in two places:
 | Shared types | `src/frontend/src/types.ts` |
 | Build config | `src/frontend/vite.config.ts` |
 | Nginx config | `src/frontend/default.conf.template`, `src/frontend/nginx.conf` |
+
+## Streaming text presentation
+
+Assistant text uses Markdown from its first frame. Plain paragraphs, formatted text, and cited text share CitationHtmlBlock; later characters no longer switch the body between plain-text and Markdown containers. SSE parsing and background runs own reception and recovery. GraphemeReveal only presents newly received text.
+
+New text fades in by complete grapheme, including combining accents and ZWJ emoji. styles/chat/grapheme-reveal.css defines the parameters in one place: 90ms, cubic-bezier(.215,.61,.355,1), and blur from 6px to 0. The normal stagger is 30ms. Large bursts shorten the stagger to bound pending presentation to 600ms. Existing text and citation portal nodes stay in place. Completed animations merge temporary text nodes so long messages do not retain per-character DOM.
+
+Code, math, copy buttons, and chart components are not split. Completion or cancellation immediately displays all received text. Recovery snapshots show existing text without replay; subsequent deltas animate normally. Reduced-motion mode displays text immediately.
+
+Markdown HTML uses DOMPurify to remove executable attributes and URLs while retaining new-tab behavior for external links.
+
+Run npm run test:grapheme-reveal for browser component coverage. For full-app coverage, scripts/grapheme-e2e-environment.py creates an isolated Docker network, Redis, temporary SQLite, test model, and Nginx; then run npm run test:grapheme-reveal-app. The environment does not read the real .env. Its down command removes only containers carrying the test label.
+
+## Conversation status indicators
+
+Running conversations show a gray rotating ring. Completed conversations with unread results show a blue breathing dot, which clears when the result is read. Waiting for input or confirmation and failed tasks retain amber and red indicators. Project groups place indicators in a fixed indentation slot to the left of the title, keeping titles aligned across states. The default project (conversation history) places indicators on the right. The running ring retains its work-indicator animation under reduced motion; the unread dot becomes static.
+
+## Asynchronous first-question titles
+
+After admitting the first question in an ordinary conversation, the server retains a question-based fallback and starts an independent summary-model call using only that question. The frontend reads the result while the answer stream is active. Temporary titles never block generation. Each conversation gets one automatic attempt; failure retains the fallback, later questions do not retry, and forks retain their inherited title. Explicit title edits pin the name on the server, with a fresh check when generation completes to prevent concurrent overwrites. Updating a title does not reorder conversations or add a dedicated text transition.
+
+### Message identity and session renewal
+
+The SSE response exposes `X-Hugagent-User-Message-Id`, the persisted user message ID for this admission, including to cross-origin clients. Before consuming the answer stream, the frontend binds this ID to the exact optimistic message and merges any raced history row with the same ID. Separate submissions with identical text retain distinct message IDs; content and timestamps are never deduplication keys.
+
+History loading depends on the user ID and conversation ID, rather than the entire authenticated user object. Session renewal continues to update expiry, profile, and capabilities. Changes to these fields alone do not reload a conversation while its answer is streaming.

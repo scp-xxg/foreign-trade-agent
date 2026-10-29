@@ -15,7 +15,7 @@ import os
 from typing import Any, Dict, Optional
 from urllib.parse import parse_qsl, quote, urlencode, urlparse, urlunparse
 
-from core.content.content_blocks import get_branding_info, is_register_allowed
+from core.files.content.branding import get_branding_info, is_register_allowed
 from core.infra.logging import get_logger
 from fastapi import APIRouter, Form, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -496,7 +496,7 @@ async def mock_legacy_login_page(
             user = MOCK_USERS[idx]
         except (ValueError, IndexError):
             user = MOCK_USERS[0]
-        ticket = _generate_ticket(_user_info_without_password(user))
+        ticket = await _generate_ticket(_user_info_without_password(user))
         target = _build_redirect_target(request, redirect, ticket)
         return RedirectResponse(url=target, status_code=302)
     # local mode no longer exposes the Mock dropdown-account page: everything converges on /login, so no entry point bounces back to the mock page.
@@ -536,7 +536,7 @@ async def mock_login_page(
             user = MOCK_USERS[idx]
         except (ValueError, IndexError):
             user = MOCK_USERS[0]
-        ticket = _generate_ticket(_user_info_without_password(user))
+        ticket = await _generate_ticket(_user_info_without_password(user))
         target = _build_redirect_target(request, redirect, ticket)
         return RedirectResponse(url=target, status_code=302)
 
@@ -1453,7 +1453,7 @@ def _try_local_login(username: str, password: str) -> Optional[Dict[str, Any]]:
 
     try:
         from core.db.engine import SessionLocal
-        from core.services.local_user_service import LocalUserService
+        from core.auth.local_users import LocalUserService
     except Exception as exc:
         logger.warning("local auth unavailable: %s", exc)
         return None
@@ -1549,7 +1549,7 @@ async def _handle_login_submit(
     if local_info is not None:
         _audit_local_login(request, username, success=True, user_id=local_info.get("user_id"))
         local_info["remember"] = remember_flag
-        ticket = _generate_ticket(local_info)
+        ticket = await _generate_ticket(local_info)
         target = _build_redirect_target(request, redirect, ticket)
         return RedirectResponse(url=target, status_code=303)
 
@@ -1561,7 +1561,7 @@ async def _handle_login_submit(
         if mock_user is not None and mock_user["password"] == password:
             mock_info = _user_info_without_password(mock_user)
             mock_info["remember"] = remember_flag
-            ticket = _generate_ticket(mock_info)
+            ticket = await _generate_ticket(mock_info)
             target = _build_redirect_target(request, redirect, ticket)
             return RedirectResponse(url=target, status_code=303)
 
@@ -1610,35 +1610,32 @@ async def _handle_register_submit(
         return _bounce("两次输入的密码不一致")
 
     try:
-        from core.db.engine import SessionLocal
-        from core.services.local_user_service import LocalUserService
+        from core.auth.local_users import LocalUserService
+        from core.db.threads import run_in_session
     except Exception as exc:
         logger.warning("local auth module unavailable: %s", exc)
         return _bounce("注册服务暂不可用")
 
-    db = SessionLocal()
     try:
-        service = LocalUserService(db)
-        result = service.register(
-            code=code,
-            username=username,
-            nickname=nickname,
-            email=email,
-            password=password,
-            real_name=real_name,
-            phone=phone,
+        result = await run_in_session(
+            lambda db: LocalUserService(db).register(
+                code=code,
+                username=username,
+                nickname=nickname,
+                email=email,
+                password=password,
+                real_name=real_name,
+                phone=phone,
+            )
         )
     except Exception as exc:  # noqa: BLE001
         logger.exception("register failed: %s", exc)
-        db.close()
         return _bounce("注册失败，请稍后重试")
-    finally:
-        db.close()
 
     if not result.ok or not result.user_info:
         return _bounce(result.message or "注册失败")
 
-    ticket = _generate_ticket(result.user_info)
+    ticket = await _generate_ticket(result.user_info)
     target = _build_redirect_target(request, redirect, ticket)
     return RedirectResponse(url=target, status_code=303)
 
@@ -1772,7 +1769,7 @@ async def mock_ticket_exchange(body: dict):
     It can also be called externally if ``SSO_TICKET_EXCHANGE_URL`` points here.
     """
     ticket = body.get("ticket", "")
-    user_info = consume_ticket(ticket)
+    user_info = await consume_ticket(ticket)
 
     if user_info is None:
         return {"code": 401, "message": "Invalid or expired ticket", "data": None}

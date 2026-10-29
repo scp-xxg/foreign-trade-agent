@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy.pool import StaticPool
 
 from core.db.models.foreign_trade import ForeignTradeInquiry
-from core.services.foreign_trade_inquiry import InquiryError, InquiryService
+from core.foreign_trade.inquiry import InquiryError, InquiryService
 from api.routes.v1 import foreign_trade as routes
 
 
@@ -176,7 +176,7 @@ def test_clarification_draft_does_not_invent_quote(svc):
 
 @pytest.mark.asyncio
 async def test_public_fetch_failure_stays_unknown(monkeypatch, svc):
-    import core.services.foreign_trade_public_data as public_data
+    import core.foreign_trade.public_data as public_data
     monkeypatch.setattr(public_data, "verify_buyer", AsyncMock(side_effect=RuntimeError("sensitive detail")))
     item = svc.create("alice", values())
     item = await svc.verify("alice", item["id"], 1)
@@ -187,7 +187,7 @@ async def test_public_fetch_failure_stays_unknown(monkeypatch, svc):
 
 @pytest.mark.asyncio
 async def test_public_result_provenance_persisted_and_buyer_edit_invalidates(monkeypatch, svc):
-    import core.services.foreign_trade_public_data as public_data
+    import core.foreign_trade.public_data as public_data
     card = {"status": "public_evidence", "checked_at": "2026-10-21T01:00:00Z", "facts": [
         {"key": "title", "label": "Website title", "value": "Lyreco", "status": "self_reported",
          "source_url": "https://www.lyreco.com/group/", "evidence": "Lyreco"}],
@@ -259,7 +259,7 @@ def test_api_requires_authentication(db_engine, monkeypatch):
 
 @pytest.mark.asyncio
 async def test_slow_public_fetch_does_not_overwrite_concurrent_edit(monkeypatch, db_engine):
-    import core.services.foreign_trade_public_data as public_data
+    import core.foreign_trade.public_data as public_data
     with Session(db_engine) as one, Session(db_engine) as two:
         first, second = InquiryService(one), InquiryService(two)
         item = first.create("alice", values())

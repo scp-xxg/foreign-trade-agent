@@ -1,6 +1,6 @@
 """Smoke tests for the pdf-editing skill CLI.
 
-Replaces the old ``mcp_servers/_office_shared/_integration_test.py::test_pdf``
+Replaces the old ``extensions/mcp_servers/_office_shared/_integration_test.py::test_pdf``
 (removed when pdf_mcp was deleted). Exercises every subcommand end-to-end:
 read (5 modes), merge, split, fill-form, create, reformat. The argparse +
 emit_json contract is what changed when migrating from MCP to skill;
@@ -23,7 +23,7 @@ import pytest
 
 
 BACKEND_ROOT = Path(__file__).resolve().parents[2]  # src/backend
-SKILL_DIR = BACKEND_ROOT / "skill_bundles/default/pdf-editing"
+SKILL_DIR = BACKEND_ROOT / "extensions/skills/default/pdf-editing"
 CLI = SKILL_DIR / "scripts/cli.py"
 
 
@@ -237,3 +237,17 @@ def test_reformat_unsupported_extension(tmp_path):
     payload = json.loads(proc.stdout.strip().splitlines()[-1])
     assert payload["ok"] is False
     assert "unsupported" in payload["error"]["message"].lower()
+
+
+def test_shim_uses_its_own_skill_directory_with_spaces(tmp_path):
+    relocated = tmp_path / "中文 PDF tools"
+    shutil.copytree(SKILL_DIR, relocated)
+    env = {**os.environ, "PY_BIN": sys.executable}
+    env["PDF_SKILL_DIR"] = str(tmp_path / "unrelated-skill")
+    env.pop("SKILL_DIR", None)
+    result = subprocess.run(
+        ["sh", str(relocated / "scripts/pdf-cli"), "--help"],
+        cwd=tmp_path, env=env, capture_output=True, text=True, timeout=20,
+    )
+    assert result.returncode == 0, result.stderr
+    assert "create" in result.stdout

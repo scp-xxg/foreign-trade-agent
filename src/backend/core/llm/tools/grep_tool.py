@@ -7,21 +7,17 @@ Three output_modes (aligned with Claude Code):
 """
 
 from __future__ import annotations
+from core.llm.factory.tools.definitions import function_tool
 
 import logging
 from typing import Optional
 
-from agentscope.tool import Toolkit
+from agentscope.tool import Toolkit, ToolResponse
 
-from core.services.project_scope import ProjectScope
+from core.projects.edition import ProjectScope
 
-from . import myspace_vfs as _ms
 from ._common import resolve_sandbox_session, resp_json, sandbox_exec_bash, shell_quote
-from ._paths import (
-    to_physical_path,
-    validate_project_scope_path,
-    validate_workspace_path,
-)
+from core.sandbox.workspace.resolution import to_physical_path, validate_project_scope_path, validate_workspace_path
 
 logger = logging.getLogger(__name__)
 
@@ -46,7 +42,7 @@ def register_grep(
 
     async def Grep(
         pattern: str,
-        path: str = "/workspace",
+        path: str = ".",
         glob: str = "",
         output_mode: str = "files_with_matches",
         case_insensitive: bool = False,
@@ -69,33 +65,8 @@ def register_grep(
         if scope_err:
             return resp_json({"error": scope_err})
 
-        # Grep needs to search content → first materialize that subtree of "My Space" into the sandbox in bulk on demand
-        # (the batch version of lazy loading; already-in-sandbox files are not re-fetched), ensuring the search covers the real My Space.
-        materialized = 0
-        if scope and scope.kind == "team":
-            from .project_working_copy import directory, prepare
-            from core.sandbox import get_sandbox_provider
-            from fastapi import HTTPException
-            try:
-                materialized = len(await prepare(get_sandbox_provider(), _sess, scope, user_id or ""))
-            except HTTPException as exc:
-                return resp_json({"error": exc.detail, "status": exc.status_code})
-            prefix = "/myspace/" + scope.folder_name
-            if path == "/workspace" or path == prefix:
-                path = directory(scope.project_id)
-            elif path.startswith(prefix + "/"):
-                path = directory(scope.project_id) + path[len(prefix):]
-        elif user_id and _ms.myspace_rel(path, user_id, scope) is not None:
-            try:
-                from core.sandbox import get_sandbox_provider as _gsp
-                materialized = await _ms.materialize_tree(
-                    _gsp(), _sess, user_id, path, scope=scope,
-                )
-            except Exception as exc:  # noqa: BLE001
-                logger.warning("[grep] materialize_tree 失败 %s: %s", path, exc)
-
         # /myspace → /workspace/myspace/<uid>
-        path = to_physical_path(path, user_id, session_id=_sess)
+        path = to_physical_path(path, user_id, session_id=_sess, scope=scope)
 
         if output_mode not in _OUTPUT_MODES:
             return resp_json({
@@ -186,16 +157,14 @@ def register_grep(
             "matches": raw_lines,
             "num_matches": len(raw_lines),
             "truncated": truncated,
-            "myspace_materialized": materialized,
         })
 
     Grep.__doc__ = (
         "按正则搜索文件内容。优先用 ripgrep，缺失则 fallback grep。\n\n"
-        "搜 ``/myspace`` 时会先把该子树的**文本**文件批量物化进沙盒再搜"
-        "（返回 ``myspace_materialized`` 计数）；二进制文档搜不到，改用 Read 看解析文本。\n\n"
+        "直接搜索已挂载目录中的文本文件。二进制文档使用 Bash 调用文档工具处理。\n\n"
         "Args:\n"
         "    pattern (`str`): 正则表达式。\n"
-        "    path (`str`): 搜索路径，默认 ``/workspace``；搜用户「我的空间」\n"
+        "    path (`str`): 搜索路径，默认 ``.``（本次会话的工作目录）；搜用户「我的空间」\n"
         "        时用 ``/myspace`` 或其子文件夹。\n"
         "    glob (`str`): 可选文件名 glob 过滤（如 ``*.py``）。\n"
         "    output_mode (`str`): files_with_matches | content | count。\n"
@@ -205,8 +174,8 @@ def register_grep(
         "    head_limit (`int`): 截断行数，0 = 默认 250，硬上限 1000。\n\n"
         "Returns:\n"
         "    JSON: ``{ok: true, engine, pattern, path, output_mode, matches: [...],\n"
-        "             num_matches, truncated, myspace_materialized}``。\n"
+        "             num_matches, truncated}``。\n"
     )
 
-    toolkit.register_tool_function(Grep, namesake_strategy="override")
+    toolkit.append(function_tool(Grep))
     logger.info("[factory] Registered Grep tool (chat_id=%s)", chat_id)

@@ -1,11 +1,11 @@
 """Bindable resource coverage for user-created sub-agents."""
 
-from types import SimpleNamespace
+from features.desktop.capabilities.agents import AgentDefinition
 
 import pytest
 
 from core.db.models import AdminMcpServer
-from core.services.user_agent_service import UserAgentService
+from core.capabilities.agents.edition import UserAgentService
 
 
 def _mcp(
@@ -43,15 +43,15 @@ def test_available_resources_include_personally_disabled_mcps(
     db_session.commit()
 
     monkeypatch.setattr(
-        "core.config.catalog_resolver.resolve_all_runtime_enabled",
+        'core.capabilities.catalog.resolver.resolve_all_runtime_enabled',
         lambda _db, _user_id: ([], [], ["global_enabled"]),
     )
     monkeypatch.setattr(
-        "core.services.plugin_service.builtin_plugin_component_ids",
+        'core.capabilities.plugins.management.builtin_plugin_component_ids',
         lambda: (set(), {"builtin_plugin_tool"}),
     )
     monkeypatch.setattr(
-        "core.config.catalog_runtime.get_runtime_catalog",
+        'core.capabilities.catalog.runtime.get_runtime_catalog',
         lambda _db, include_runtime_details=False: {
             "mcp": [
                 {
@@ -91,7 +91,9 @@ def test_available_resources_include_personally_disabled_mcps(
     [
         (None, True),
         (
-            SimpleNamespace(
+            AgentDefinition(
+                agent_id="private-agent",
+                name="Private agent",
                 mcp_server_ids=["private_disabled"],
                 skill_ids=[],
                 kb_ids=[],
@@ -105,9 +107,18 @@ async def test_agent_factory_loads_disabled_private_mcp_only_for_explicit_subage
     monkeypatch,
     user_agent,
     expected_enabled_only,
+    db_session,
 ):
-    from core.llm import agent_factory
+    from core.llm import factory as agent_factory
+    from core.llm.factory.tools import mcp_config as factory_mcp_config
+    import core.capabilities.mcp.service as mcp_service
+    import prompts.prompt_config as prompt_config
 
+    from sqlalchemy.orm import sessionmaker
+
+    monkeypatch.setattr(
+        'core.models.config.SessionLocal', sessionmaker(bind=db_session.get_bind())
+    )
     calls = []
 
     class FakeMcpService:
@@ -119,14 +130,14 @@ async def test_agent_factory_loads_disabled_private_mcp_only_for_explicit_subage
         pass
 
     monkeypatch.setattr(
-        agent_factory.McpServerConfigService,
+        mcp_service.McpServerConfigService,
         "get_instance",
         classmethod(lambda _cls: FakeMcpService()),
     )
-    monkeypatch.setattr(agent_factory, "load_prompt_config", lambda: object())
+    monkeypatch.setattr(prompt_config, "load_prompt_config", lambda: object())
     monkeypatch.setattr(
-        agent_factory,
-        "_effective_mcp_server_keys",
+        factory_mcp_config,
+        'effective_mcp_server_keys',
         lambda *_args, **_kwargs: (_ for _ in ()).throw(StopAfterOwnedMcpResolution()),
     )
 

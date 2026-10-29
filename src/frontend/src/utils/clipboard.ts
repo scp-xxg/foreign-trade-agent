@@ -8,16 +8,18 @@
  *
  * @returns whether the copy succeeded
  */
-export async function copyToClipboard(text: string): Promise<boolean> {
+export async function copyToClipboard(text: string, signal?: AbortSignal): Promise<boolean> {
+  if (signal?.aborted) return false;
   // Preferred: the modern Clipboard API under a secure context
   if (window.isSecureContext && navigator.clipboard) {
     try {
       await navigator.clipboard.writeText(text);
-      return true;
+      return !signal?.aborted;
     } catch {
       // Fall through to the execCommand fallback below
     }
   }
+  if (signal?.aborted) return false;
   // Fallback: execCommand (HTTP / older browsers)
   //
   // Use a span + Range selection rather than `textarea.select()`: the latter moves focus to the
@@ -64,14 +66,14 @@ export async function copyHtmlToClipboard(html: string, plainText: string): Prom
   try {
     const host = document.createElement('div');
     host.innerHTML = html;
-    return execCommandCopyNode(host);
+    return execCommandCopyNode(host, { html, plainText });
   } catch {
     return false;
   }
 }
 
 /** Mount `node` off-screen, select its contents with a Range and run execCommand('copy'). */
-function execCommandCopyNode(node: HTMLElement): boolean {
+function execCommandCopyNode(node: HTMLElement, content?: { html: string; plainText: string }): boolean {
   node.style.position = 'fixed';
   node.style.top = '0';
   node.style.left = '0';
@@ -85,10 +87,18 @@ function execCommandCopyNode(node: HTMLElement): boolean {
   selection?.removeAllRanges();
   selection?.addRange(range);
 
+  const overrideCopy = (event: ClipboardEvent) => {
+    if (!content || !event.clipboardData) return;
+    event.preventDefault();
+    event.clipboardData.setData('text/html', content.html);
+    event.clipboardData.setData('text/plain', content.plainText);
+  };
+  if (content) document.addEventListener('copy', overrideCopy);
   let ok = false;
   try {
     ok = document.execCommand('copy');
   } finally {
+    document.removeEventListener('copy', overrideCopy);
     selection?.removeAllRanges();
     document.body.removeChild(node);
   }

@@ -1,0 +1,25 @@
+#!/bin/sh
+# Resolve the selected skill from an explicit environment or this script's directory.
+set -e
+target="$0"
+while [ -L "$target" ]; do
+    link=$(readlink "$target") || break
+    case "$link" in
+        /*) target="$link" ;;
+        *) target="$(dirname "$target")/$link" ;;
+    esac
+done
+script_dir=$(CDPATH= cd -- "$(dirname -- "$target")" && pwd)
+skill_dir="${PDF_SKILL_DIR:-${SKILL_DIR:-}}"
+if [ -f "$script_dir/cli.py" ]; then
+    candidate="$script_dir/cli.py"
+elif [ -n "$skill_dir" ]; then
+    candidate="$skill_dir/scripts/cli.py"
+else
+    candidate=""
+fi
+if [ ! -f "$candidate" ]; then
+    echo "pdf-cli: set PDF_SKILL_DIR to the skill directory or invoke its scripts/pdf-cli directly." >&2
+    exit 127
+fi
+exec "${PY_BIN:-python3}" "$candidate" "$@"

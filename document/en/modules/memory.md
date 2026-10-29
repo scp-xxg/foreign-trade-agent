@@ -22,26 +22,37 @@ The whole system honors one core promise: **no memory I/O ever blocks the SSE ho
 User sends a message
   │
   ▼
-api/routes/v1/chats.py
+api/routes/v1/chats/__init__.py
   · reads memory_enabled / memory_write_enabled from users_shadow.metadata
   · project chats read projects.metadata instead (team projects scope = "team:<team_id>")
   │
   ▼
 orchestration/workflow.py
-  ├─► launch_memory_retrieval()            ← background task, returns immediately
-  │     └─ core/memory/service.retrieve_memories()
-  │          ├─ mem0.Memory.search() → Milvus vector search
-  │          └─ core/memory/graph.py → optional Neo4j relation search
+  ├─► open_session_memory()                ← session-scoped: when this chat already
+  │     │                                     has a frozen block, **no search is issued**
+  │     └─ first turn only: launch_memory_retrieval() background task, returns immediately
+  │          └─ core/memory/service.retrieve_memories()
+  │               ├─ mem0.Memory.search() → Milvus vector search
+  │               └─ core/memory/graph.py → optional Neo4j relation search
   │
-  ├─► build_frozen_memory_block()          ← assembles the "session-frozen" block
+  ├─► resolve_session_memory()             ← later turns replay the stored snapshot;
+  │     │                                     only the first turn assembles a block
   │     · L1 profile: DB read, <20ms, always awaited
   │     · L2 procedures: awaits the retrieval task within a 600ms budget
   │       (MEMORY_RETRIEVAL_BUDGET_MS); timeout shields the background task,
   │       skips this injection, and leaves completion state observable
+  │     · stores the block on ChatSession.metadata once the read actually landed;
+  │       a timed-out or degraded read is not stored, so the next turn retries
+  │       rather than freezing an accidental blank for the whole chat
   │
-  ├─► inject_frozen_memory()               ← frozen block prepended to
-  │                                           session_messages as a user-role message
-  │     (user rather than system: models like Qwen require system only at index 0)
+  ├─► inject_session_blocks()              ← session-constant blocks (identity +
+  │                                           frozen memory) prepended to
+  │                                           session_messages as user-role messages
+  │     (user rather than system: models like Qwen require system only at index 0,
+  │      and keeping these per-user bytes out of the system prompt leaves the system
+  │      text, tool schemas and skill list a byte-identical shared prefix across
+  │      users and chats. Both blocks are constant for the whole chat, so sitting
+  │      ahead of the history never moves the prefix-cache boundary between turns)
   │
   ▼  … agent streams its response over SSE …
   │
@@ -57,7 +68,7 @@ save_memories_background()
        · sanitizer gate → write L1/L2/L3/session → audit side channel
 ```
 
-The integration layer for retrieval and injection lives in `src/backend/orchestration/memory_integration.py`. mem0's LLM / embedder / Milvus / reranker configuration is assembled in `src/backend/core/memory/service.py`, while Neo4j graph reads and writes live in `src/backend/core/memory/graph.py`. Model configs are resolved from the DB roles `memory` / `embedding` first, falling back to environment variables.
+The integration layer for retrieval and injection lives in `src/backend/core/agent_runtime/integrations/memory.py`. mem0's LLM / embedder / Milvus / reranker configuration is assembled in `src/backend/core/memory/service.py`, while Neo4j graph reads and writes live in `src/backend/core/memory/graph.py`. Model configs are resolved from the DB roles `memory` / `embedding` first, falling back to environment variables.
 
 ## Write pipeline and extractors
 
@@ -129,7 +140,7 @@ Two independent toggles, both stored in `users_shadow.metadata` (ORM column `ext
 | `memory_enabled` | Persistent memory **read**: inject the frozen block at session start | `false` |
 | `memory_write_enabled` | **Write**: extract and save memories after each conversation | `false` |
 
-Project chats get their own scope: personal projects and the default workspace use the real `user_id`, while team projects use `scope_user_id = "team:<team_id>"` — all team members write into the same mem0 bucket for shared recall, with the real author preserved in `metadata.author_user_id` (see `orchestration/memory_integration.py::save_memories_background` and `api/routes/v1/memories.py::list_memories`). Project-level toggles live in `projects.metadata` (`memory_enabled` / `memory_write_enabled`, defaulting to `true` inside a project); see [Projects & MySpace](./projects-myspace.md).
+Project chats get their own scope: personal projects and the default workspace use the real `user_id`, while team projects use `scope_user_id = "team:<team_id>"` — all team members write into the same mem0 bucket for shared recall, with the real author preserved in `metadata.author_user_id` (see `core/agent_runtime/integrations/memory.py::save_memories_background` and `api/routes/v1/memories.py::list_memories`). Project-level toggles live in `projects.metadata` (`memory_enabled` / `memory_write_enabled`, defaulting to `true` inside a project); see [Projects & MySpace](./projects-myspace.md).
 
 ## Frontend memory center
 
@@ -213,7 +224,7 @@ See the [environment variable reference](../deployment/environment-variables.md)
 | `src/backend/core/memory/graph.py` | L3 Neo4j relation persistence, reinforcement, retrieval, and deletion |
 | `src/backend/core/memory/profile.py` | L1 profile: get / patch / compact / delete |
 | `src/backend/core/memory/profile_store.py` | L1 revision CAS and effect-receipt store |
-| `src/backend/core/memory/outbox.py` | Durable admission, leases, retry/quarantine, extraction checkpoints, atomic settlement |
+| `src/backend/core/memory/outbox/__init__.py` | Durable admission, leases, retry/quarantine, extraction checkpoints, atomic settlement |
 | `src/backend/core/memory/effect_lane.py` | Per-scope L2 ordering via PostgreSQL advisory locks / SQLite local locks |
 | `src/backend/core/memory/executor.py` | Cancellation-safe bridge that waits for real threaded effects before lease release |
 | `src/backend/core/memory/pipeline.py` | Outbox admission seam, semaphore, Milvus circuit breaker |
@@ -222,11 +233,18 @@ See the [environment variable reference](../deployment/environment-variables.md)
 | `src/backend/core/memory/sanitizer.py` | Sanitizer gate (hardcoded + DB-managed rules) |
 | `src/backend/core/memory/audit.py` | Audit side channel (Enterprise Edition, EE) |
 | `src/backend/core/memory/context.py` | `MemoryContext` and workspace / layer resolution |
-| `src/backend/orchestration/memory_integration.py` | Retrieval launch, frozen-block assembly and injection, save delegation |
-| `src/backend/orchestration/workflow.py` | Main orchestration: memory hook wiring |
+| `src/backend/core/agent_runtime/integrations/memory.py` | Retrieval launch, frozen-block assembly and injection, save delegation |
+| `src/backend/core/agent_runtime/runner.py` | Main orchestration: memory hook wiring |
 | `src/backend/api/routes/v1/memories.py` | `/v1/memories` management API |
 | `src/backend/core/db/models/memory.py` | `ProfileMemory`, `MemoryOutbox`, and `MemorySanitizerRule` ORM |
 | `src/backend/edition_ee/db/models/memory.py` | `MemoryAudit` ORM (EE only) |
 | `src/frontend/src/components/settings/SettingsModal.tsx` | Memory settings + layered memory modal |
 | `src/frontend/src/components/memory/FactsList.tsx` | L2 procedure list component (editable) |
 | `docker-compose.yml` (`mem0` profile) | Milvus / etcd / MinIO / Neo4j |
+
+
+### L2 expiry and mutation permissions
+
+L2 stores expiry dates in memory metadata. Search, lists and duplicate matching hide an entry on its UTC expiry date. The background sweep later removes the stored row. Legacy entries still use `ttl_days` and their update timestamp. Text edits preserve the ID, workspace, expiry date and write receipt. Reinforcement extends expiry.
+
+Single-entry edits and deletion authorize the actor against the stored scope. Team-project mutations require current edit permission. Durable replay rechecks permission. Expiry does not hide write receipts from crash recovery, preventing duplicate writes.

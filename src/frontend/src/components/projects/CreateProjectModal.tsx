@@ -1,3 +1,5 @@
+import { defaultProjectEnvironment } from "../../api/projectEnvironment";
+import ProjectEnvironmentEditor from "./ProjectEnvironmentEditor";
 import { useEffect, useMemo, useState } from 'react';
 import { FolderOutlined } from '@ant-design/icons';
 import { Input, message, Modal, Radio, TreeSelect } from 'antd';
@@ -10,6 +12,8 @@ import type { PersonalFolderNode } from '../../types';
 
 interface Props {
   onCreated?: (projectId: string) => void;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }
 
 interface FolderTreeNode {
@@ -26,9 +30,11 @@ function foldersToTree(folders: PersonalFolderNode[]): FolderTreeNode[] {
   }));
 }
 
-export default function CreateProjectModal({ onCreated }: Props) {
-  const open = useProjectStore((state) => state.createModalOpen);
-  const setOpen = useProjectStore((state) => state.setCreateModalOpen);
+export default function CreateProjectModal({ onCreated, open: openProp, onOpenChange }: Props) {
+  const storeOpen = useProjectStore((state) => state.createModalOpen);
+  const setStoreOpen = useProjectStore((state) => state.setCreateModalOpen);
+  const open = openProp ?? storeOpen;
+  const setOpen = onOpenChange ?? setStoreOpen;
   const createPersonal = useProjectStore((state) => state.createPersonal);
   const isDesktop = useDeploymentModeStore((state) => state.isDesktop);
   const provisionMode = useDeploymentModeStore((state) => state.provisionMode);
@@ -39,6 +45,8 @@ export default function CreateProjectModal({ onCreated }: Props) {
   const [linkedFolderId, setLinkedFolderId] = useState<string>();
   const [folders, setFolders] = useState<PersonalFolderNode[]>([]);
   const [submitting, setSubmitting] = useState(false);
+  const [environment, setEnvironment] = useState(defaultProjectEnvironment);
+  const [environmentReady, setEnvironmentReady] = useState(true);
 
   useEffect(() => {
     if (!open) return;
@@ -47,6 +55,7 @@ export default function CreateProjectModal({ onCreated }: Props) {
       return;
     }
     setName('');
+    setEnvironment(defaultProjectEnvironment());
     setDescription('');
     setFolderMode('auto');
     setLinkedFolderId(undefined);
@@ -71,6 +80,7 @@ export default function CreateProjectModal({ onCreated }: Props) {
         cleanName,
         description.trim() || undefined,
         folderMode === 'existing' ? linkedFolderId : undefined,
+        environment,
       );
       message.success(t('项目已创建'));
       setOpen(false);
@@ -93,8 +103,9 @@ export default function CreateProjectModal({ onCreated }: Props) {
       okText={t('创建项目')}
       cancelText={t('取消')}
       confirmLoading={submitting}
+      okButtonProps={{ disabled: !environmentReady }}
       destroyOnClose
-      width={520}
+      width={640}
     >
       <div style={{ display: 'flex', flexDirection: 'column', gap: 16, paddingTop: 8 }}>
         <div>
@@ -118,6 +129,10 @@ export default function CreateProjectModal({ onCreated }: Props) {
             rows={4}
             maxLength={2000}
           />
+        </div>
+        <div>
+          <div style={{ marginBottom: 8, fontWeight: 600 }}>{t('项目环境')}</div>
+          <ProjectEnvironmentEditor value={environment} onChange={setEnvironment} onReadyChange={setEnvironmentReady} />
         </div>
         <div>
           <div style={{ marginBottom: 6, fontWeight: 600, fontSize: 13 }}>

@@ -1,23 +1,25 @@
+import { syncConversationTitle } from './chatTitle';
 import { useRef } from 'react';
-import { Modal, message } from 'antd';
+import { message } from 'antd';
 import { t } from '../i18n';
 import { authFetch } from '../api';
-import { newDraftChatId, registerDeletedChatId } from '../storage';
 import { buildHistorySegments } from '../utils/segments';
 import { triggerPdfDownload, toSafeFileName } from '../utils/export';
 import { SUMMARY_MAX_ROUNDS } from '../utils/constants';
-import { formatDateKey } from '../utils/date';
+import { formatDateKey, parseServerTime } from '../utils/date';
 import { useChatStore, useCatalogStore, useUIStore, useAutomationChatStore } from '../stores';
 import { usePageConfigStore } from '../stores/pageConfigStore';
+import { useProjectStore } from '../stores/projectStore';
 import type { ChatItem, ChatMessage } from '../types';
+import { confirmDeleteChat } from '../utils/conversationDeletion';
 import { ensureFullMessages } from './useChatInit';
 
 export function useChatActions(effectiveApiUrl: string) {
   const {
-    store, updateStore, currentChatId, setCurrentChatId,
+    store, updateStore,
     setToolResultPanel,
-    backendSessionIds, removeBackendSessionId,
-    removeLoadedMsgId, addLoadedMsgId,
+    backendSessionIds,
+    addLoadedMsgId,
     clearShareSelection,
   } = useChatStore();
   const storeRef = useRef(store);
@@ -26,48 +28,24 @@ export function useChatActions(effectiveApiUrl: string) {
   const { setPanel } = useCatalogStore();
   const { setEditingChatId, setEditingTitle, editingTitle } = useUIStore();
 
-  function setPanelSafe(p: import('../types').PanelKey) {
-    setPanel(p);
+  function setPanelSafe(p: import('../types').PanelKey, sub?: string) {
+    setPanel(p, sub);
   }
 
   function newChat(inputRef: React.RefObject<HTMLTextAreaElement | null>) {
-    const id = newDraftChatId(useChatStore.getState().currentUserId);
+    // This entry leaves the project page for a standalone conversation.
+    useProjectStore.getState().closeCurrentProject();
+    useChatStore.getState().resumeHomeChat();
     if (useAutomationChatStore.getState().activeGroup) {
       useAutomationChatStore.getState().exitAutomationChat();
     }
-    setCurrentChatId(id);
     setPanelSafe('chat');
     setToolResultPanel(null);
     clearShareSelection();
     inputRef.current?.focus();
   }
 
-  function deleteChat(id: string) {
-    Modal.confirm({
-      title: t('删除历史对话'),
-      content: t('确定删除该历史对话吗？该操作不可恢复。'),
-      okText: t('删除'),
-      okButtonProps: { danger: true },
-      cancelText: t('取消'),
-      onOk: () => {
-        if (effectiveApiUrl && backendSessionIds.has(id)) {
-          void authFetch(`${effectiveApiUrl}/v1/chats/${id}`, { method: 'DELETE' }).catch(() => {});
-        }
-        registerDeletedChatId(id);
-        removeBackendSessionId(id);
-        removeLoadedMsgId(id);
-        updateStore((prev) => {
-          const next = { chats: { ...prev.chats }, order: (prev.order || []).filter((x) => x !== id) };
-          delete (next.chats as any)[id];
-          if (currentChatId === id) {
-            const nextId = next.order?.[0] || newDraftChatId(useChatStore.getState().currentUserId);
-            setCurrentChatId(nextId);
-          }
-          return next;
-        });
-      },
-    });
-  }
+  const deleteChat = confirmDeleteChat;
 
   function patchChat(id: string, patch: Partial<ChatItem>) {
     // Favorite-only changes should NOT reorder or bump updatedAt
@@ -103,7 +81,6 @@ export function useChatActions(effectiveApiUrl: string) {
           ...(latestChat?.agentId ? { agent_id: latestChat.agentId } : {}),
           ...(latestChat?.agentName ? { agent_name: latestChat.agentName } : {}),
           ...(latestChat?.planChat ? { plan_chat: true } : {}),
-          ...(latestChat?.batchChat ? { batch_chat: true } : {}),
           ...((patch.titleManuallySet ?? latestChat?.titleManuallySet) ? { title_manually_set: true } : {}),
         };
       }
@@ -191,7 +168,7 @@ export function useChatActions(effectiveApiUrl: string) {
           role: (m.role === 'assistant' ? 'assistant' : 'user') as 'user' | 'assistant',
           content: cleanContent,
           uid: String(m.message_id),
-          ts: m.created_at ? new Date(m.created_at).getTime() : Date.now(),
+          ts: m.created_at ? parseServerTime(m.created_at) : Date.now(),
           isMarkdown: !!(m.metadata?.is_markdown),
         });
       }
@@ -285,38 +262,8 @@ export function useChatActions(effectiveApiUrl: string) {
     return payload?.data as { share_id: string; preview_url: string; expires_at?: string | null; expiry_option: '3d' | '15d' | '3m' | 'permanent' };
   }
 
-  async function generateSummary(chatId: string) {
-    const chat = storeRef.current.chats[chatId];
-    if (!chat || !effectiveApiUrl) return;
-    // 用户手动重命名过的会话不再用自动摘要覆盖标题（问题13）
-    if (chat.titleManuallySet) return;
-    // 标题定下来就不再改：原来前 3 轮每轮都重新生成一次，用户每追问一句，历史列表里
-    // 这段会话的名字就跟着变一次，找不回自己刚才在哪一条（对齐 DeepSeek / 豆包：取
-    // 首轮问题定名后固定）。这里以「标题还是默认占位」为准，首次生成失败也还能重试，
-    // 下面的 SUMMARY_MAX_ROUNDS 仍作为重试次数上界。
-    if (chat.title && chat.title !== t('新对话')) return;
-    const userMessages = chat.messages.filter(m => m.role === 'user');
-    const assistantMessages = chat.messages.filter(m => m.role === 'assistant');
-    if (userMessages.length === 0 || assistantMessages.length === 0) return;
-    const exchangeCount = Math.min(userMessages.length, assistantMessages.length);
-    if (exchangeCount > SUMMARY_MAX_ROUNDS) return;
-
-    try {
-      const response = await authFetch(`${effectiveApiUrl}/v1/summary`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ messages: chat.messages.map(m => ({ role: m.role, content: m.content })) })
-      });
-      if (!response.ok) return;
-      const data = await response.json();
-      if (data?.data?.enabled === false) return;
-      const summary = data?.data?.summary;
-      if (summary && summary !== '新对话') {
-        patchChat(chatId, { title: summary });
-      }
-    } catch (error) {
-      console.warn('Failed to generate summary:', error);
-    }
+  function generateSummary(chatId: string) {
+    return syncConversationTitle(effectiveApiUrl, chatId);
   }
 
   async function generateClassification(chatId: string) {

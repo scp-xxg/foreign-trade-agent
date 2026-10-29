@@ -1,7 +1,8 @@
 """Tests for the per-run workspace state used by pin_to_workspace."""
 import asyncio
+import contextvars
 
-from core.llm import workspace
+from core.llm.runtime import workspace
 
 
 def test_initial_state_is_empty_and_inactive():
@@ -76,7 +77,7 @@ def test_pin_to_workspace_tool_accepts_list(monkeypatch):
     import json as _json
 
     from agentscope.tool import Toolkit
-    from core.llm.tool_collector import ToolCollector
+    from core.llm.factory.tools.definitions import ToolAssembly
     from core.llm.tools.pin_tool import register_pin_to_workspace
 
     # Stub the artifact lookup so we don't need a real artifact store.
@@ -88,13 +89,12 @@ def test_pin_to_workspace_tool_accepts_list(monkeypatch):
     def fake_get_artifact(fid):
         return fake_store.get(fid)
 
-    monkeypatch.setattr("core.artifacts.store.get_artifact", fake_get_artifact)
+    monkeypatch.setattr('core.files.artifacts.store.get_artifact', fake_get_artifact)
 
     workspace.init_state()
-    # AgentScope 2.0: register_* writes into the ToolCollector; schema goes through Toolkit.get_tool_schemas().
-    c = ToolCollector()
+    c = ToolAssembly()
     register_pin_to_workspace(c)
-    tk = Toolkit(tools=c.function_tools)
+    tk = Toolkit(tools=list(c))
     schemas = asyncio.run(tk.get_tool_schemas())
     pin_schema = next(s for s in schemas if s["function"]["name"] == "pin_to_workspace")
     # Schema must declare file_ids as an array of strings (not a string).
@@ -102,7 +102,7 @@ def test_pin_to_workspace_tool_accepts_list(monkeypatch):
     assert fid_param["type"] == "array"
     assert fid_param["items"]["type"] == "string"
 
-    fn = c.get_tool("pin_to_workspace")._func
+    fn = next(t for t in c if t.name == "pin_to_workspace")._func
 
     resp = asyncio.run(fn(file_ids=["fid_a", "fid_b"]))
     payload = _json.loads(resp.content[0].text)  # 2.0: block is a pydantic object
@@ -148,3 +148,19 @@ def test_state_isolated_per_async_context():
     a, b = asyncio.run(run())
     assert a == ["fa"]
     assert b == ["fb"]
+
+
+def test_a_pin_from_outside_the_run_context_lands_nowhere():
+    """产物区只能由这一轮上下文里的 ``pin_to_workspace`` 填。
+
+    回归的是这条真实故障：登记器在自己的任务里按 chat_id 反查工作区状态，把文件卡片挂了
+    进去。「我的空间」是用户级的一份目录、每个会话的沙箱都挂着它，登记器只看得到路径、
+    看不到会话，于是会话 B 的沙箱写的 csv 被挂进了会话 A 的产物区。现在没有这条按会话
+    反查的入口：不在这一轮的上下文里就挂不上，也不该挂。
+    """
+    workspace.init_state()
+    assert not hasattr(workspace, "pin_for_chat")  # 按会话反查的后门不该再存在
+
+    # 一份空的 ContextVar 上下文 = 登记器那种"不属于任何一轮"的执行环境。
+    assert contextvars.Context().run(workspace.pin, "f9") is False
+    assert workspace.get_pinned_file_ids() == []

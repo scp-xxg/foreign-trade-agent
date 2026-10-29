@@ -24,7 +24,7 @@
 | Python | ≥ 3.11 |
 | Node.js | ≥ 20（公开安装器会在本机构建前端） |
 | Rust 与 Cargo | Linux 没有兼容 `ripgrep` 预编译 wheel 时需要，包括 x86_64 且 glibc 低于 2.39 的系统 |
-| OS 沙箱 | Linux 需要 `bubblewrap`（命令 `bwrap`，安装器会自动安装）；macOS 使用系统自带 `sandbox-exec`；Windows 使用系统受限令牌，无需额外安装 |
+| OS 沙箱 | Linux 需要 `bubblewrap`（命令 `bwrap`，安装器会自动安装）；macOS 使用系统自带 `sandbox-exec`；Windows 以低完整性级别（Low IL）运行命令，无需额外安装 |
 | 网络 | 能访问所配置的大模型 API 端点 |
 
 ## 安装
@@ -42,7 +42,7 @@ curl -fsSL https://raw.githubusercontent.com/ZJU-REAL/HugAgentOS/main/install.sh
 3. Linux 检测并安装 `bubblewrap`，macOS 检查系统 `sandbox-exec`；沙箱后端不可用时安装失败，不会降级为裸执行；
 4. 检测可选的 LibreOffice；缺失时说明不可用能力并询问是否立即安装，跳过或安装失败不会阻断其余功能；
 5. 在 `~/.hugagent/venv` 创建虚拟环境（检测到 [uv](https://github.com/astral-sh/uv) 时使用 uv，否则使用 `python -m venv`），并自动重建上次中断留下的不完整环境；
-6. 安装 `requirements.txt`、`hugagent` 控制台命令、内置 Agent Skills 的 Python/Node.js 依赖，以及可选的本地知识库依赖；
+6. 安装 `requirements.txt`、`hugagent-server` 控制台命令、内置 Agent Skills 的 Python/Node.js 依赖，以及可选的本地知识库依赖；
 7. 把前端构建到 `src/frontend/dist`；
 8. 进入交互式首次配置向导。
 
@@ -62,7 +62,7 @@ curl -fsSL https://raw.githubusercontent.com/ZJU-REAL/HugAgentOS/main/install.sh
 
 **第 2c 步（可选）· 重排模型（reranker）**——对知识库混合检索结果做重排增强，检索更准。填 reranker 端点（`base_url` / 模型名 / `api_key`），直接回车跳过（不配则检索照常、只是不重排）。
 
-> HugAgentOS 共有 9 个模型角色：7 个对话角色（主智能体 / 摘要 / 追问 / 记忆 / 图表 / 计划 / 代码执行，共用上面的对话模型）+ 向量（embedding）+ 重排（reranker）。onboard 覆盖全部三类；登录后还可在网页「设置 → 系统管理 → 模型服务」为单个角色指派不同模型。
+> HugAgentOS 包含对话模型角色（主智能体 / 摘要 / 追问 / 记忆 / 计划 / 代码执行，共用上面的对话模型）+ 向量（embedding）+ 重排（reranker）。onboard 覆盖全部三类；登录后还可在网页「设置 → 系统管理 → 模型服务」为单个角色指派不同模型。
 
 **第 3 步 · 插件初始化**——全新安装会自动安装并启用
 `automation`（定时任务）、`skill-manager`（技能管理）和 `sites`
@@ -73,14 +73,14 @@ curl -fsSL https://raw.githubusercontent.com/ZJU-REAL/HugAgentOS/main/install.sh
 **第 4 步（可选）· 配置文件解析服务**——上传 PDF / 扫描件解析需要一个外部解析服务（MinerU 兼容），填入其 API URL 即可（写入 `file_parser.api_url`）；直接回车跳过。Excel / CSV / PPTX / 文本为进程内解析，无需此项。
 
 **第 5 步（可选）· 配置互联网搜索**——智能体联网检索需要一个搜索引擎
-密钥。选择 `tavily`（默认）、`baidu`（千帆 AppBuilder）或 `langsearch`，
+密钥。选择 `tavily`（默认）、`baidu`（千帆 AppBuilder）、`langsearch` 或 `deepseek`，
 然后填写所选引擎对应的 API Key；直接回车可跳过。事后也可在网页
 「设置 → 系统管理 → 服务配置」里补配。
 
 引导末尾会打印**本机能力概览**（Node.js / pandoc / LibreOffice 是否就绪，对应 React 建站 / Word 转换 / PPT 和 Word 在线预览），随后自动起服务并打开 `http://127.0.0.1:3001/`。
 
 > **警告：** 服务默认只监听 `127.0.0.1`。若服务器确实需要接受远程连接，请使用
-> `hugagent serve --host 0.0.0.0 --port 3001 --no-browser`，并先配置强管理员密码、
+> `hugagent-server serve --host 0.0.0.0 --port 3001 --no-browser`，并先配置强管理员密码、
 > 防火墙和 HTTPS。不要在不受信任的网络中直接暴露服务。
 
 ### 非交互安装（自动化 / CI）
@@ -88,7 +88,7 @@ curl -fsSL https://raw.githubusercontent.com/ZJU-REAL/HugAgentOS/main/install.sh
 `onboard` 支持旁路参数，用于脚本化安装：
 
 ```bash
-hugagent onboard \
+hugagent-server onboard \
   --username admin --password '<强密码>' \
   --model-base-url https://api.deepseek.com/v1 \
   --model-api-key '<your-key>' --model-name deepseek-chat \
@@ -113,10 +113,10 @@ hugagent onboard \
 ## 日常使用
 
 ```bash
-hugagent            # 已初始化 → 起服务并打开浏览器；未初始化 → 自动进引导
-hugagent serve      # 显式起服务（--host 改监听地址，--port 改端口，--no-browser 不开浏览器）
-hugagent onboard    # 重跑引导 / 改配置
-hugagent doctor     # 环境自检（Python 版本、端口占用、数据目录、前端构建、依赖等）
+hugagent-server            # 已初始化 → 起服务并打开浏览器；未初始化 → 自动进引导
+hugagent-server serve      # 显式起服务（--host 改监听地址，--port 改端口，--no-browser 不开浏览器）
+hugagent-server onboard    # 重跑引导 / 改配置
+hugagent-server doctor     # 环境自检（Python 版本、端口占用、数据目录、前端构建、依赖等）
 ```
 
 ## 数据目录
@@ -140,9 +140,9 @@ hugagent doctor     # 环境自检（Python 版本、端口占用、数据目录
 
 **开箱可用**
 - **核心对话 + ReAct 工具编排 + 计划模式 + 断线续播 + 引用标注**。
-- **代码执行（bash / Python）**：以宿主子进程执行，并由操作系统自己的沙箱约束——Linux 用 `bubblewrap`、macOS 用 `sandbox-exec`、Windows 用受限令牌。除「完全放开」外的每一档权限都会进沙箱：可写范围限定在工作区与你授权的文件夹，可写目录里的 `.git` 保持只读，临时目录是命令私有的；把「网络」这一类设为「阻止」时，Linux 与 macOS 会连网络一起断开。沙箱后端不可用、或这条策略在当前系统上无法完整执行时，命令会被拒绝并说明原因，不会退化成裸执行。文件工具使用同一套读写权限策略，工作区位于 `~/.hugagent/workspace/`。这仍是单用户本机形态，不等同于多租户容器隔离。
+- **代码执行（bash / Python）**：以宿主子进程执行，并由操作系统自己的沙箱约束——Linux 用 `bubblewrap`、macOS 用 `sandbox-exec`、Windows 用低完整性级别（Low IL）进程。除「完全放开」外的每一档权限都会进沙箱：可写范围限定在工作区与你授权的文件夹，可写目录里的 `.git` 保持只读，临时目录是命令私有的；把「网络」这一类设为「阻止」时，Linux 与 macOS 会连网络一起断开。沙箱后端不可用、或这条策略在当前系统上无法完整执行时，命令会被拒绝并说明原因，不会退化成裸执行。文件工具使用同一套读写权限策略，工作区位于 `~/.hugagent/workspace/`。这仍是单用户本机形态，不等同于多租户容器隔离。
 - **内置技能**（word / excel / ppt / pdf 编辑等 5 个）：安装时同步到工作区，沙箱可直接调用其脚本。
-- **内置工具型 MCP**：互联网搜索 / 网页抓取 / 批量执行 / 知识库检索等——服务本身正常运行（部分需配置对应外部服务或密钥才有数据，见下）。
+- **内置工具型 MCP**：互联网搜索 / 网页抓取 / 知识库检索等——服务本身正常运行（部分需配置对应外部服务或密钥才有数据，见下）。
 - **数据可视化（图表）**：安装脚本会装 matplotlib；装上即可用。
 - **项目 / 我的空间 / 产物 / 数据画布 / 自动化定时任务（网页创建与触发）/ 文档与提示词**：均在 SQLite + 本地存储上正常工作。
 - **自建向量知识库**：用嵌入式 **Milvus Lite**（单文件，无需服务端），**纯向量（dense）检索**；需在 onboard 配置 embedding 模型。要更强的混合检索，把 `MILVUS_URL` 指向真正的 Milvus 服务即可自动切回。
@@ -168,16 +168,16 @@ hugagent doctor     # 环境自检（Python 版本、端口占用、数据目录
 
 | 现象 | 处理 |
 |---|---|
-| 起服务报端口被占用 | `hugagent serve --port <其他端口>`；或先 `hugagent doctor` 查占用 |
+| 起服务报端口被占用 | `hugagent-server serve --port <其他端口>`；或先 `hugagent-server doctor` 查占用 |
 | 网页打开是一段 JSON 而非应用 | 前端未构建：`cd src/frontend && npm run build`，或设 `FRONTEND_DIST_DIR` 指向已构建的 `dist` |
-| 登录报模型不可用 | 重跑 `hugagent onboard` 重配模型（引导会实测连通性） |
+| 登录报模型不可用 | 重跑 `hugagent-server onboard` 重配模型（引导会实测连通性） |
 | 启动日志反复出现 `AllocTimestamp` / `Method not implemented` | 停止当前服务并重新运行公开一键安装器。安装器会把 PyMilvus 与 Milvus Lite 校准到兼容版本，不会删除 `~/.hugagent/milvus.db`。 |
-| 想换模型 / 改配置 | 重跑 `hugagent onboard`，或登录后到「设置 → 系统管理 → 模型服务 / 服务配置」调整 |
+| 想换模型 / 改配置 | 重跑 `hugagent-server onboard`，或登录后到「设置 → 系统管理 → 模型服务 / 服务配置」调整 |
 | PPT/Word 预览提示 LibreOffice 未安装 | 重新运行一键安装器并在提示时选择安装；Debian/Ubuntu 也可执行 `sudo apt-get update && sudo apt-get install -y libreoffice-impress libreoffice-writer libreoffice-calc`，然后重启 HugAgentOS |
 | bash 提示缺少 OS 沙箱运行器 | Linux 安装 `bubblewrap`（Debian/Ubuntu：`sudo apt-get install bubblewrap`）后重启。装上之前，除「完全放开」外的权限档会直接拒绝执行本机命令——这是设计如此，不会退化成无隔离运行 |
-| bash 提示当前系统无法执行这条策略 | 说明这一档要求的隔离超出了本系统能力，例如 Windows 的受限令牌无法限制读取范围、也无法在不提权的情况下断网。按提示放宽对应设置（如把「网络」类别从「阻止」改回「确认」），或换到能提供该能力的系统 |
-| 技能执行反复出现 `fork: Resource temporarily unavailable` | 停止当前服务，重新运行公开安装器完成升级，再启动 `hugagent`。旧版本若留下子进程，先检查当前用户的进程，必要时注销当前登录会话后重试。 |
-| 环境是否就绪 | `hugagent doctor` 一次性自检 |
+| bash 提示当前系统无法执行这条策略 | 说明这一档要求的隔离超出了本系统能力，例如 Windows 的低完整性沙箱无法限制读取范围、也无法在不提权的情况下断网。按提示放宽对应设置（如把「网络」类别从「阻止」改回「确认」），或换到能提供该能力的系统 |
+| 技能执行反复出现 `fork: Resource temporarily unavailable` | 停止当前服务，重新运行公开安装器完成升级，再启动 `hugagent-server`。旧版本若留下子进程，先检查当前用户的进程，必要时注销当前登录会话后重试。 |
+| 环境是否就绪 | `hugagent-server doctor` 一次性自检 |
 
 ## 相关源码
 
@@ -187,7 +187,7 @@ hugagent doctor     # 环境自检（Python 版本、端口占用、数据目录
 | CLI（onboard / serve / doctor） | `src/backend/cli.py` |
 | 本地模式开关 | `src/backend/core/config/settings.py`（`DeploySettings`，`DEPLOY_PROFILE=local`） |
 | 前端静态托管 + `/api` 桥接 | `src/backend/api/local_hosting.py` |
-| MCP / 沙箱子进程督管 | `src/backend/orchestration/local_subprocess.py` |
-| 进程内事件流 / 短时状态 | `src/backend/orchestration/run_event_stream.py`、`src/backend/core/infra/ephemeral.py`（`REDIS_URL` 留空即启用） |
-| 内置 MCP 目录种子 | `src/backend/core/services/mcp_service.py`（`seed_builtin_mcp_servers_if_empty`） |
+| MCP / 沙箱子进程督管 | `src/backend/core/infra/local_runtime/` |
+| 进程内事件流 / 短时状态 | `src/backend/core/runs/events/`、`src/backend/core/infra/ephemeral.py`（`REDIS_URL` 留空即启用） |
+| 内置 MCP 目录种子 | `src/backend/core/capabilities/mcp/service.py`（`seed_builtin_mcp_servers_if_empty`） |
 | 环境变量参考 | [environment-variables.md](environment-variables.md)（「无 Docker 本地模式」段） |

@@ -53,11 +53,11 @@ HugAgentOS 提供**两个相互独立的管理入口**，分别面向内容运�
 
 `/v1/admin/skills`（`api/routes/v1/admin_skills.py`，`ADMIN_TOKEN`）：技能全生命周期管理——CRUD、zip 上传、启停、排序、图标、依赖扫描与编辑、技能内单文件读写删、复刻内置技能、导入 / 导出。技能存于 `admin_skills` 表，技能体系详见 [Agent 技能](agent-skills.md)。
 
-`/v1/admin/skill-drafts`（`api/routes/v1/admin_skill_drafts.py`，`ADMIN_TOKEN`）：自动蒸馏出的技能草稿审核——列表 / 计数 / 详情、先编辑后通过（approve）、驳回（reject）、删除，以及手动触发每日蒸馏扫描。
+`/v1/admin/skill-drafts`（`features/distillation/api/admin_skill_drafts.py`，`ADMIN_TOKEN`）：自动蒸馏出的技能草稿审核——列表 / 计数 / 详情、先编辑后通过（approve）、驳回（reject）、删除，以及手动触发每日蒸馏扫描。
 
 ### 市场审核（admin_marketplace）（商业版 EE：content_admin）
 
-`/v1/admin/marketplace`（`api/routes/v1/admin_marketplace.py`，`ADMIN_TOKEN`）：两件事——
+`/v1/admin/marketplace`（`features/marketplace/api/admin_marketplace.py`，`ADMIN_TOKEN`）：两件事——
 
 1. **安装市场技能为全局技能**：浏览市场列表（标注「是否已全局安装」）、安装后 owner 为空、全员可用，可继续在「技能管理」编辑。
 2. **审核用户上架申请**：申请列表（按 status 过滤）、详情（含 SKILL.md 预览）、通过（上架，全员可装）、驳回 / 下架。
@@ -87,16 +87,18 @@ GitHub 绑定默认在此面板维护，也可用 `FEEDBACK_GITHUB_*` 环境变�
 
 `/v1/admin/agents`（`api/routes/v1/admin_agents.py`，`ADMIN_TOKEN`）：管理员侧子智能体 CRUD（全员可见）、可绑定资源列表（available-resources）、启停切换、导入 / 导出。
 
+子智能体状态开关使用 `PUT /v1/admin/agents/{agent_id}/toggle`。切换和列表刷新期间，该智能体的开关显示处理中并阻止重复提交，避免连续点击把状态切回。
+
 ### 知识库管理（admin_kb）（商业版 EE：content_admin）
 
-`/v1/admin/kb`（`api/routes/v1/admin_kb.py`，`ADMIN_TOKEN`）：自建**公共知识库**管理（`KBSpace.visibility == "public"`，归属系统属主），能力镜像用户态 `kb.py`——库 CRUD、AI 生成简介、文档上传 / 列表 / 原文预览（Office 转 PDF）/ 删除 / 重新索引、分块预览与逐块编辑（内容 / 标签 / 问题）。公共库对全部用户在能力目录可见、可被检索。Dify 模式下仅只读展示 Dify 数据集，写操作返回 409。详见 [知识库](knowledge-base.md)。
+`/v1/admin/kb`（`edition_ee/routes/admin_kb.py`，`ADMIN_TOKEN`）：自建**公共知识库**管理（`KBSpace.visibility == "public"`，归属系统属主），能力镜像用户态 `kb.py`——库 CRUD、AI 生成简介、文档上传 / 列表 / 原文预览（Office 转 PDF）/ 删除 / 重新索引、分块预览与逐块编辑（内容 / 标签 / 问题）。公共库对全部用户在能力目录可见、可被检索。Dify 模式下仅只读展示 Dify 数据集，写操作返回 409。详见 [知识库](knowledge-base.md)。
 
 ### 沙箱管理（admin_sandbox + config_security/sandbox）
 
 两个互补面板：
 
-- `/v1/admin/sandbox`（`api/routes/v1/admin_sandbox.py`，`ADMIN_TOKEN`，**商业版 EE：content_admin**）：聚合技能依赖清单预览、触发沙盒镜像重建 + 容器热切、重建历史与日志查询。
-- `/v1/config/security/sandbox/*`（`api/routes/v1/config_security.py`，`CONFIG_TOKEN`，**商业版 EE：system_config**）：只读安全视图——沙盒概览、运行实例列表 / 详情、快照、重建历史、脱敏配置。Provider 不支持的能力（如 ScriptRunner 无法枚举实例）返回 `code=42210`，前端置灰。
+- `/v1/admin/sandbox`（`features/sandbox_ops/api/admin_sandbox.py`，`ADMIN_TOKEN`，**商业版 EE：content_admin**）：聚合技能依赖清单预览、触发沙盒镜像重建 + 容器热切、重建历史与日志查询。
+- `/v1/config/security/sandbox/*`（`features/security_console/api/config_security.py`，`CONFIG_TOKEN`，**商业版 EE：system_config**）：只读安全视图——沙盒概览、运行实例列表 / 详情、快照、重建历史、脱敏配置。Provider 不支持的能力（如 ScriptRunner 无法枚举实例）返回 `code=42210`，前端置灰。
 
 详见 [沙箱](sandbox.md)。
 
@@ -106,7 +108,7 @@ GitHub 绑定默认在此面板维护，也可用 `FEEDBACK_GITHUB_*` 环境变�
 
 `/v1/admin/usage-logs`（`api/routes/v1/admin_usage_logs.py`，`CONFIG_TOKEN`）：按用户的智能体调用日志查询（token 用量、模型、错误状态）、统计汇总、去重模型名列表。
 
-桌面双模式的执行位置按会话保存，普通聊天、计划生成与执行、自主循环及其续跑和取消均沿用同一执行端。选择本机后，模型仍可通过云端网关调用，但会话和任务日志保存在本机。浏览器打开云端 `/config` 时仅查询云端记录；查看本机任务请使用桌面端调用日志。运行端标签不表示模型的部署位置，也不会把本机对话自动上传到云端。
+桌面双模式的执行位置按会话保存，普通聊天、计划生成与执行、自主循环及其续跑和取消均沿用同一执行端。本机任务可以通过云端网关调用模型。设备后台将日志同步为只读管理副本。云端 `/config` 的技能、智能体、对话、工具和模型调用日志各使用一个统一列表，合并云端记录与已收到的本机记录；运行端标记区分“本机”和“云端”。各列表统一筛选、排序和分页，不再提供独立的本机列表、任务来源选择框或设备同步状态区。设备离线时保留已收到的记录。运行端表示任务执行位置，不表示模型部署位置。
 
 > 社区版用户可查看自己的 Token 用量；面向组织的汇总报表 / 定价 / 成本导出归商业版。
 
@@ -164,13 +166,47 @@ GitHub 绑定默认在此面板维护，也可用 `FEEDBACK_GITHUB_*` 环境变�
 | 管理凭证依赖 | `src/backend/api/deps.py` |
 | License 能力位 | `src/backend/edition_ee/licensing/features.py`、`src/backend/edition_ee/licensing/deps.py` |
 | 技能 / 草稿 / 市场 | `src/backend/api/routes/v1/admin_skills.py`、`admin_skill_drafts.py`、`admin_marketplace.py` |
-| 问题反馈与 GitHub 发布 | `src/backend/edition_ee/routes/feedbacks.py`、`admin_feedbacks.py`、`services/feedback_service.py` |
+| 问题反馈与 GitHub 发布 | `src/backend/edition_ee/routes/feedbacks.py`、`admin_feedbacks.py`、`edition_ee/services/feedback_service.py` |
 | 提示词 / MCP / 子智能体 | `src/backend/api/routes/v1/admin_prompts.py`、`admin_mcp_servers.py`、`admin_agents.py` |
-| 知识库 / 沙盒 | `src/backend/edition_ee/routes/admin_kb.py`、`src/backend/api/routes/v1/admin_sandbox.py` |
+| 知识库 / 沙盒 | `src/backend/edition_ee/routes/admin_kb.py`、`src/backend/features/sandbox_ops/api/admin_sandbox.py` |
 | 计费 / 用量 / 日志 / 会话审查 | `src/backend/api/routes/v1/admin_billing.py`、`admin_usage_logs.py`、`admin_logs.py`、`admin_chat_history.py` |
 | 内容管理 | `src/backend/api/routes/v1/content.py` |
 | 用户 / 团队 / 邀请 / License（EE） | `src/backend/edition_ee/routes/config_users.py`、`config_teams.py`、`config_invites.py`、`config_license.py` |
-| 安全 | `src/backend/api/routes/v1/config_security.py` |
+| 安全 | `src/backend/features/security_console/api/config_security.py` |
 | 服务配置 | `src/backend/api/routes/v1/service_configs.py` |
 
 延伸阅读：[认证与权限](auth.md) · [提示词系统](prompts.md) · [版本与授权](../editions/overview.md)
+
+## 市场单条导出（商业版 EE）
+
+在 `/admin` 的技能市场、插件市场和智能体市场中，点击条目上的「导出」即可下载该条目的 ZIP。技能和智能体的详情页也提供导出按钮。条目无需先安装，下架条目也可由管理员导出。
+
+- 技能 ZIP 包含 `SKILL.md`、脚本、参考资料和二进制附件，可从技能上传入口重新导入。
+- 插件 ZIP 保留原始清单、运行时和资源文件；已从市场移除的技能不会导出。可从插件上传入口重新导入。
+- 智能体 ZIP 包含一个 YAML frontmatter Markdown 文件，保存系统提示词、模型参数、欢迎语、推荐问题和能力引用。可从智能体导入入口重新导入。技能、插件、工具和知识库的引用不会打包为依赖资源。
+
+导出读取市场条目的内容，不读取已安装实例的凭据。凭据文件、环境文件、缓存和符号链接不进入导出包。市场可见范围与安装状态不会随包迁移。下载接口沿用内容管理权限：
+
+| 对象 | GET 接口 |
+| --- | --- |
+| 技能 | `/v1/admin/marketplace/skills/{slug}/export-zip` |
+| 插件 | `/v1/admin/plugins/market/{slug}/export-zip` |
+| 智能体 | `/v1/admin/agent-marketplace/agents/{slug}/export-zip` |
+
+三个市场支持勾选条目和全选当前筛选结果。单项导出使用小型下载图标，悬停显示“导出”。插件市场图标位于编辑按钮旁。点击“批量导出”下载一个 ZIP，包内每个条目都是可单独导入的 ZIP。单批最多 100 项，条目 ZIP 总大小最多 100 MB。批量接口：`POST /v1/admin/marketplace/export-zip`，请求体为 `{kind: "skill" | "agent" | "plugin", slugs: string[]}`。
+
+点击“批量删除”后确认可删除条目。预置条目自动跳过，只移出市场，不影响已安装实例。删除失败会显示对应条目和原因，并保留失败条目的勾选。翻页保留勾选；更改搜索、分类或重新打开市场时清空勾选。
+
+插件市场的全选、已选择数量和批量操作栏固定在列表上方。滚动时仅插件列表移动，操作栏始终可见。
+
+### 智能体 API 调用来源
+
+用户调用日志与工具调用日志在同一列表显示本机、云端和 API 来源，并支持按调用来源筛选。
+API 来源由后端已认证的 API Key 确定；客户端不能通过请求体指定。流式与非流式智能体
+请求使用同一记录链路，API 工具记录仍保留实际执行状态、所属用户与会话。筛选来源后，
+列表分页和统计汇总使用相同来源范围，不额外复制调用记录或重复统计 Token。
+
+已保存服务端运行记录的专属智能体 API 历史调用可自动识别为 API。旧版普通 API Key 调用若未保存
+来源，不能可靠地与网页调用区分，仍显示为云端；新请求逐次记录来源，同一会话的
+网页调用不会因 API 请求而被改标。模型网关请求继续显示在网关调用日志，
+智能体 API 请求不会写入该网关日志。

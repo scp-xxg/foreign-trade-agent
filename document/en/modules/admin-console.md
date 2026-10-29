@@ -53,11 +53,11 @@ Page Configuration also owns the homepage's first-screen content. Administrators
 
 `/v1/admin/skills` (`api/routes/v1/admin_skills.py`, `ADMIN_TOKEN`): full skill lifecycle — CRUD, zip upload, enable/disable, ordering, icons, dependency scan and editing, per-file read/write/delete inside a skill, forking built-in skills, import/export. Skills are stored in the `admin_skills` table; see [Agent Skills](agent-skills.md).
 
-`/v1/admin/skill-drafts` (`api/routes/v1/admin_skill_drafts.py`, `ADMIN_TOKEN`): review of auto-distilled skill drafts — list / count / detail, edit-then-approve, reject, delete, plus a manual trigger for the daily distillation scan.
+`/v1/admin/skill-drafts` (`features/distillation/api/admin_skill_drafts.py`, `ADMIN_TOKEN`): review of auto-distilled skill drafts — list / count / detail, edit-then-approve, reject, delete, plus a manual trigger for the daily distillation scan.
 
 ### Marketplace review (admin_marketplace) (Enterprise Edition: content_admin)
 
-`/v1/admin/marketplace` (`api/routes/v1/admin_marketplace.py`, `ADMIN_TOKEN`) does two things:
+`/v1/admin/marketplace` (`features/marketplace/api/admin_marketplace.py`, `ADMIN_TOKEN`) does two things:
 
 1. **Install marketplace skills globally**: browse the marketplace listing (flagging "already installed globally"); installed skills have an empty owner, are available to everyone, and remain editable under Skill Management.
 2. **Review user listing submissions**: submission list (filterable by status), detail (with SKILL.md preview), approve (publish, installable by all), reject / unpublish.
@@ -87,16 +87,18 @@ Cross-environment snapshot endpoints `GET /v1/content/prompts/export` / `POST /v
 
 `/v1/admin/agents` (`api/routes/v1/admin_agents.py`, `ADMIN_TOKEN`): admin-owned sub-agent CRUD (visible to all users), bindable-resource listing (available-resources), enable toggle, import/export.
 
+The sub-agent status switch uses `PUT /v1/admin/agents/{agent_id}/toggle`. While the toggle and list refresh are in progress, the switch shows a loading state and prevents duplicate submissions for that agent, avoiding a second click reversing the change.
+
 ### Knowledge base management (admin_kb) (Enterprise Edition: content_admin)
 
-`/v1/admin/kb` (`api/routes/v1/admin_kb.py`, `ADMIN_TOKEN`): management of self-hosted **public knowledge bases** (`KBSpace.visibility == "public"`, owned by the system owner), mirroring the user-side `kb.py` — KB CRUD, AI-generated descriptions, document upload / listing / original-file preview (Office→PDF) / deletion / reindexing, chunk preview and per-chunk editing (content / tags / questions). Public KBs are visible to all users in the capability catalog and searchable. In Dify mode, Dify datasets are shown read-only and writes return 409. See [Knowledge Base](knowledge-base.md).
+`/v1/admin/kb` (`edition_ee/routes/admin_kb.py`, `ADMIN_TOKEN`): management of self-hosted **public knowledge bases** (`KBSpace.visibility == "public"`, owned by the system owner), mirroring the user-side `kb.py` — KB CRUD, AI-generated descriptions, document upload / listing / original-file preview (Office→PDF) / deletion / reindexing, chunk preview and per-chunk editing (content / tags / questions). Public KBs are visible to all users in the capability catalog and searchable. In Dify mode, Dify datasets are shown read-only and writes return 409. See [Knowledge Base](knowledge-base.md).
 
 ### Sandbox management (admin_sandbox + config_security/sandbox)
 
 Two complementary panels:
 
-- `/v1/admin/sandbox` (`api/routes/v1/admin_sandbox.py`, `ADMIN_TOKEN`, **Enterprise Edition: content_admin**): aggregated skill-dependency manifest preview, sandbox image rebuild trigger + container hot-swap, rebuild history and log queries.
-- `/v1/config/security/sandbox/*` (`api/routes/v1/config_security.py`, `CONFIG_TOKEN`, **Enterprise Edition: system_config**): read-only security view — sandbox overview, running instances list / detail, snapshots, rebuild history, redacted configuration. Capabilities a provider cannot support (e.g. ScriptRunner cannot enumerate instances) return `code=42210`, which the frontend renders as disabled.
+- `/v1/admin/sandbox` (`features/sandbox_ops/api/admin_sandbox.py`, `ADMIN_TOKEN`, **Enterprise Edition: content_admin**): aggregated skill-dependency manifest preview, sandbox image rebuild trigger + container hot-swap, rebuild history and log queries.
+- `/v1/config/security/sandbox/*` (`features/security_console/api/config_security.py`, `CONFIG_TOKEN`, **Enterprise Edition: system_config**): read-only security view — sandbox overview, running instances list / detail, snapshots, rebuild history, redacted configuration. Capabilities a provider cannot support (e.g. ScriptRunner cannot enumerate instances) return `code=42210`, which the frontend renders as disabled.
 
 See [Sandbox](sandbox.md).
 
@@ -106,7 +108,7 @@ See [Sandbox](sandbox.md).
 
 `/v1/admin/usage-logs` (`api/routes/v1/admin_usage_logs.py`, `CONFIG_TOKEN`): per-user agent call log queries (token usage, model, error status), summary statistics, distinct model names.
 
-Desktop dual mode preserves the execution target per conversation across ordinary chat, plan generation and execution, autonomous loops, continuation, and cancellation. Local tasks may call models through the cloud gateway while keeping conversations and task logs on the device. Opening cloud `/config` in a browser queries cloud records only; use desktop call logs for local tasks. The execution label does not indicate where the model is hosted, and local conversations are not automatically uploaded.
+Desktop dual mode preserves each conversation's execution target for chat, plans, autonomous loops, continuation, and cancellation. Local tasks may use models through the cloud gateway. Devices synchronize read-only management copies in the background. Cloud `/config` uses one list per skill, agent, conversation, tool, and model log module, combining cloud records with received local records. Runtime labels distinguish Local and Cloud. Each list shares filtering, ordering, and pagination; there is no separate desktop list, task-source selector, or device-sync panel. Received records remain available while devices are offline. Runtime identifies task execution, not model hosting.
 
 > Community Edition users can view their own token usage; organization-wide reports / pricing / cost export are Enterprise Edition.
 
@@ -164,13 +166,50 @@ Aligned with chapter 4 of the productization plan and the route registry:
 | Administrative credential dependencies | `src/backend/api/deps.py` |
 | License features | `src/backend/edition_ee/licensing/features.py`, `src/backend/edition_ee/licensing/deps.py` |
 | Skills / drafts / marketplace | `src/backend/api/routes/v1/admin_skills.py`, `admin_skill_drafts.py`, `admin_marketplace.py` |
-| Feedback and GitHub publishing | `src/backend/edition_ee/routes/feedbacks.py`, `admin_feedbacks.py`, `services/feedback_service.py` |
+| Feedback and GitHub publishing | `src/backend/edition_ee/routes/feedbacks.py`, `admin_feedbacks.py`, `edition_ee/services/feedback_service.py` |
 | Prompts / MCP / sub-agents | `src/backend/api/routes/v1/admin_prompts.py`, `admin_mcp_servers.py`, `admin_agents.py` |
-| Knowledge base / sandbox | `src/backend/edition_ee/routes/admin_kb.py`, `src/backend/api/routes/v1/admin_sandbox.py` |
+| Knowledge base / sandbox | `src/backend/edition_ee/routes/admin_kb.py`, `src/backend/features/sandbox_ops/api/admin_sandbox.py` |
 | Billing / usage / logs / chat review | `src/backend/api/routes/v1/admin_billing.py`, `admin_usage_logs.py`, `admin_logs.py`, `admin_chat_history.py` |
 | Content management | `src/backend/api/routes/v1/content.py` |
 | Users / teams / invites / license (EE) | `src/backend/edition_ee/routes/config_users.py`, `config_teams.py`, `config_invites.py`, `config_license.py` |
-| Security | `src/backend/api/routes/v1/config_security.py` |
+| Security | `src/backend/features/security_console/api/config_security.py` |
 | Service configs | `src/backend/api/routes/v1/service_configs.py` |
 
 Further reading: [Authentication & Permissions](auth.md) · [Prompt System](prompts.md) · [Editions & Licensing](../editions/overview.md)
+
+## Export individual marketplace entries (EE)
+
+In the skill, plugin, and agent marketplaces under `/admin`, click **Export** on an entry to download its ZIP. Skill and agent detail views also provide this button. Administrators can export entries without installing them, including unlisted entries.
+
+- Skill ZIPs contain `SKILL.md`, scripts, references, and binary attachments. Re-import them through skill upload.
+- Plugin ZIPs preserve the original manifest, runtime, and resources. Skills removed from the marketplace are excluded. Re-import them through plugin upload.
+- Agent ZIPs contain one Markdown file with YAML frontmatter. It preserves the system prompt, model parameters, welcome message, suggested questions, and capability references. Re-import it through agent import. Referenced skills, plugins, tools, and knowledge bases are not bundled as dependencies.
+
+Exports read marketplace content and do not read installed-instance credentials. Credential files, environment files, caches, and symbolic links are excluded. Marketplace visibility and installation state do not transfer with the package. These download endpoints use content-management authorization:
+
+| Entry | GET endpoint |
+| --- | --- |
+| Skill | `/v1/admin/marketplace/skills/{slug}/export-zip` |
+| Plugin | `/v1/admin/plugins/market/{slug}/export-zip` |
+| Agent | `/v1/admin/agent-marketplace/agents/{slug}/export-zip` |
+
+All three marketplaces support entry selection and selecting all filtered results. Individual export uses a compact download icon with an Export tooltip, next to Edit in the plugin marketplace. Export Selected downloads one ZIP containing independently importable entry ZIPs. A batch allows up to 100 entries and 100 MB of entry ZIP data. Endpoint: `POST /v1/admin/marketplace/export-zip`, body: `{kind: "skill" | "agent" | "plugin", slugs: string[]}`.
+
+Delete Selected asks for confirmation of eligible entries. Preset entries are skipped. Only listings are removed; installed instances remain. Failures show entry names and reasons and retain selection for retry. Selection survives pagination and resets on search/category changes or reopening the marketplace.
+
+The plugin marketplace selection count, Select All and bulk actions remain above the scrollable list. Only plugin entries scroll; the toolbar stays visible.
+
+### Agent API call origin
+
+User usage logs and tool call logs share one list with local, cloud, and API origins.
+Both lists support origin filtering. The backend derives API origin from the authenticated
+API key; clients cannot set it in the request body. Streaming and non-streaming agent
+requests share the same logging path. Tool records retain their actual execution status,
+owner, and conversation. Pagination and summary statistics use the selected origin
+without copying records or counting tokens twice.
+
+Historical agent-specific API calls with saved server admission records are recognized as API calls.
+Older personal API-key calls without saved provenance cannot reliably be distinguished
+from web calls and remain labeled cloud. New requests store origin per call, so an API
+request does not relabel web calls in the same conversation. Model gateway requests
+remain in gateway call logs; agent API requests do not enter those logs.

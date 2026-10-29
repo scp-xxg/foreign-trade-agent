@@ -1,0 +1,283 @@
+// Modified by foreign-trade-agent contributors, 2026-10-28; see CHANGES_FOREIGN_TRADE.md.
+import { PanelToggleGlyph } from './canvas/CanvasControlIcons';
+import { ChatSlot } from '../customization/ChatCustomization';
+import {WorkspaceRuntime} from '../workbench/WorkspaceRuntime';
+import {ActivityPanel} from '../workbench/ActivityPanel';
+import {navigateTo} from '../routing/navigation';
+import { useLocation } from 'react-router';
+import { WorkspaceApplication } from '../workbench/WorkspaceApplication';
+import { ApplicationAccess } from '../workbench/ApplicationAccess';
+import { chatDraftKey } from '../stores/composerStore';
+import { useChatStore } from '../stores/chatStore';
+import { useAuthStore } from '../stores/authStore';
+import { usePersonalAgentAvailable } from '../personalAgentEdition';
+import {
+  CloseOutlined,
+  MenuOutlined,
+} from '@ant-design/icons';
+import {
+  Button,
+  Layout,
+  Modal,
+  Tag,
+  Tooltip,
+  Typography
+} from 'antd';
+import 'highlight.js/styles/github.css';
+import { lazy, Suspense, useEffect, useRef, useState, type AnimationEvent, type CSSProperties } from 'react';
+import { t } from '../i18n';
+
+/* styles loaded via styles/index.ts in main.tsx */
+import { useProjectStore } from '../stores/projectStore';
+import { resolvePlanModeActive } from '../utils/chatMode';
+import { TOPIC_TAG_COLORS } from '../utils/constants';
+import { RightSidebarPanel } from './canvas';
+import { PromptHubPanel } from './chat';
+import { builtinPages } from '../applicationComposition';
+import { WorkbenchPage } from '../workbench/WorkbenchPage';
+import { AuthExpiredModal, ImagePreview } from './common';
+import { CollapseHeight } from './common/CollapseHeight';
+import { CreateKBModal, ReindexModal } from './kb';
+import { SearchModal, Sidebar } from './sidebar';
+import { ToolResultPanel } from './tool';
+
+import type { useAppController } from '../hooks/useAppController';
+import { SlidePanel } from './common/SlidePanel';
+import { usePaneOcclusion } from '../hooks/usePaneOcclusion';
+import PanelLoadingSkeleton from './common/PanelLoadingSkeleton';
+import { ProjectsSkeleton } from './projects/ProjectSkeletons';
+const RunTimelinePanel = lazy(() => import('./automation/RunTimelinePanel').then(m => ({ default: m.RunTimelinePanel })));
+const ProjectHeader = lazy(() => import('./projects/ProjectHeader'));
+const ProjectWorkspaceRail = lazy(() => import('./projects/ProjectWorkspaceRail'));
+const { Header, Content } = Layout;
+export function AppWorkspace({ state }: { state: ReturnType<typeof useAppController> }) {
+  const { handleNewChat, handleNewProjectChat, deleteChat, toggleChatPinned, toggleChatFavorite, startRenameChat, commitRenameChat, exportChatRecord, handleSelectChat, handleSetPanel, siderCollapsed, setSiderCollapsed, handleSelectSearchResult, canvasFullscreen, canvasPanelWidth, canvasOpen, chatSurface, showChatHeader, openMobileSidebar, isEmptyChat, handleRightSidebarToggle, showHeader, title, hint, chat, chatProjectName, recommendBarVisible, recommendBannerText, handleCapabilityClick, setRecommendBarVisible, panel, overviewProjectId, toolResultPanel, promptHubOpen, isCE, automationActiveGroup, rightSidebarView, detailModal, setDetailModal, refreshCatalog } = state;
+  const personalAgentAvailable = usePersonalAgentAvailable();
+  const authUserLoaded = useAuthStore(s => s.authUser != null);
+  useEffect(() => {
+    // Preserve the module's own permission contract and existing revoked-route fallback.
+    if (panel === 'personal_agent' && authUserLoaded && !personalAgentAvailable) handleSetPanel('chat');
+  }, [panel, authUserLoaded, personalAgentAvailable, handleSetPanel]);
+  const location = useLocation();
+  const generic = location.pathname.startsWith('/apps');
+  const moduleSurface = !chatSurface && !generic && panel !== 'personal_agent';
+  const moduleScrollRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (moduleSurface && moduleScrollRef.current) moduleScrollRef.current.scrollTop = 0;
+  }, [location.pathname, moduleSurface]);
+  // The panel's entrance rise pushes a full-height panel 6px past the viewport; hide the
+  // scrollbar until it settles (the stable gutter keeps the width unchanged).
+  const [settledPanel, setSettledPanel] = useState<string | null>(null);
+  const panelEntering = settledPanel !== panel;
+  const settlePanel = (event: AnimationEvent<HTMLDivElement>) => {
+    if (event.target === event.currentTarget) setSettledPanel(panel);
+  };
+  useEffect(() => {
+    // Fallback when animationend never fires (e.g. the panel is hidden mid-animation).
+    const timer = setTimeout(() => setSettledPanel(panel), 400);
+    return () => clearTimeout(timer);
+  }, [panel]);
+  const showProjectOverview = !generic && !!overviewProjectId;
+  const { paneRef, hidden: paneHidden } = usePaneOcclusion(canvasOpen, canvasFullscreen);
+  return (
+    <Layout className="jx-appShell" style={{ height: '100%' }}>
+      <ChatSlot name="sidebar"><Sidebar
+        onNewChat={handleNewChat}
+        onNewProjectChat={handleNewProjectChat}
+        onDeleteChat={deleteChat}
+        onTogglePinned={toggleChatPinned}
+        onToggleFavorite={toggleChatFavorite}
+        onStartRename={startRenameChat}
+        onCommitRename={commitRenameChat}
+        onExportChat={(id) => void exportChatRecord(id)}
+        onSelectChat={handleSelectChat}
+        onSetPanel={handleSetPanel}
+      /></ChatSlot>
+      {!siderCollapsed && (
+        <button
+          type="button"
+          className="jx-mobileSidebarBackdrop"
+          onClick={() => setSiderCollapsed(true)}
+          aria-label={t('关闭侧边栏')}
+        />
+      )}
+
+      {/* Global search modal: triggered by the search button / ⌘K / Ctrl+K */}
+      <SearchModal
+        onNewChat={handleNewChat}
+        onSelectChat={handleSelectChat}
+        onSelectSearchResult={handleSelectSearchResult}
+      />
+
+      <Layout className={`jx-appMainLayout${canvasFullscreen ? ' is-canvasFullscreen' : ''}`} style={{ overflow: 'hidden', background: 'var(--color-bg-base)', '--jx-canvas-preferred-width': canvasPanelWidth ? `${canvasPanelWidth}px` : undefined } as CSSProperties}>
+        <div ref={paneRef} inert={paneHidden} aria-hidden={paneHidden || undefined} className={`jx-primaryPane${canvasOpen ? ' is-canvasOpen' : ''}${chatSurface ? ' is-chatSurface' : ''}`}>
+          {!showChatHeader && (
+            <header className="jx-mobileHeader">
+              <button
+                type="button"
+                className="jx-mobileMenuBtn"
+                onClick={openMobileSidebar}
+                aria-label={t('打开侧边栏')}
+              >
+                <MenuOutlined />
+              </button>
+            </header>
+          )}
+          {chatSurface && !isEmptyChat && !canvasOpen && (
+            <Tooltip title={t('展开右侧面板')} placement="bottomRight">
+              <Button
+                type="text"
+                className="jx-rightSidebarToggle"
+                icon={<PanelToggleGlyph />}
+                onClick={handleRightSidebarToggle}
+                aria-label={t('展开右侧面板')}
+                aria-pressed="false"
+              />
+            </Tooltip>
+          )}
+          {/* Non-chat panels: standard header */}
+          {showHeader && (
+            <Header className="jx-topbar" style={{ paddingInline: 20, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0, flex: 1 }}>
+                <div style={{ minWidth: 0, flex: 1 }}>
+                  <Typography.Title level={5} style={{ margin: 0, fontWeight: 900 }} ellipsis>{title}</Typography.Title>
+                  <Typography.Text type="secondary" style={{ fontSize: 12, display: 'block', marginTop: 2 }} ellipsis>{hint}</Typography.Text>
+                </div>
+              </div>
+            </Header>
+          )}
+
+          {/* Chat panel with messages: minimal header with title */}
+          {showChatHeader && (
+            <div className="jx-chatTopbar">
+              <button
+                type="button"
+                className="jx-mobileMenuBtn"
+                onClick={openMobileSidebar}
+                aria-label={t('打开侧边栏')}
+              >
+                <MenuOutlined />
+              </button>
+              {chat?.projectId && (
+                <span
+                  className="jx-chatTopbarProject"
+                  title={`${t('项目：')}${chatProjectName || t('项目')}`}
+                  onClick={() => { void useProjectStore.getState().openProject(chat.projectId!); }}
+                >
+                  {chatProjectName || t('项目')}
+                  <span className="jx-chatTopbarProjectSep">/</span>
+                </span>
+              )}
+              <span className="jx-chatTopbarTitle">{chat?.title || t('对话')}</span>
+              {chat?.agentName && (
+                <Tag className="jx-headerTopicTag" color="blue">{chat.agentName}</Tag>
+              )}
+              {/* Follows the live composer mode, not the historical planChat marker: once the user
+                closes plan mode the header must stop claiming the chat is still in it. */}
+              {resolvePlanModeActive(chat) && (
+                <Tag className="jx-headerTopicTag" color="blue">{t('计划模式')}</Tag>
+              )}
+              {chat?.businessTopic && (
+                <Tag className="jx-headerTopicTag" color={TOPIC_TAG_COLORS[chat.businessTopic] || 'default'}>{chat.businessTopic}</Tag>
+              )}
+            </div>
+          )}
+
+          {/* Chat empty state: closable recommend banner (full-width); on close the height collapses so the content below moves up smoothly */}
+          <CollapseHeight
+            show={chatSurface && isEmptyChat && recommendBarVisible}
+            motionKey="recommend-banner"
+            duration={0.2}
+            style={{ flex: 'none' }}
+          >
+            <div className="jx-recommendBanner">
+              <span className="jx-recommendBanner-icon">💡</span>
+              <span className="jx-recommendBanner-text">
+                {recommendBannerText.trim() || t('通过外贸插件在对话中处理业务；工作台用于辅助查看、核对与编辑。')}
+                <a className="jx-recommendBanner-link" onClick={() => handleCapabilityClick('plugins')}>{t('查看外贸插件 >')}</a>
+              </span>
+              <button className="jx-recommendBanner-close" onClick={() => setRecommendBarVisible(false)} aria-label={t('关闭')}>
+                <CloseOutlined style={{ fontSize: 16 }} />
+              </button>
+            </div>
+          </CollapseHeight>
+
+
+          <div className={`jx-mainRow${showProjectOverview ? ' jx-mainRow--project' : ''}`}>
+            <Content ref={moduleScrollRef} className={`jx-content${moduleSurface ? ' jx-content--moduleSurface' : ''}${chatSurface ? ' jx-content--chatSurface' : ''}${chatSurface && !!chat?.messages.length ? ' jx-content--messageSurface' : ''}${panelEntering ? ' jx-content--panelEntering' : ''}`}>
+              {/* Unified panel-switch entrance (fade+rise, enter-only to stay responsive); key=panel:
+              * switching chats within the chat panel does not replay it. One-way entrance
+              * needs no motion — CSS primitives suffice. */}
+              <ActivityPanel onOpen={key=>navigateTo('/apps/'+encodeURIComponent(key))}/>
+              <WorkspaceRuntime />
+              <div
+                key={panel}
+                className={`jx-panel jx-anim-fadeInUp${moduleSurface ? ' jx-panel--moduleSurface' : ''}`}
+                data-panel={panel}
+                onAnimationEnd={settlePanel}
+                style={{ '--fadeInUp-distance': '6px', animationDuration: '180ms' } as React.CSSProperties}
+              >
+                {overviewProjectId && (
+                  <Suspense fallback={null}><ProjectHeader key={overviewProjectId} projectId={overviewProjectId} /></Suspense>
+                )}
+                {generic ? <WorkspaceApplication /> : <ApplicationAccess id={chatSurface ? 'chat' : panel}>
+                <WorkbenchPage
+                  registry={builtinPages}
+                  applicationId={chatSurface ? 'chat' : panel}
+                  context={{ state, paneHidden }}
+                  fallback={panel === 'projects' ? <ProjectsSkeleton /> : <PanelLoadingSkeleton />}
+                />
+                </ApplicationAccess>}
+              </div>
+            </Content>
+
+            {overviewProjectId && !canvasOpen && (
+              <Suspense fallback={null}>
+                <ProjectWorkspaceRail key={overviewProjectId} projectId={overviewProjectId} />
+              </Suspense>
+            )}
+            <SlidePanel show={!!toolResultPanel && !promptHubOpen && !canvasOpen && chatSurface} panelKey="tool-result-panel" x={20} duration={0.22}>
+              <ToolResultPanel />
+            </SlidePanel>
+            <SlidePanel show={!isCE && promptHubOpen && !canvasOpen && chatSurface} panelKey="prompt-hub">
+              <PromptHubPanel draftKey={chatDraftKey(useChatStore.getState().currentChatId)} />
+            </SlidePanel>
+            {!canvasOpen && (
+              <SlidePanel show={!!automationActiveGroup && panel === 'automation' && chatSurface && !showProjectOverview} panelKey="run-timeline" x={24} duration={0.24}>
+                <Suspense fallback={<PanelLoadingSkeleton />}><RunTimelinePanel /></Suspense>
+              </SlidePanel>
+            )}
+          </div>
+        </div>
+
+        <SlidePanel
+          show={canvasOpen}
+          panelKey="canvas"
+          className={`jx-canvasPanelSlot${rightSidebarView === 'file' ? '' : ' jx-rightSidebarSlot'}${canvasFullscreen ? ' is-fullscreen' : ''}`}
+          x={30}
+          duration={0.28}
+        >
+          <RightSidebarPanel />
+        </SlidePanel>
+      </Layout>
+
+      {/* Global modals */}
+      <Modal
+        title={detailModal?.title}
+        open={!!detailModal}
+        onCancel={() => setDetailModal(null)}
+        footer={<Button onClick={() => setDetailModal(null)}>{t('关闭')}</Button>}
+        width={640}
+        className="jx-detailModal"
+        destroyOnHidden
+      >
+        {detailModal?.body}
+      </Modal>
+
+      <ImagePreview />
+      <CreateKBModal onCreated={() => void refreshCatalog()} />
+      <ReindexModal />
+      <AuthExpiredModal />
+    </Layout>
+  );
+}

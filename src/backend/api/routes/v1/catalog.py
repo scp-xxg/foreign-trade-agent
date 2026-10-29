@@ -8,19 +8,14 @@ from time import monotonic
 from typing import Any, Dict, List, Optional
 
 from core.auth.backend import UserContext, get_current_user
-from core.config.catalog_runtime import get_runtime_catalog
+from core.capabilities.catalog.runtime import get_runtime_catalog
 from core.config.settings import settings
-from core.db.engine import get_db
-from core.db.repository import KBRepository
+from core.db.threads import run_in_session
+from features.knowledge.repository import KBRepository
 from core.infra.exceptions import BadRequestError
 from core.infra.responses import success_response
-from core.kb.external_provider import (
-    get_provider_cache_identity,
-    get_provider_name,
-    is_enabled,
-    list_collections,
-)
-from core.services import CatalogService
+from features.knowledge.edition import get_provider_cache_identity, get_provider_name, is_enabled, list_collections
+from core.capabilities.catalog.overrides import CatalogService
 from fastapi import APIRouter, Depends, Path
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
@@ -162,7 +157,7 @@ logger = logging.getLogger(__name__)
 def _index_modes_of(space) -> List[str]:
     """自建知识库的索引模式；解析失败按仅 RAG（历史库的语义）。"""
     try:
-        from core.kb.wiki.config import index_modes_of
+        from features.knowledge.wiki.config import index_modes_of
 
         return index_modes_of(space)
     except Exception:  # noqa: BLE001
@@ -172,184 +167,14 @@ def _index_modes_of(space) -> List[str]:
 def _kb_capabilities(space) -> Dict[str, bool]:
     """索引模式 → 能力位，字段与外接知识库的 capabilities 同构。"""
     try:
-        from core.kb.wiki_router import capabilities_for_local_kb
+        from features.knowledge.wiki_router import capabilities_for_local_kb
 
         return capabilities_for_local_kb(space)
     except Exception:  # noqa: BLE001
         return {"vector": True, "keyword": True, "wiki": False, "graph": False}
 
 
-def _load_owned_capability_items(db, user_id: str) -> tuple:
-    """Load a user's self-added private skills / MCPs and convert them to catalog items (owner='self').
-
-    Returns (skill_items, mcp_items). These items are not in the global catalog and are
-    injected only into that user's /v1/catalog response; the frontend shows the "mine"
-    badge and delete button based on ``owner == 'self'``.
-    """
-    from core.config.catalog_loader import resolve_skill_detail
-    from core.db.models import AdminMcpServer, AdminSkill, McpMarketInstallation
-    from core.services.skill_icon_service import get_skill_icons
-
-    skill_items: List[Dict[str, Any]] = []
-    mcp_items: List[Dict[str, Any]] = []
-    icons = get_skill_icons(db)
-    try:
-        marketplace_server_ids = {
-            str(row[0])
-            for row in db.query(McpMarketInstallation.server_id)
-            .filter(McpMarketInstallation.owner_user_id == user_id)
-            .all()
-        }
-        for row in (
-            db.query(AdminSkill)
-            .filter(AdminSkill.owner_user_id == user_id)
-            .order_by(AdminSkill.updated_at.desc())
-            .all()
-        ):
-            # When user_intro is unset, fall back to showing the SKILL.md body (same policy as the global catalog).
-            detail = resolve_skill_detail(row.user_intro, row.skill_content or "")
-            skill_items.append(
-                {
-                    "id": row.skill_id,
-                    "kind": "tool_bundle",
-                    "name": row.display_name,
-                    "description": row.description or "",
-                    "desc": row.description or "",
-                    "enabled": bool(row.is_enabled),
-                    "version": row.version or "1.0.0",
-                    "config": {"tags": row.tags or []},
-                    "tags": row.tags or [],
-                    "detail": detail,
-                    "icon": icons.get(row.skill_id, ""),
-                    "owner": "self",
-                    "deletable": True,
-                }
-            )
-    except Exception as exc:
-        logger.warning("Failed to load owned skills for %s: %s", user_id, exc)
-
-    try:
-        for row in (
-            db.query(AdminMcpServer)
-            .filter(AdminMcpServer.owner_user_id == user_id)
-            .order_by(AdminMcpServer.sort_order)
-            .all()
-        ):
-            extra_config = dict(row.extra_config or {})
-            mcp_items.append(
-                {
-                    "id": row.server_id,
-                    "kind": "mcp_server",
-                    "name": row.display_name,
-                    "description": row.description or "",
-                    "desc": row.description or "",
-                    "enabled": bool(row.is_enabled),
-                    "version": "1",
-                    "config": {"server": row.server_id},
-                    "icon": row.icon or "",
-                    "detail": row.user_intro or "",
-                    "owner": "self",
-                    "deletable": True,
-                    "marketplace_installed": bool(extra_config.get("market_slug"))
-                    or row.server_id in marketplace_server_ids,
-                }
-            )
-    except Exception as exc:
-        logger.warning("Failed to load owned MCP servers for %s: %s", user_id, exc)
-
-    return skill_items, mcp_items
-
-
-def _plugin_component_ids(db) -> tuple:
-    """Skill / MCP id sets of plugin components, used to remove them from the skill / MCP tool libraries so they show only under "Plugins".
-
-    Union of two sources — both are required:
-    1. **DB install source**: ``AdminSkill/AdminMcpServer.source_plugin`` is non-null —
-       written dynamically when a user installs a plugin.
-    2. **Built-in bundle scan**: skills/MCP provided by
-       ``plugin_bundles/{default,marketplace}/*`` (derived from each bundle's
-       ``skills/*/`` dirs + MCP declarations; the Agent Plugins standard manifest
-       has no ``components`` list) — MCPs of built-in plugins (e.g. automation /
-       skill-manager) go through ``_ports.py`` → catalog.json and statically
-       bubble up as first-class entries; the DB has no ``source_plugin`` row
-       for them, so source 1 alone cannot remove them.
-
-    Filters **display** only; does not affect the enablement resolution of
-    ``resolve_all_runtime_enabled`` (agents can still use them as usual).
-    """
-    from core.db.models import AdminMcpServer, AdminSkill
-
-    skill_ids: set = set()
-    mcp_ids: set = set()
-    try:
-        skill_ids = {
-            r[0]
-            for r in db.query(AdminSkill.skill_id)
-            .filter(AdminSkill.source_plugin.isnot(None))
-            .all()
-        }
-        mcp_ids = {
-            r[0]
-            for r in db.query(AdminMcpServer.server_id)
-            .filter(AdminMcpServer.source_plugin.isnot(None))
-            .all()
-        }
-    except Exception as exc:  # noqa: BLE001
-        logger.warning("plugin component id load failed: %s", exc)
-    try:
-        from core.services.plugin_service import builtin_plugin_component_ids
-
-        fs_skill_ids, fs_mcp_ids = builtin_plugin_component_ids()
-        skill_ids |= fs_skill_ids
-        mcp_ids |= fs_mcp_ids
-    except Exception as exc:  # noqa: BLE001
-        logger.warning("builtin plugin component id scan failed: %s", exc)
-    return skill_ids, mcp_ids
-
-
-def _is_owned_capability(db, user_id: str, kind: str, item_id: str) -> bool:
-    """Whether the item is a private skill/mcp self-added by the current user (owner == user_id)."""
-    from core.db.models import AdminMcpServer, AdminSkill
-
-    try:
-        if kind == "skill":
-            return (
-                db.query(AdminSkill)
-                .filter(AdminSkill.skill_id == item_id, AdminSkill.owner_user_id == user_id)
-                .first()
-                is not None
-            )
-        if kind == "mcp":
-            return (
-                db.query(AdminMcpServer)
-                .filter(
-                    AdminMcpServer.server_id == item_id, AdminMcpServer.owner_user_id == user_id
-                )
-                .first()
-                is not None
-            )
-    except Exception:
-        return False
-    return False
-
-
-# Request/Response Models
-class UpdateCatalogRequest(BaseModel):
-    """Request model for updating catalog configuration."""
-
-    enabled: Optional[bool] = Field(None, description="Enable/disable the item")
-    config: Optional[Dict[str, Any]] = Field(None, description="Configuration overrides")
-
-
-class CatalogItemResponse(BaseModel):
-    """Response model for a catalog item."""
-
-    id: str
-    name: str
-    description: str
-    enabled: bool
-    config: Optional[Dict[str, Any]] = None
-    metadata: Optional[Dict[str, Any]] = None
+from features.marketplace.api.catalog_ownership import _load_owned_capability_items, _plugin_component_ids, _is_owned_capability
 
 
 def _get_catalog_items_sync(user: UserContext, db: Session):
@@ -369,7 +194,7 @@ def _get_catalog_items_sync(user: UserContext, db: Session):
     # invisible/unusable. The catalog itself queries the DB directly and does not use this
     # cache, so this call only affects agent resolution and is harmless to display.
     try:
-        from core.config.catalog_resolver import invalidate_capability_cache
+        from core.capabilities.catalog.resolver import invalidate_capability_cache
 
         invalidate_capability_cache(str(user.user_id))
     except Exception as exc:  # noqa: BLE001
@@ -439,7 +264,7 @@ def _get_catalog_items_sync(user: UserContext, db: Session):
     # global version — otherwise the capability library would show two identically named,
     # identical-content items (private id=entry-fingerprint, global id=entry, which differ
     # so both entered the list). Merge by entry_name; dedupe only against enabled global items.
-    from core.services.marketplace_service import base_entry_name
+    from core.capabilities.skills.installation import base_entry_name as base_entry_name
 
     for kind, owned in (("skills", owned_skill_items), ("mcp", owned_mcp_items)):
         global_ids = {it.get("id") for it in base_catalog.get(kind, []) if it.get("enabled", True)}
@@ -458,7 +283,7 @@ def _get_catalog_items_sync(user: UserContext, db: Session):
         try:
             external_items = _list_datasets_cached()
             # Permission assignment: narrow to datasets visible to the current user (public + granted scoped; defaults to public when unset).
-            from core.auth.kb_permissions import get_dataset_levels
+            from features.knowledge.edition import get_dataset_levels
 
             ds_ids = [str(item.get("id", "")).strip() for item in external_items if item.get("id")]
             ds_levels = get_dataset_levels(db, user.user_id, ds_ids)
@@ -533,8 +358,8 @@ def _get_catalog_items_sync(user: UserContext, db: Session):
     public_local_kb_items: List[Dict[str, Any]] = []
     if not is_ce:
         try:
-            from core.auth.kb_permissions import get_accessible_local_kb_levels, level_to_caps
-            from core.db.models import KBSpace
+            from features.knowledge.edition import get_accessible_local_kb_levels, level_to_caps
+            from features.knowledge.models import KBSpace
 
             levels = get_accessible_local_kb_levels(db, user.user_id)
             owned_ids = {s.kb_id for s in spaces}
@@ -599,16 +424,28 @@ def _get_catalog_items_sync(user: UserContext, db: Session):
 
     kb_items: List[Dict[str, Any]] = public_kb_items + public_local_kb_items + private_kb_items
 
-    # Plugin components are shown only under "Plugins"; remove them from the skill / MCP tool library lists (avoids duplication; does not affect enablement resolution).
-    plugin_skill_ids, plugin_mcp_ids = _plugin_component_ids(db)
-    skill_list = [
-        it
-        for it in merge_items(
+    # 桌面双端的本机后端：云端账号的技能与连接器同步在本机登记表里，业务库中没有
+    # 对应行。不在这里叠加进来，能力中心就只剩本机自带的内置项——显示的和真正生效的
+    # 不是同一份。云端部署下叠加层为空，这几行是恒等变换。
+    from features.desktop.capabilities import device_catalog
+
+    overlay = device_catalog.catalog_overlay(user_id=str(user.user_id))
+    skill_list = device_catalog.merge_items(
+        merge_items(
             base_catalog.get("skills", []) + owned_skill_items, user_overrides.get("skills", [])
-        )
-        if it.get("id") not in plugin_skill_ids
-    ]
-    mcp_list = [it for it in mcp_items if it.get("id") not in plugin_mcp_ids]
+        ),
+        overlay["skills"],
+    )
+    mcp_list = device_catalog.merge_items(mcp_items, overlay["mcp"])
+
+    # Plugin components are shown only under "Plugins"; remove them from the skill / MCP tool library lists (avoids duplication; does not affect enablement resolution).
+    # 三个来源合起来才完整：业务库里的归属、内置插件包扫描、以及本机登记表里云端
+    # 同步来的那部分。剔除放在叠加之后，两边的条目走同一道口径。
+    plugin_skill_ids, plugin_mcp_ids = _plugin_component_ids(db)
+    plugin_skill_ids |= overlay["hidden_skills"]
+    plugin_mcp_ids |= overlay["hidden_mcp"]
+    skill_list = [it for it in skill_list if it.get("id") not in plugin_skill_ids]
+    mcp_list = [it for it in mcp_list if it.get("id") not in plugin_mcp_ids]
 
     data = {
         "skills": skill_list,
@@ -622,156 +459,13 @@ def _get_catalog_items_sync(user: UserContext, db: Session):
 
 @router.get("", summary="获取能力目录")
 async def get_catalog_items(
-    user: UserContext = Depends(get_current_user), db: Session = Depends(get_db)
+    user: UserContext = Depends(get_current_user),
 ):
     """Build the synchronous catalog outside the Uvicorn event loop."""
     await _ensure_external_cache_ready()
-    return await run_in_threadpool(_get_catalog_items_sync, user, db)
+    return await run_in_session(lambda db: _get_catalog_items_sync(user, db))
 
 
-@router.patch("/{kind}/{id}", summary="更新能力配置")
-def update_catalog_item(
-    kind: str = Path(..., description="Item kind: skill, agent, mcp, or kb"),
-    id: str = Path(..., description="Item ID"),
-    request: UpdateCatalogRequest = ...,
-    user: UserContext = Depends(get_current_user),
-    db: Session = Depends(get_db),
-):
-    """更新当前用户对某能力项的配置（启用状态 enabled 与配置覆盖 config）。
 
-    覆盖按用户独立存储，不影响其他用户或系统级默认值。kind 取值：skill / agent /
-    mcp / kb（kb 仅运行时开关，不落库）。管理员在目录层禁用的项不可被用户重新启用；
-    技能或工具变更会失效系统提示词缓存。
-    """
-    # Normalize kind
-    kind_map = {
-        "skill": "skill",
-        "skills": "skill",
-        "agent": "agent",
-        "agents": "agent",
-        "mcp": "mcp",
-        "mcp_server": "mcp",
-        "mcp_servers": "mcp",
-        "kb": "kb",
-        "knowledge_base": "kb",
-        "knowledge_bases": "kb",
-    }
-
-    normalized_kind = kind_map.get(kind.lower())
-    if not normalized_kind:
-        raise BadRequestError(
-            message="Invalid kind",
-            data={"allowed_kinds": ["skill", "agent", "mcp", "kb"], "provided_kind": kind},
-        )
-
-    # Validate that at least one field is provided
-    if request.enabled is None and request.config is None:
-        raise BadRequestError(
-            message="At least one field must be provided",
-            data={"allowed_fields": ["enabled", "config"]},
-        )
-
-    # KB toggles are not persisted in DB catalog_overrides (no kb enum in schema).
-    # Frontend persists UI preference locally; backend accepts request for API uniformity.
-    if normalized_kind == "kb":
-        return success_response(
-            data={
-                "kind": normalized_kind,
-                "id": id,
-                "enabled": True if request.enabled is None else request.enabled,
-                "config": request.config or {},
-            },
-            message="Knowledge base toggle accepted (runtime-only)",
-        )
-
-    # Get runtime catalog to verify static and DB-managed public items.
-    base_catalog = get_runtime_catalog(db, include_runtime_details=False)
-    kind_bucket = (
-        "skills"
-        if normalized_kind == "skill"
-        else "agents" if normalized_kind == "agent" else "mcp"
-    )
-    base_items = base_catalog.get(kind_bucket, [])
-
-    item_exists = any(item.get("id") == id for item in base_items)
-    # Private items (skill/mcp self-added by a user) are not in the global catalog, but their owner may still override enable/disable
-    if not item_exists and not _is_owned_capability(db, user.user_id, normalized_kind, id):
-        raise BadRequestError(
-            message="Item not found in catalog",
-            data={
-                "kind": normalized_kind,
-                "item_id": id,
-                "hint": f"The item may not exist in the {kind_bucket} catalog",
-            },
-        )
-
-    # Get current override or default values
-    catalog_service = CatalogService(db)
-    user_overrides = catalog_service.get_user_overrides(user.user_id, normalized_kind)
-
-    # Find current item config
-    current_enabled = True
-    current_config = {}
-    admin_disabled = False
-
-    # Get from base catalog
-    for item in base_items:
-        if item.get("id") == id:
-            current_enabled = item.get("enabled", True)
-            current_config = item.get("config", {})
-            admin_disabled = not bool(item.get("enabled", True))
-            break
-
-    # Admin lock: if disabled at the catalog level, user cannot re-enable
-    if admin_disabled and request.enabled is True:
-        raise BadRequestError(
-            message="此功能已被管理员禁用，无法启用", data={"kind": normalized_kind, "item_id": id}
-        )
-
-    # Override with user settings if exists
-    override_key = (
-        "skills"
-        if normalized_kind == "skill"
-        else "agents" if normalized_kind == "agent" else "mcps"
-    )
-    for override_item in user_overrides.get(override_key, []):
-        if override_item.get("id") == id:
-            current_enabled = override_item.get("enabled", current_enabled)
-            current_config = override_item.get("config", current_config)
-            break
-
-    # Apply updates
-    new_enabled = request.enabled if request.enabled is not None else current_enabled
-    new_config = current_config.copy()
-    if request.config is not None:
-        new_config.update(request.config)
-
-    # Save override
-    catalog_service.update_override(
-        user_id=user.user_id,
-        kind=normalized_kind,
-        item_id=id,
-        enabled=new_enabled,
-        config=new_config if new_config else None,
-    )
-
-    # Invalidate prompt cache: tool/skill changes affect the system prompt
-    try:
-        from prompts.prompt_runtime import invalidate_prompt_cache
-
-        invalidate_prompt_cache()
-    except Exception:
-        pass
-    # Invalidate this user's capability cache so the toggle takes effect on the
-    # next message (otherwise resolve_all_runtime_enabled's 30s cache hides it).
-    try:
-        from core.config.catalog_resolver import invalidate_capability_cache
-
-        invalidate_capability_cache(str(user.user_id))
-    except Exception:
-        pass
-
-    return success_response(
-        data={"kind": normalized_kind, "id": id, "enabled": new_enabled, "config": new_config},
-        message="Catalog item updated successfully",
-    )
+from .catalog_mutations import router as mutations_router
+router.include_router(mutations_router)

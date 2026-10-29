@@ -1,9 +1,8 @@
+from core.agent_runtime.skills import _build_skill_injection
+from core.chat.schemas import ChatRequest
+from core.llm.factory.tools.mcp_config import _required_mcp_server_keys
+from core.chat.operations.request_context import _build_user_extra_data
 from pydantic import ValidationError
-
-from api.routes.v1.chats import _build_user_extra_data
-from api.schemas import ChatRequest
-from core.llm.agent_factory import _required_mcp_server_keys
-from orchestration.workflow import _build_skill_injection
 
 
 def test_connector_selection_is_persisted_in_user_message_metadata():

@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from typing import Any
-from mcp.server.fastmcp import FastMCP
+from mcp.server.mcpserver import MCPServer
 from pydantic import StrictInt
 from starlette.requests import Request
 from starlette.responses import JSONResponse
@@ -12,15 +12,14 @@ if __package__:
 else:
     import engine
 
-mcp = FastMCP(
+mcp = MCPServer(
     "foreign-trade-demo",
     instructions=(
         "All products and prices are synthetic demo data. Query product facts and "
         "call calculate_quote for every quotation or quantity change. Never invent "
         "freight, certification, stock or delivery commitments."
     ),
-    host="127.0.0.1", port=9120,
-    stateless_http=True, json_response=True, log_level="WARNING",
+    log_level="WARNING",
 )
 
 
@@ -73,4 +72,5 @@ async def health(_: Request) -> JSONResponse:
 
 
 if __name__ == "__main__":
-    mcp.run(transport="streamable-http")
+    mcp.run(transport="streamable-http", host="127.0.0.1", port=9120,
+            stateless_http=True, json_response=True)

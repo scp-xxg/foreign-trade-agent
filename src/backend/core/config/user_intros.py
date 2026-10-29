@@ -20,7 +20,7 @@ from __future__ import annotations
 
 from typing import Dict
 
-from core.config.edition_display_names import edition_mcp_user_intros
+from core.config.edition import edition_mcp_user_intros
 
 # ── Skills ────────────────────────────────────────────────────────────
 
@@ -363,7 +363,7 @@ MCP_SERVER_USER_INTROS: Dict[str, str] = {
 """,
     "internet_search": """\
 ## 用途
-当数仓和知识库都查不到时，调用互联网搜索做兜底——抓取新闻、财经资讯、公开网页等实时信息，并标明信息来源。
+检索公开网页、官方文档、新闻和财经资讯。复杂调研可并发提交最多 4 个查询，按 URL 去重合并最多 8 条来源；关键结论可继续读取原文核验。来源语言不限，回答语言按用户要求。
 
 ## 适用场景
 - "最近行业有什么新动态"
@@ -377,27 +377,11 @@ MCP_SERVER_USER_INTROS: Dict[str, str] = {
 - 信息时效标注（发布时间）
 - 来源可靠性提示（官媒 / 自媒体 / 论坛等）
 """,
-    "generate_chart_tool": """\
-## 用途
-根据查询到的数据，直接生成柱状图、折线图、饼图等可视化图表，作为图片嵌入到回答中，无需再额外导出。
-
-## 适用场景
-- "把这组数据画成趋势图"
-- "用饼图展示行业占比"
-- "对比各区数据画柱状图"
-- "近三年增速做成折线图"
-
-## 输出示例
-- 嵌入回答的图表图片（PNG）
-- 自动配色 + 标题 + 坐标轴标注
-- 支持柱状 / 折线 / 饼图 / 堆叠图等常见类型
-- 数据标签清晰可读
-""",
     # Word / Excel / PPT capability has migrated to the officecli-* skills
-    # (see src/backend/skill_bundles/default/officecli-*), which drive the
+    # (see src/backend/extensions/skills/default/officecli-*), which drive the
     # pre-installed `officecli` binary through Bash — word_mcp / excel_mcp /
     # ppt_mcp no longer exist.
-    # PDF capability has migrated to the pdf-editing skill (see src/backend/skill_bundles/default/pdf-editing/).
+    # PDF capability has migrated to the pdf-editing skill (see src/backend/extensions/skills/default/pdf-editing/).
     # The MCP layer no longer exposes pdf_mcp; the skill's scripts/pdf-cli is the single entry point.
     "web_fetch": """\
 ## 用途
@@ -414,22 +398,6 @@ MCP_SERVER_USER_INTROS: Dict[str, str] = {
 - Markdown 格式转换结果
 - 搜索引擎结果列表（含标题 / 摘要 / 链接）
 - 抓取时间与来源 URL 标注
-""",
-    "batch_runner": """\
-## 用途
-对一组对象（Excel 行、多份文档、文本枚举）批量执行同一个任务。先生成一份可审阅的执行计划，确认无误后再逐条跑，避免重复劳动。
-
-## 适用场景
-- "把这份 Excel 里 50 家企业全都做一次画像"
-- "对这 30 份政策文件批量生成摘要"
-- "针对这一组关键词分别做市场分析"
-- "为这批合同批量套用模板生成 Word"
-
-## 输出示例
-- 可视化的批量执行计划（每条任务的输入参数）
-- 进度跟踪（已完成 / 失败 / 待处理）
-- 每条任务的独立结果链接
-- 失败任务的原因说明
 """,
     **edition_mcp_user_intros(),
 }

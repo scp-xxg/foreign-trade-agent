@@ -7,12 +7,13 @@ import { buildConversationTurns } from '../../utils/conversationNavigation';
 import '../../styles/conversationNavigation.css';
 
 interface ConversationNavigationProps {
+  hidden?: boolean;
   messages: readonly ChatMessage[];
   chatListRef: RefObject<HTMLDivElement | null>;
 }
 
 /** Mounted per chat so preview/focus state cannot leak to another conversation. */
-export function ConversationNavigation({ messages, chatListRef }: ConversationNavigationProps) {
+export function ConversationNavigation({ messages, chatListRef, hidden = false }: ConversationNavigationProps) {
   const turns = useMemo(() => buildConversationTurns(messages), [messages]);
   const anchors = turns.map((turn) => turn.uid).join(',');
   const [activeUid, setActiveUid] = useState<string | null>(null);
@@ -21,18 +22,17 @@ export function ConversationNavigation({ messages, chatListRef }: ConversationNa
   const railRef = useRef<HTMLElement>(null);
 
   useEffect(() => {
+    if (hidden) return;
     const list = chatListRef.current;
-    const scroller = list?.closest<HTMLElement>('.jx-content');
+    const scroller = list?.closest<HTMLElement>('.jx-chatViewport');
     if (!list || !scroller || !anchors) return;
     const anchorUids = anchors.split(',');
-    const footer = list.parentElement?.querySelector<HTMLElement>('.jx-chatFooter');
+    const elements = anchorUids.map(uid => list.querySelector<HTMLElement>(`[data-message-uid="${uid}"]`));
     let frame = 0;
     const update = () => {
       frame = 0;
       const rect = scroller.getBoundingClientRect();
-      const footerTop = footer?.getBoundingClientRect().top ?? rect.bottom;
-      const visibleBottom = Math.min(rect.bottom, footerTop);
-      const height = Math.max(0, visibleBottom - rect.top - 32);
+      const height = Math.max(0, rect.height - 32);
       const nextPosition = {
         top: rect.top + 16 + height / 2,
         right: Math.max(0, window.innerWidth - rect.right) + 8,
@@ -44,12 +44,14 @@ export function ConversationNavigation({ messages, chatListRef }: ConversationNa
       // Last question above the reading line owns the following answer, even a very long one.
       const readingLine = rect.top + Math.min(96, height * 0.25);
       let current = anchorUids[0];
-      for (const uid of anchorUids) {
-        const element = list.querySelector<HTMLElement>(`[data-message-uid="${uid}"]`);
-        if (!element) continue;
-        if (element.getBoundingClientRect().top > readingLine) break;
-        current = uid;
+      let low = 0, high = elements.length;
+      while (low < high) {
+        const middle = (low + high) >>> 1;
+        const element = elements[middle];
+        if (element && element.getBoundingClientRect().top <= readingLine) low = middle + 1;
+        else high = middle;
       }
+      current = anchorUids[Math.max(0, low - 1)];
       // At the bottom the last turn may be too short to reach the reading line.
       if (scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight <= 8) {
         current = anchorUids[anchorUids.length - 1];
@@ -65,14 +67,13 @@ export function ConversationNavigation({ messages, chatListRef }: ConversationNa
     const observer = new ResizeObserver(schedule);
     observer.observe(scroller);
     observer.observe(list);
-    if (footer) observer.observe(footer);
     return () => {
       cancelAnimationFrame(frame);
       observer.disconnect();
       scroller.removeEventListener('scroll', schedule);
       window.removeEventListener('resize', schedule);
     };
-  }, [anchors, chatListRef]);
+  }, [anchors, chatListRef, hidden]);
 
   useEffect(() => {
     const rail = railRef.current;
@@ -87,7 +88,7 @@ export function ConversationNavigation({ messages, chatListRef }: ConversationNa
 
   const navigate = (uid: string) => {
     const list = chatListRef.current;
-    const scroller = list?.closest<HTMLElement>('.jx-content');
+    const scroller = list?.closest<HTMLElement>('.jx-chatViewport');
     const target = list?.querySelector<HTMLElement>(`[data-message-uid="${uid}"]`);
     if (!target || !scroller) return;
     setPreviewUid(null);
@@ -102,7 +103,7 @@ export function ConversationNavigation({ messages, chatListRef }: ConversationNa
     target.classList.add('jx-anim-flash');
   };
 
-  if (!turns.length || !position || position.height < 44) return null;
+  if (hidden || !turns.length || !position || position.height < 44) return null;
 
   return createPortal(
     <nav

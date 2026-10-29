@@ -8,6 +8,7 @@ import {
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { assertMacosSigning } from "./macos-signing.mjs";
 import { stageTrackedCeRepository } from "./ce-payload.mjs";
 import {
   currentDesktopTarget,
@@ -16,6 +17,8 @@ import {
 import { readDesktopVersion } from "./desktop-version.mjs";
 import { buildDesktopRuntime } from "./build-runtime.mjs";
 import { validateDesktopBuildTarget } from "./desktop-build-target.mjs";
+
+assertMacosSigning();
 
 const desktopDir = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const repoRoot = resolve(desktopDir, "..");
@@ -42,6 +45,7 @@ if (bundleFlavor === "full") {
 }
 const desktopTarget = currentDesktopTarget();
 const dependencyFingerprint = desktopDependencyFingerprint(repoRoot, desktopTarget);
+run(process.execPath, [join(repoRoot, "scripts", "build-workbench.mjs"), "--check"]);
 const python = bundleFlavor === "full" ? findPython() : null;
 
 function run(command, args, options = {}) {
@@ -69,7 +73,7 @@ function findPython() {
       [
         ...prefix,
         "-c",
-        "import sys; raise SystemExit(0 if sys.version_info >= (3, 11) else 1)",
+        "import sys, tarfile; raise SystemExit(0 if sys.version_info >= (3, 11) and hasattr(tarfile, 'data_filter') else 1)",
       ],
       {
         stdio: "ignore",
@@ -79,7 +83,7 @@ function findPython() {
     if (result.status === 0) return { command, prefix };
   }
   throw new Error(
-    "Python 3.11 or later is required to generate the bundled CE server.",
+    "Python 3.11.4 or later with tarfile extraction filters is required to generate the bundled CE server.",
   );
 }
 
@@ -180,7 +184,7 @@ console.log(
 console.log("[desktop] Building the CE login/onboarding web application");
 run(
   npmCommand,
-  [...npmPrefix, "install", "--no-audit", "--no-fund", "--no-package-lock"],
+  [...npmPrefix, "ci", "--no-audit", "--no-fund"],
   {
     cwd: join(generatedRoot, "src", "frontend"),
   },
@@ -193,6 +197,16 @@ run(npmCommand, [...npmPrefix, "run", "build"], {
     NODE_OPTIONS: process.env.NODE_OPTIONS || "--max-old-space-size=6144",
   },
 });
+run(process.execPath, [join(repoRoot, "scripts", "build-workbench.mjs"), "--verify-dist", "dist"], {
+  cwd: join(repoRoot, "src", "frontend"),
+});
+run(process.execPath, [join(generatedRoot, "scripts", "build-workbench.mjs"), "--verify-dist", "dist"], {
+  cwd: join(generatedRoot, "src", "frontend"),
+});
+// Shared packages use frontend tools; the payload needs no Node installation.
+for (const name of ["workbench-protocol", "workbench-sdk"]) {
+  rmSync(join(generatedRoot, "packages", name, "node_modules"), {recursive: true, force: true});
+}
 // node_modules is a build-time input, not a server runtime dependency. Keeping it
 // would inflate the NSIS payload by hundreds of megabytes.
 rmSync(join(generatedRoot, "src", "frontend", "node_modules"), {

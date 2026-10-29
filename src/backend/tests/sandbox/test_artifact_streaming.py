@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from tests.sandbox.provider_test_support import install_session_scope
+
 import json
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -9,16 +11,16 @@ from types import SimpleNamespace
 
 import pytest
 from core.config.settings import SandboxSettings
-from core.sandbox._common import stream_to_file
+from core.sandbox.workspace.streams import stream_to_file
 from core.sandbox.errors import SandboxFileTooLargeError
-from core.sandbox.script_runner_provider import ScriptRunnerProvider
+from core.sandbox.providers.script_runner.provider import ScriptRunnerProvider
 from fastapi import HTTPException
-from services.script_runner_service import server as runner_server
+from core.sandbox.runner import server as runner_server
 
 
 class _CaptureToolkit:
-    def register_tool_function(self, function, *, namesake_strategy: str):
-        assert namesake_strategy == "override"
+    def append(self, tool):
+        function = tool._func
         self.function = function
 
 
@@ -66,14 +68,14 @@ async def test_script_runner_raw_endpoint_enforces_limit(monkeypatch, tmp_path):
     monkeypatch.setattr(runner_server, "MAX_ARTIFACT_EXPORT_BYTES", 8)
 
     response = await runner_server.get_file_raw(
-        runner_server.GetFileRequest(session_id="chat-1", path="/workspace/within.pdf")
+        runner_server.GetFileRequest(session_id="chat-1", path="within.pdf")
     )
     assert Path(response.path) == within
     assert response.headers["x-artifact-size"] == "8"
 
     with pytest.raises(HTTPException) as exc_info:
         await runner_server.get_file_raw(
-            runner_server.GetFileRequest(session_id="chat-1", path="/workspace/over.pdf")
+            runner_server.GetFileRequest(session_id="chat-1", path="over.pdf")
         )
     assert exc_info.value.status_code == 413
 
@@ -123,7 +125,7 @@ class _ScriptRunnerClient:
 @pytest.mark.asyncio
 async def test_script_runner_streams_file_to_path(monkeypatch, tmp_path):
     monkeypatch.setattr(
-        "core.sandbox.script_runner_provider.httpx.AsyncClient",
+        "core.sandbox.providers.script_runner.provider.httpx.AsyncClient",
         _ScriptRunnerClient,
     )
     destination = tmp_path / "script-runner.pdf"
@@ -161,7 +163,7 @@ class _OversizedScriptRunnerClient(_ScriptRunnerClient):
 @pytest.mark.asyncio
 async def test_script_runner_reports_sidecar_limit(monkeypatch, tmp_path):
     monkeypatch.setattr(
-        "core.sandbox.script_runner_provider.httpx.AsyncClient",
+        "core.sandbox.providers.script_runner.provider.httpx.AsyncClient",
         _OversizedScriptRunnerClient,
     )
     destination = tmp_path / "too-large.bin"
@@ -190,7 +192,7 @@ class _OpenSandboxFiles:
 @pytest.mark.asyncio
 async def test_opensandbox_streams_file_to_path(tmp_path):
     OpenSandboxProvider = pytest.importorskip(
-        "core.sandbox.opensandbox_provider"
+        "core.sandbox.providers.opensandbox.provider"
     ).OpenSandboxProvider
     provider = OpenSandboxProvider.__new__(OpenSandboxProvider)
 
@@ -200,6 +202,7 @@ async def test_opensandbox_streams_file_to_path(tmp_path):
         return SimpleNamespace(sandbox=SimpleNamespace(files=_OpenSandboxFiles()))
 
     provider._get_or_create_session = _get_session
+    install_session_scope(provider)
     destination = tmp_path / "opensandbox.pdf"
     written = await provider.get_file_to_path(
         "chat-1",
@@ -241,7 +244,7 @@ class _CubeFiles:
 
 @pytest.mark.asyncio
 async def test_cube_streams_file_to_path(tmp_path):
-    CubeSandboxProvider = pytest.importorskip("core.sandbox.cube_provider").CubeSandboxProvider
+    CubeSandboxProvider = pytest.importorskip("core.sandbox.providers.cube.provider").CubeSandboxProvider
     provider = CubeSandboxProvider.__new__(CubeSandboxProvider)
     provider._request_timeout_s = 120
 
@@ -269,7 +272,7 @@ async def test_remote_providers_reject_known_size_before_stream(provider_kind: s
 
     if provider_kind == "opensandbox":
         OpenSandboxProvider = pytest.importorskip(
-            "core.sandbox.opensandbox_provider"
+            "core.sandbox.providers.opensandbox.provider"
         ).OpenSandboxProvider
         provider = OpenSandboxProvider.__new__(OpenSandboxProvider)
 
@@ -284,9 +287,10 @@ async def test_remote_providers_reject_known_size_before_stream(provider_kind: s
             return SimpleNamespace(sandbox=SimpleNamespace(files=_Files()))
 
         provider._get_or_create_session = _get_session
+        install_session_scope(provider)
         call = provider.get_file_to_path("chat-1", "/workspace/large.bin", destination, max_bytes=8)
     else:
-        CubeSandboxProvider = pytest.importorskip("core.sandbox.cube_provider").CubeSandboxProvider
+        CubeSandboxProvider = pytest.importorskip("core.sandbox.providers.cube.provider").CubeSandboxProvider
         provider = CubeSandboxProvider.__new__(CubeSandboxProvider)
         provider._request_timeout_s = 120
 
@@ -311,13 +315,12 @@ async def test_remote_providers_reject_known_size_before_stream(provider_kind: s
 
 
 def test_artifact_store_persists_from_file_without_byte_upload(monkeypatch, tmp_path):
-    from core.artifacts import store
+    from core.files.artifacts import store
 
     source = tmp_path / "source.pdf"
     source.write_bytes(b"streamed-pdf")
     artifact_dir = tmp_path / "artifacts"
     monkeypatch.setattr(store, "_STORE_DIR", artifact_dir)
-    monkeypatch.setattr(store, "_INDEX_PATH", artifact_dir / "index.json")
     monkeypatch.setattr(store, "_storage_type", lambda: "local")
 
     item = store.save_artifact_file(
@@ -333,7 +336,7 @@ def test_artifact_store_persists_from_file_without_byte_upload(monkeypatch, tmp_
 
 
 def test_artifact_store_uses_file_upload_for_oss(monkeypatch, tmp_path):
-    from core.artifacts import store
+    from core.files.artifacts import store
 
     source = tmp_path / "source.pdf"
     source.write_bytes(b"streamed-pdf")
@@ -355,7 +358,6 @@ def test_artifact_store_uses_file_upload_for_oss(monkeypatch, tmp_path):
 
     storage = _Storage()
     monkeypatch.setattr(store, "_STORE_DIR", artifact_dir)
-    monkeypatch.setattr(store, "_INDEX_PATH", artifact_dir / "index.json")
     monkeypatch.setattr(store, "_storage_type", lambda: "oss")
     monkeypatch.setattr(store, "_get_oss_storage", lambda: storage)
 
@@ -368,7 +370,8 @@ def test_artifact_store_uses_file_upload_for_oss(monkeypatch, tmp_path):
 
     assert uploaded_files == [(str(source), item["storage_key"])]
     assert item["path"] is None
-    assert uploaded_bytes and uploaded_bytes[-1][1] == "artifacts/_index.json"
+    # 登记只镜像这一条记录，不再整份重传索引
+    assert uploaded_bytes and uploaded_bytes[-1][1] == store._record_oss_key(item["file_id"])
     assert all(content != b"streamed-pdf" for content, _ in uploaded_bytes)
 
 
@@ -402,7 +405,7 @@ async def test_sandbox_get_artifact_streams_then_removes_temp_file(monkeypatch):
 
     monkeypatch.setenv("SANDBOX_TOOLS_ENABLED", "true")
     monkeypatch.setattr(sandbox_package, "get_sandbox_provider", lambda: _Provider())
-    monkeypatch.setattr(sandbox_tool, "_store_generated_file_path", _store)
+    monkeypatch.setattr("core.llm.tools.sandbox_artifact_tools._store_generated_file_path", _store)
     toolkit = _CaptureToolkit()
     sandbox_tool.register_sandbox_get_artifact(toolkit, chat_id="chat-1", user_id="user-1")
 

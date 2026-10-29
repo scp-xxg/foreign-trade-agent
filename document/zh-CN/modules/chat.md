@@ -2,6 +2,8 @@
 
 > 最后更新：2026-09-09
 
+每轮回复开始且尚无文字、思考或工具执行记录时，前端显示“正在处理…”启动提示，采用 14px 常规字重、品牌图形轻呼吸和文字扫光。启动提示、行内思考和执行卡标题共用 18px 图标占位、9px 间距和 28px 最小行高，切换时不播放纵向入场动画。图像理解期间显示对应状态；等待超过 15 秒后显示计时。已有输出后，等待下一段内容或准备工具调用时不再追加等待文字或计时提示。
+
 普通代码块右上方提供常驻「复制」按钮，只复制当前代码块中的代码文本，保留缩进与换行；流式输出期间可复制已经显示的内容。复制成功后按钮以原按钮颜色显示对勾和「已复制」，两秒后恢复；失败时在按钮内显示「复制失败」，不弹出顶部提示。
 
 对话是 HugAgentOS 的核心链路：一条用户消息经过 FastAPI 路由、运行时上下文装配、流式编排器，最终由 AgentScope 2.0 的 ReActAgent 驱动多轮「思考 → 调工具 → 观察」循环，并以 SSE 事件流实时推送到前端。本篇按真实代码走一遍端到端流程，并展开引用系统、计划模式、子智能体、会话摘要、会话分享、上下文压缩与超长结果 offload 等子能力。
@@ -10,20 +12,55 @@
 
 首页、会话页和项目面板使用同一套消息输入框。长文本会自动撑高输入框，达到最大高度后在框内滚动；Shift+Enter 换行、继续输入或粘贴文字时，光标所在行保持在底部工具栏上方可见。回到前文编辑时跟随当前光标，手动滚动阅读时保留滚动位置。
 
+输入框底部工具栏始终保持一行。缩放或分屏导致空间不足时，所有带文字的控件统一收起为图标，发送按钮保持可见；悬停可查看控件说明，点击仍使用原有功能。空间恢复后自动显示文字，不新增更多菜单。极窄宽度下，工具图标可横向滚动，发送按钮仍固定可见。
+
+### 未发送草稿
+
+对话、新建对话和每个项目分别保留自己的未发送草稿。切换到其他对话或项目时显示目标的草稿，返回原入口时恢复文字、富文本格式、能力引用、引用追问和附件。返回首页、点击“新建对话”或在对话模块点击左侧对话图标，都会恢复当前尚未发送的新建对话草稿；发送后再次进入则创建空白草稿。
+
+新建定时任务的引导模板只在创建时填入一次，修改或清空后不会因切换而重新出现。上传中的附件始终跟随发起上传的草稿，项目草稿首次发送时连同附件一起转入新对话。草稿保存在当前页面内存中，刷新页面或退出账号后清除。
+
+
+## 消息与思考展示
+
+用户消息使用统一圆角气泡。只有本次新发送的消息播放入场动画，加载历史或返回会话不会重播。消息操作在鼠标悬停、键盘聚焦和触屏场景下可见。
+
+独立思考沿用原有行内摘要，工具步骤中的思考保留时间线样式。点击摘要，或聚焦后按 Enter / Space，可展开和收起；流式更新保留展开选择。
+
+输入区附件使用紧凑卡片，保留文件名扩展名，不显示底部文件类型文字。上传失败会在卡片中持续显示，并可点击“重试”；上传期间移除或切换草稿不会把异步结果写入其他草稿。已完成的附件仍可预览和下载。“我的空间”的文档/图片筛选支持方向键、Home / End 和选中状态提示。
+
+
 ## 上传附件预览
 
 文件上传完成后，点击输入框上方或已发送消息中的附件卡片，可在右侧 Canvas 打开预览；图片直接显示。Canvas 复用现有文档预览能力，不支持的格式会提示下载后打开。上传中或上传失败的文件不会打开预览。消息附件卡片上的下载图标及 Canvas 下载按钮仍可下载原文件。
 
 ## 会话内导航
 
+打开工具结果、提示词或项目资源栏时，滚动区按实际聊天内容列计算宽度，会话导航随列边缘移动。Canvas 全屏或在窄屏覆盖聊天区时，隐藏聊天区退出键盘焦点范围，导航不显示；关闭面板后恢复聊天入口焦点。
+
+聊天滚动条贴在聊天面板最右边，会话短线导航随之靠右；正文与输入框保持原有大小和居中位置。未打开右侧面板时，不预留 Canvas 空间；回复结束不会改变布局。
+
 会话页右侧的短线导航按已加载的每轮提问排列。悬停或用键盘聚焦可预览提问与回答摘要，点击可跳到同一会话的对应位置；当前阅读的轮次以深色长线标记。导航支持上下方向键、Home / End 切换焦点，Enter / Space 跳转，Esc 关闭预览。开启系统“减少动态效果”时直接定位。
 
 长会话可在导航栏内滚动查看条目；向上翻阅并加载更早消息后，导航会同步补充。切换会话时导航重新生成，空会话不显示。打开右侧面板时导航始终跟随聊天区域，支持深色模式和触屏操作。
 
+
+## 创建聊天分支
+
+输入 `/fork` 并选择“创建聊天分支”，可从当前聊天最后一条已结束的助手回复创建分支。也可以点击某条助手回复下方的分支图标，从该回复创建分支；复制范围包含这条回复及之前的历史。新会话默认命名为“原标题 · 分支”，顶部显示来源并可返回原聊天。
+
+分支中的消息有独立 ID，可以继续提问、重新生成或删除，不改动原聊天。分支保留工具调用与结果、思考记录、引用和附件信息，复制全部所选历史，不受浏览器已加载页数限制。附件引用原文件；文件内容、项目文件和沙箱进程不创建快照。原会话的执行任务、待确认操作和队列不迁移，继承的计划与治理卡片只供查看。
+
+仅会话所有者可创建分支，并须仍有原项目的访问权限。正在生成的回复不能作为分叉位置，之前已结束的回复仍可使用。空聊天或尚无完整回复时会提示原因。桌面端的本机聊天分支仍在本机运行，云端聊天分支仍使用云端。创建期间重复点击不会产生多个分支；失败后重试沿用同一创建请求。
+
+历史 Token 用量只作展示，不重新计费或增加模型调用次数；复制的历史也不会被后台进化回填当作新执行采集。
+
+API：`POST /v1/chats/{chat_id}/fork`，请求体包含必填 UUID `request_id`、可选 `through_message_id`（包含该助手回复）和 `title`。省略边界时选用最后一条已结束的助手回复。成功返回 HTTP 201 与新会话，`metadata.fork` 记录来源和边界。相同请求 ID 与参数返回原分支，参数冲突返回 409。服务端在一个事务中复制历史，不沿用压缩检查点，防止较早分叉带入后续轮次的摘要。
+
 ## 一次对话的端到端流程
 
 ```
-浏览器 ── POST /v1/chats/stream ──▶ api/routes/v1/chats.py::chat_stream
+浏览器 ── POST /v1/agents/responses (stream=true) ──▶ api/routes/v1/agent_responses.py::agent_response
    │   1. _ensure_main_model_configured()   主模型未配置直接 503
    │   2. 鉴权 / 会话归属校验 / 读取用户能力与记忆开关
    │   3. core/chat/context.py::build_runtime_context()  组装 workflow context
@@ -34,10 +71,10 @@ orchestration/chat_run_executor.py::start_run()
    ▼
 orchestration/workflow.py::astream_chat_workflow()
    │   ├─ orchestration/memory_integration.py  非阻塞记忆检索（后台 task + 预算超时）
-   │   ├─ core/config/catalog_resolver.py      解析本次启用的 skills/mcp/kb
-   │   ├─ core/llm/agent_factory.py::create_agent_executor()
+   │   ├─ core/capabilities/catalog/resolver.py      解析本次启用的 skills/mcp/kb
+   │   ├─ core/llm/factory/build.py::create_agent_executor()
    │   │     MCP 连接池 + 技能注册 + 文件工具 + 系统提示词 + 中间件 → Agent
-   │   ├─ core/llm/context_manager.py          历史按 token 预算裁剪
+   │   ├─ core/llm/context/window_policy.py          历史按 token 预算裁剪
    │   └─ orchestration/streaming.py::StreamingAgent.stream()
    │         消费 agent.reply_stream()，归并 25 种细粒度事件并保留工具参数增量
    ▼
@@ -48,12 +85,12 @@ SSE follower：chat_run_executor.follow_run_as_sse()
 
 ### Run 解耦与断线续播
 
-每次发送消息会创建一条 `ChatRun` 并启动后台任务（`orchestration/chat_run_executor.py`），事件写入 Redis Stream（`maxlen=5000`；默认 TTL 为最长人机等待 7200 秒加 1800 秒恢复余量）。HTTP 连接只是"跟随者"，因此：
+每次发送消息会创建一条 `ChatRun` 并启动后台任务（`core/chat/runtime/`），事件写入 Redis Stream（`maxlen=5000`；默认 TTL 为最长人机等待 7200 秒加 1800 秒恢复余量）。HTTP 连接只是"跟随者"，因此：
 
 | 能力 | 端点 |
 |---|---|
-| 发起流式对话 | `POST /v1/chats/stream` |
-| 刷新/断线后续播 | `GET /v1/chats/stream/{run_id}?from_offset=N` |
+| 发起智能体回复（默认 JSON；`stream: true` 返回 SSE） | `POST /v1/agents/responses` |
+| 刷新/断线后续播 | `GET /v1/chats/stream/{run_id}?from=N` |
 | 探测会话进行中的 run | `GET /v1/chats/{chat_id}/active-run` |
 | 取消 run（真正杀后台任务） | `POST /v1/chat-runs/{run_id}/cancel` |
 | 在下一次安全 ReAct 边界追加指令 | `POST /v1/chat-runs/{run_id}/steer` |
@@ -61,6 +98,12 @@ SSE follower：chat_run_executor.follow_run_as_sse()
 | 撤回尚未生效的追加指令 | `DELETE /v1/chat-runs/{run_id}/steer/{steer_id}` |
 
 防御机制：静默 15 秒写一行 `: heartbeat` SSE 注释（防 nginx `proxy_read_timeout` 掐流）；workflow 600 秒无有效输出触发看门狗判 failed（`CHAT_RUN_INACTIVITY_TIMEOUT_SEC`）；只有后端注册表中确实存在待回答/待确认交互时，内部心跳才可续活该看门狗；周期 reaper 把超龄且静默的 running run 收成 failed；启动钩子 `recover_orphan_runs()` 清理重启遗留。
+
+### 中断后继续回答
+
+点击停止后，系统保留已显示的正文、思考和工具记录。刷新历史时，思考仍单独显示；只有思考、尚无正文的回复也会保留。再次输入“继续”会启动新一轮，并携带已有正文、已记录的工具结果和中断标记。
+
+已完成且来源兼容的思考按原生协议回放。来源未知或不兼容的思考只保留用于历史展示，不转成助手正文。模型步骤完成前中断的思考不会被伪装成完整的原生思考；已显示的半截正文仍用于续写。恢复历史不执行工具；没有结果记录的调用标为结果未知。
 
 ### 智能体主动询问用户
 
@@ -90,27 +133,27 @@ SSE follower：chat_run_executor.follow_run_as_sse()
 | 替我批准 | `auto` | 普通写入 / 编辑直接放行；**删除类操作**（`DESTRUCTIVE_OPS`）与本地策略标了 `danger:<类别>` 的命令仍然停下来问 |
 | 完全放开 | `full` | 所有工具确认一律不再询问 |
 
-档位在 `core/llm/tool_permissions.py` 里统一声明（`APPROVAL_ASK` / `APPROVAL_AUTO` / `APPROVAL_FULL`），随对话上下文传到 `PermissionRuntime`，是所有工具确认闸的唯一判据；任何一档都只跳过"问"这一步，本地安全策略判定的硬拒绝仍然拒绝。"这次危不危险"由 `core/sandbox/local_policy.danger_categories()` 从裁决理由里的 `danger:` 前缀还原，不靠匹配提示文案。读到早期版本存下的 `standard` / `readonly` 时按最保守的 `ask` 兜底。
+档位在 `core/llm/tool_permissions/` 里统一声明（`APPROVAL_ASK` / `APPROVAL_AUTO` / `APPROVAL_FULL`），随对话上下文传到 `PermissionRuntime`，是所有工具确认闸的唯一判据；任何一档都只跳过"问"这一步，本地安全策略判定的硬拒绝仍然拒绝。"这次危不危险"由 `core/sandbox/permissions/models.py::danger_categories()` 从裁决理由里的 `danger:` 前缀还原，不靠匹配提示文案。读到早期版本存下的 `standard` / `readonly` 时按最保守的 `ask` 兜底。
 
 渠道机器人、定时任务这类无人值守入口走 `default_allow` 分支，不受该档位影响。
 
 **桌面端沿用同一档，不再另存一份权限档。** 原来的「本机操作权限档」（严格 / 标准 / 放开，存本机 `local_grants.json`，接口 `/v1/local/approval-mode`）已整体删除；本机执行策略改由 `core/services/local_grant_service.policy_for_gate(approval_mode)` 按本档位翻译：`full` 全部放行，`ask` / `auto` 走用户配置的分类处置与内置默认。OS 文件沙箱约束同样按档位声明（`LOCAL_CONFINEMENT_BY_MODE`）：`ask` / `auto` 优先约束、缺执行器时降级告警，`full` 显式不约束，读不出本机安全配置时落到 `FAIL_CLOSED_MODE` 这个记号档、要求强制隔离。桌面端仍保留的「授权目录 / 危险命令分类处置」（`/v1/local/grants`、`/v1/local/policy`）管的是"本机哪些目录能动"，与档位是两件事，入口仍在胶囊底部。
 
-### Agent 构建要点（core/llm/agent_factory.py）
+### Agent 构建要点（core/llm/factory/build.py）
 
 `create_agent_executor()` 是所有模式（主对话、计划、批量、子智能体、自动化）共用的工厂：
 
-- **MCP 工具**：经 catalog + 用户覆盖 + 请求上下文三层过滤后（见 [能力目录](catalog.md)），stable 服务复用进程级连接池（`core/llm/mcp_pool.py`），per-request 服务（如 `retrieve_dataset_content` 需带每请求 HTTP header）每次新建；用户自助添加的私有 MCP 按 owner 现查合入。
-- **技能**：经 `core/agent_skills/loader.py` 注册为 AgentScope Agent Skills，并放行 `view_text_file` 读取 SKILL.md（详见 [技能系统](agent-skills.md)）。
-- **文件/沙箱工具**：`bash`、`sandbox_put_artifact`、`sandbox_get_artifact` 无条件注册；Read/Edit/Write/Glob/Grep/Delete/Move/mkdir + MySpace 工具受 `CODE_CAPABILITY_ENABLED` 门控，共享同一个 `ReadStateTracker` 维持「先 Read 才能 Edit」不变量。
-- **中间件**（洋葱模型，`core/llm/middlewares.py`）：`DynamicModelMiddleware`（按 chat_mode 切模型，见 [模型接入](model-providers.md)）、`FileContextMiddleware`（注入上传/历史文件上下文）、`SteerMiddleware`（工具结果之后、下一轮推理之前注入追加指令）、`WorkspacePinHintMiddleware`、`FinishPinGuardMiddleware`。
-- **上下文压缩**：`CompactingAgent` 把轮前、轮内和轮末三个触发时机接入同一个持久化 checkpoint 引擎，并共用 Codex 风格交接提示词；`ContextConfig` 只保留工具结果限长和 AgentScope 溢出兜底，兜底也复用同一提示词。若兜底的结构化调用仍失败，模型适配层会返回 L3 占位摘要，避免当前回答因压缩异常直接中断。
+- **MCP 工具**：经 catalog + 用户覆盖 + 请求上下文三层过滤后（见 [能力目录](catalog.md)），stable 服务复用进程级连接池（`core/llm/mcp/`），per-request 服务（如 `retrieve_dataset_content` 需带每请求 HTTP header）每次新建；用户自助添加的私有 MCP 按 owner 现查合入。
+- **技能**：经 `core/capabilities/skills/loader.py` 注册为 AgentScope Agent Skills，并放行 `view_text_file` 读取 SKILL.md（详见 [技能系统](agent-skills.md)）。
+- **文件/沙箱工具**：`bash`、`sandbox_put_artifact`、`sandbox_get_artifact` 无条件注册；Read/Edit/Write/Glob/Grep/Delete/Move/mkdir + MySpace 工具受 `CODE_CAPABILITY_ENABLED` 门控。与 pi coding-agent 一致，Edit/Write 不要求先 Read：Edit 只校验 `old_string` 唯一匹配（精确失败后忽略行尾空白与引号/破折号差异再试），同一文件的 Edit/Write 串行执行。
+- **中间件**（洋葱模型，`core/llm/runtime/`）：`DynamicModelMiddleware`（按 chat_mode 切模型，见 [模型接入](model-providers.md)）、`FileContextMiddleware`（注入上传/历史文件上下文）、`SteerMiddleware`（工具结果之后、下一轮推理之前注入追加指令）、`WorkspacePinHintMiddleware`、`FinishPinGuardMiddleware`。
+- **上下文压缩**：`CompactingAgent` 把轮前、轮内和轮末三个触发时机接入同一个持久化 checkpoint 引擎，并共用 Codex 风格交接提示词；`ContextConfig` 只保留工具结果限长。压缩只使用统一协调器，不再运行框架的第二条摘要回退。压缩失败时保留原始上下文；最终请求仍超预算时保存断点并暂停，不继续调用回复模型。
 - **权限**：所有已注册工具 seed 原生 `PermissionRule(ALLOW)`，保留 AgentScope 内置工具的危险操作检查（不使用一刀切 BYPASS）。
 - **迭代上限**：主智能体默认 `max_iters=50`，隔离子智能体默认 10。
 
 ## SSE 事件类型与负载
 
-`orchestration/streaming.py::StreamingAgent` 把 AgentScope 2.0 `reply_stream` 的细粒度事件归并为内部事件；工具参数小分片按 256 字符或 50ms 合批，兼顾实时可见与 SSE 事件量。`workflow.py` 与 `chats.py::_stream_sse_response` 再补充会话级字段后落到 wire 上。前端实际收到的事件：
+`core/llm/runtime/streaming.py::StreamingAgent` 把 AgentScope 2.0 `reply_stream` 的细粒度事件归并为内部事件；工具参数小分片按 256 字符或 50ms 合批，兼顾实时可见与 SSE 事件量。`workflow.py` 与 `chats.py::_stream_sse_response` 再补充会话级字段后落到 wire 上。前端实际收到的事件：
 
 | `type` | 含义 | 关键字段 |
 |---|---|---|
@@ -126,7 +169,6 @@ SSE follower：chat_run_executor.follow_run_as_sse()
 | `subagent_event` | 子智能体内部过程，挂在父 `call_subagent` 卡片下 | `parent_tool_id`, `sub_type`, `agent_name`，以及内部工具或内容字段 |
 | `ontology_activation` / `ontology_gate` / `ontology_review` | 本体治理状态，不属于模型思考 | 工作流、门禁决策、委员会状态与结论 |
 | `tool_pending` | 提供商没有暴露可解析参数增量时的等待兜底 | `reason` |
-| `batch_confirm` | 批量计划生成完毕，等待用户确认（人审门） | `plan_id`, `total`, `preview`, `default_template`, `placeholder_keys` |
 | `file_confirm` | 工具挂起等待用户确认「我的空间」写操作 | 确认上下文；用户带外 `POST /v1/chats/{chat_id}/file-confirm` 后工具原地续跑 |
 | `user_question` | `ask_user_question` 已挂起并等待会话属主回答 | `request_id`, `questions[]`, `created_at`, `expires_at`, `chat_id` |
 | `user_question_resolved` | 回答、取消或超时已由服务端裁决 | `request_id`, `outcome`, `chat_id` |
@@ -158,7 +200,7 @@ data: {"type":"meta","route":"main","citations":[...],"usage":{"prompt_tokens":3
 data: [DONE]
 ```
 
-`meta` 之后，`chat_run_executor.py` 持久化助手消息、回填 artifact，并起后台任务生成追问问题（`orchestration/followups.py`，结果写进消息 `extra_data.follow_up_questions`，前端经 `GET /v1/chats/{chat_id}/messages/{message_id}/followups` 拉取）。本体事件在前端汇总为独立的“领域本体治理”模块，不再写入或显示在“思考过程”中。模型草稿保持逐 token 流式展示；委员会仅在实际修订答案时发送一次 `content_replace`，前端原位替换正文，数据库只保存评审后的最终答案。`ontology_governance` 随助手消息持久化，刷新历史会话后仍可回显。
+`meta` 之后，`chat_run_executor.py` 持久化助手消息、回填 artifact，并起后台任务生成追问问题（`core/chat/followups.py`，结果写进消息 `extra_data.follow_up_questions`，前端经 `GET /v1/chats/{chat_id}/messages/{message_id}/followups` 拉取）。本体事件在前端汇总为独立的“领域本体治理”模块，不再写入或显示在“思考过程”中。模型草稿保持逐 token 流式展示；委员会仅在实际修订答案时发送一次 `content_replace`，前端原位替换正文，数据库只保存评审后的最终答案。`ontology_governance` 随助手消息持久化，刷新历史会话后仍可回显。
 
 `usage` 是本轮所有模型调用的累计计费数据；上下文仪表使用的是
 `context_usage`，即最近一次主模型调用的 `prompt_tokens + completion_tokens`，
@@ -191,9 +233,9 @@ data: [DONE]
 
 引用让回答里的每个事实可溯源到具体工具结果。编号权收归后端唯一真源——模型只**复制**编号、不做任何计算，链路分四段：
 
-1. **发号回注（后端中间件）**：`core/llm/middlewares.py::CitationAnchorMiddleware` 挂在 AgentScope 2.0 的 `on_acting` 钩子上，在工具结果回给模型前调用 `orchestration/citation_anchor.py` 完成 提取 → 发号 → 回注：为每条可引用条目分配会话内单调唯一的锚点 id（`e1`、`e2`、…，跨工具、跨调用、跨轮不重复，新一轮从该会话历史消息的最大锚点续号），并把 `"cite_id": "e7"` 就地写进结果 JSON（纯文本结果在文末追加 `[cite_id: e7]` 行）。**发号器绑在 agent 实例上**（`attach_allocator()` / `resolve_allocator()`）——编排层与中间件由此共享同一个计数器；ContextVar 只作子智能体链路的兜底，因为 `astream_chat_workflow` 是 async generator，其上下文与 agent 实际执行所在的 task 并不互通。提取按四层降级：工具自声明 `__citations__` → 工具规格注册表（`TOOL_SPECS` 配置，列表路径 + 中英字段别名）→ 通用启发式（唯一字典数组字段）→ 整份结果 1 个锚点；操作型工具（写文件、pin 等，`SKIP_TOOLS`）直接放行。任何异常原样放行、绝不阻断对话。
+1. **发号回注（后端中间件）**：`core/llm/runtime/` 挂在 AgentScope 2.0 的 `on_acting` 钩子上，在工具结果回给模型前调用 `core/llm/citations/hook.py` 完成 提取 → 发号 → 回注：为每条可引用条目分配会话内单调唯一的锚点 id（`e1`、`e2`、…，跨工具、跨调用、跨轮不重复，新一轮从该会话历史消息的最大锚点续号），并把 `"cite_id": "e7"` 就地写进结果 JSON（纯文本结果在文末追加 `[cite_id: e7]` 行）。**发号器绑在 agent 实例上**（`attach_allocator()` / `resolve_allocator()`）——编排层与中间件由此共享同一个计数器；ContextVar 只作子智能体链路的兜底，因为 `astream_chat_workflow` 是 async generator，其上下文与 agent 实际执行所在的 task 并不互通。提取按四层降级：工具自声明 `__citations__` → 工具规格注册表（`TOOL_SPECS` 配置，列表路径 + 中英字段别名）→ 通用启发式（唯一字典数组字段）→ 整份结果 1 个锚点；操作型工具（写文件、pin 等，`SKIP_TOOLS`）直接放行。任何异常原样放行、绝不阻断对话。
 2. **提示词约定**：系统提示词（`prompts/prompt_text/default/system/40_format.system.md` 的兜底版本，运行时以 DB 激活版本为准）只需一条与工具数量无关的通用规则：把结果里标注的 `cite_id` 原样复制进 `[锚文本](cite:e7)`（或句末 `[来源](cite:e7)`），禁止自行编号。
-3. **编排层消费**：每个 `tool_result` 事件经 `collect_citation_dicts()` 按 `tool_id` 从发号器注册表精确取 `CitationItem`（`id` / `tool_name` / `tool_id` / `title` / `url` / `snippet` / `source_type` / `item_index`）；发号器缺位（旧对话回放等）时回退 `orchestration/citations.py` 的旧偏移提取。`source_type` 取值：CE 内置 `internet`、`knowledge_base`、`database`；`industry_news`、`ai_news`、`chain_info`、`company_profile` 等行业引用类型由商业版 EE 扩展。
+3. **编排层消费**：每个 `tool_result` 事件经 `collect_citation_dicts()` 按 `tool_id` 从发号器注册表精确取 `CitationItem`（`id` / `tool_name` / `tool_id` / `title` / `url` / `snippet` / `source_type` / `item_index`）；发号器缺位（旧对话回放等）时回退 `core/llm/citations/` 的旧偏移提取。`source_type` 取值：CE 内置 `internet`、`knowledge_base`、`database`；`industry_news`、`ai_news`、`chain_info`、`company_profile` 等行业引用类型由商业版 EE 扩展。
 4. **前端渲染**：citations 随 `tool_result` 与 `meta` 事件下发并随消息持久化（落库的就是注号后的结果，回放/分享与生成时编号一致）。`components/citation/CitationMarkdownBlock.tsx` 并行识别三种标记——`[锚文本](cite:eN)`（渲染为带悬浮出处卡片的文字链接）、`[[eN]]`（obsidian 双链容错）、旧格式 `[ref:工具名-序号]`（历史消息，渲染为角标）；工具卡片条目上同步显示 `cite_id` 小徽章（`jx-tr-citeTag`），没有专属渲染器的工具由通用列表渲染器兜底成标准卡片。
 
 **工具开发约定**：需要精确控制引用粒度的工具（自研或 MCP），在返回 JSON 里带 `__citations__` 字段——`[{"title": "...", "url": "...", "snippet": "...", "source_type": "..."}, …]`，条目顺序与结果正文对应；中间件优先采用并就地注入 `cite_id`。未自声明的工具按注册表配置或启发式提取，最差整份结果 1 个锚点——**任何工具默认可引用**。详见《[MCP 工具](mcp-tools.md)》的引用声明一节。
@@ -216,16 +258,19 @@ data: [DONE]
 
 ## 计划模式（Plan Mode）
 
-计划模式把复杂任务拆成「生成计划 → 用户确认/编辑 → 逐步执行」两阶段，实现在 `orchestration/subagents/plan_mode.py`：
+计划模式把复杂任务拆成「生成计划 → 用户确认/编辑 → 逐步执行」两阶段，实现在 `orchestration/plans/`：
 
 - **生成**（`astream_generate_plan` / `POST /v1/plans/generate`）：以 `disable_tools=True` 的"裸模型"产出结构化 JSON 计划。系统提示词解析顺序：版本池 `plan_mode` 激活版本 → 旧版 `system/90_plan_mode` 分段 → 文件兜底 `prompts/prompt_text/plan_mode/plan_mode.system.md` → 硬编码最小提示。
 - **执行**（`astream_execute_plan` / `POST /v1/plans/{plan_id}/execute`）：每个步骤独立建 agent 顺序执行，支持步骤级 MCP/技能/子智能体绑定、取消（`is_run_cancelled` 轮询）；执行同样走 ChatRun + Redis Stream，可断线续播。
 - **前端呈现与标题**：手动计划模式的预览和执行进度统一显示在对话内的计划卡片，不再重复显示输入框上方的紧凑计划条（该计划条只服务普通对话中的模型 `update_plan`）；计划预览生成后即触发会话标题自动摘要，摘要完成前由首条任务生成临时标题。
 - **历史与当前模式解耦**：会话的 `planChat` 标记和 `plan_snapshot` 仅用于保留侧边栏类型及历史计划卡片；输入框是否继续走计划模式由独立的逐会话状态控制。用户关闭计划模式后仍能查看已有计划和报告，但后续消息（例如基于报告生成 PPT）按普通对话执行，刷新或重新进入会话也不会被历史计划自动重新开启。
-- **模型角色**：计划模式优先解析 `plan_agent` 角色，未配置降级 `main_agent`（`agent_factory.py` `_mode_role` 分支）。
-- 无人值守模式（计划执行 / 自动化）会从工具集中摘除 `batch_runner`，因为 `batch_plan` 的确认弹窗在该场景无 UI 可确认（`workflow.py::_resolve_batch_runner_visibility`）。
+- **模型角色**：计划模式优先解析 `plan_agent` 角色，未配置降级 `main_agent`（`factory/runtime/model_selection.py` 的角色选择分支）。
 
 ## 子智能体（Sub-agents）
+
+原生看图工具返回的图片保持独立媒体块。主智能体和子智能体共用的工具结果截断只限制文字，图片不按 base64 字符数计入文字限额，也不会被写入文字 offload；统一上下文的文字裁剪同样保留图片。图片读取大小限制与整体上下文容量保护仍有效。
+
+主对话中的子智能体调用行仅展示身份、状态和详情入口，不显示运行计时或完成耗时；右侧执行详情仍保留耗时信息。调用行沿用普通工具的箭头样式，箭头紧邻名称，仅在鼠标悬浮或键盘聚焦时显示。
 
 普通主对话的 harness 始终提供三个平台默认子智能体。它们不是 `UserAgent` 数据行，使用保留 ID，不能被同名自建 Agent 覆盖：
 
@@ -237,9 +282,9 @@ data: [DONE]
 
 这三个角色会直接显示在用户侧「子智能体」页面并标记为「内置」，所有用户初始默认开启。用户可逐个启停；停用状态保存在该用户的 `users_shadow.metadata.disabled_builtin_subagent_ids` 中，因此可跨浏览器保持。已停用角色仍留在子智能体列表和 `@` 候选中，并标记为「未启用，仅本轮调用」；它不会进入主智能体的初始上下文或自主路由表，只有用户通过 `@` 或严格的自然语言调用明确指定时才临时加入本轮。角色提示词在详情页只读展示，不再作为 Config 提示词管理的可编辑标签页。详情页的「能力策略」会显示这些角色跟随主智能体在运行时动态加载能力，并明确探索员、审查员的只读收窄规则，不再把动态继承误显示为「未绑定」。
 
-上下文和工作区是两个独立维度：探索员、审查员能检查当前文件，但不会被主对话或执行过程锚定；执行员则需要完整继承用户约束和既有决定。主智能体的动态路由表只展示本轮最终启用且角色策略允许下放的技能、MCP、知识库和基础工具；主智能体已关闭、未授权或被运行时过滤的能力既不会展示，也不会传给默认子智能体。三个角色都不能继续调用子智能体。默认列表不含 planner：普通主对话已用 `update_plan` 维护计划，避免形成“计划里的计划”。角色提示词在运行时仍来自版本池 `subagents` kind 的 `explorer / worker / reviewer` 三个独立 part，文件系统目录 `prompts/prompt_text/subagents/` 只负责种子和故障回退；该 kind 保留在后端与迁移快照中，以兼容既有环境。
+上下文和工作区是两个独立维度：探索员、审查员能检查当前文件，但不会被主对话或执行过程锚定；执行员则需要完整继承用户约束和既有决定。主智能体的动态路由表只展示本轮最终启用且角色策略允许下放的技能、MCP、知识库和基础工具；主智能体已关闭、未授权或被运行时过滤的能力既不会展示，也不会传给默认子智能体。三个角色都不能继续调用子智能体。默认列表不含 planner：普通主对话已用 `update_plan` 维护计划，避免形成“计划里的计划”。角色提示词在运行时仍来自版本池 `subagents` kind 的 `explorer / worker / reviewer` 三个独立 part，随包提示词 `extensions/agents/default/<role>/system.md` 只负责种子和故障回退；该 kind 保留在后端与迁移快照中，以兼容既有环境。
 
-除此之外，用户自建子智能体（`api/routes/v1/agents.py`，DB 表 `UserAgent`）可绑定独立的系统提示词、MCP / 技能 / 插件 / KB 集合与模型参数（provider / temperature / max_tokens / max_iters）。创建或编辑时，资源选择器支持以下来源：
+除此之外，用户自建子智能体（`edition_ee/routes/agents.py`，DB 表 `UserAgent`）可绑定独立的系统提示词、MCP / 技能 / 插件 / KB 集合与模型参数（provider / temperature / max_tokens / max_iters）。创建或编辑时，资源选择器支持以下来源：
 
 - 已安装的技能与插件；
 - 技能市场和插件市场，安装完成后自动绑定到当前子智能体；需要凭据的市场资源仍先走原有凭据配置与安装权限校验；
@@ -247,7 +292,7 @@ data: [DONE]
 
 用户自建子智能体有四种触达方式；平台默认角色通过主智能体自主编排或自然语言显式委派触达。编排归属取决于用户是否明确指定了目标：
 
-聊天输入框提供两个键盘启动器。输入 `@` 会先显示文件、智能体、计划模式、批量执行、工作流模式和
+聊天输入框提供两个键盘启动器。输入 `@` 会先显示文件、智能体、计划模式、工作流模式和
 自主循环等当前可用快捷入口；继续输入可直接筛选智能体，选择「智能体」则进入完整智能体列表。
 输入 `/` 会按插件、技能分组显示命令及说明；对话模式统一通过 `@` 选择。两个面板都支持方向键选择、
 Enter / Tab 确认和 Escape 返回或关闭。个人在能力中心关闭的技能、插件和智能体仍会出现在候选中。
@@ -281,7 +326,7 @@ Enter / Tab 确认和 Escape 返回或关闭。个人在能力中心关闭的技
 - **专属会话**：从子智能体详情页进入的会话使用 `agent_id`，后续轮次持续由该子智能体执行。
 - **主智能体自主编排**：既没有结构化 `@`，也没有命中严格自然语言调用语法时，主智能体可
   按任务需要调用
-  `core/llm/subagent_tool.py` 注册的 `call_subagent`。子智能体在独立线程和事件循环中运行，结果
+  `core/llm/subagents/tool.py` 注册的 `call_subagent`。子智能体在独立线程和事件循环中运行，结果
   回传给主智能体整合。这一路径适合多子智能体并行、任务拆分和跨领域汇总。
 
 ## 会话摘要与上下文压缩
@@ -290,9 +335,9 @@ Enter / Tab 确认和 Escape 返回或关闭。个人在能力中心关闭的技
 
 | 层次 | 实现 | 触发 |
 |---|---|---|
-| 会话标题摘要 | `core/llm/summarizer.py::ConversationSummarizer`（`summarizer` 模型角色，`ENABLE_SUMMARY` 开关），`POST /v1/summary` | 新会话标题自动生成 |
-| 统一上下文检查点 | `core/services/compaction_service.py::run_compaction()`；轮前、轮内、轮末共用同一触发比例、交接提示词、替代历史结构和持久化 checkpoint | 上下文达到模型窗口的配置比例时 |
-| 确定性溢出保护 | `ContextConfig.tool_result_limit` 先限制单条工具结果；统一压缩失败或持久化关闭时，AgentScope 兜底复用同一交接提示词压缩当前内存上下文 | 单条工具结果过大，或统一压缩暂时不可用时 |
+| 会话标题摘要 | `core/models/completions/summarizer.py::ConversationSummarizer`（`summarizer` 模型角色，`ENABLE_SUMMARY` 开关），`POST /v1/summary` | 新会话标题自动生成 |
+| 统一上下文检查点 | `core/chat/compaction/service.py::run_compaction()`；轮前、轮内、轮末共用同一触发比例、交接提示词、替代历史结构和持久化 checkpoint | 上下文达到模型窗口的配置比例时 |
+| 确定性溢出保护 | `ContextConfig.tool_result_limit` 先限制单条工具结果；统一压缩失败时保留原始上下文，最终请求超预算则保存断点并暂停 | 单条工具结果过大，或统一压缩暂时不可用时 |
 
 压缩只在合法边界切分：历史先按步骤展开，从尾部保留装得下
 `CHAT_COMPACT_RECENT_USER_MAX_TOKENS` 的完整近期区域（切点只落在用户消息或某一步的
@@ -311,7 +356,7 @@ framing 的后端估算。当前回合结束后若后台压缩已启动，`meta.
 
 ## 超长工具结果 offload
 
-`core/llm/offloader.py::SandboxOffloader` 实现 AgentScope 2.0 `Offloader` 协议：上下文压缩/工具结果截断时，溢出部分不再被静默丢弃，而是落盘到沙箱 `/workspace/.offload/`（`tool_<id>.txt` / `context_<hash>.txt`），框架会在给模型的 `<system-reminder>` 里附上路径，模型可用 `Read` / `bash` 按需读回。仅在沙箱工具启用（`SANDBOX_TOOLS_ENABLED=true`，默认开）时挂载，写失败永不抛异常、返回降级说明。
+`core/llm/context/offloader.py::SandboxOffloader` 实现 AgentScope 2.0 `Offloader` 协议：上下文压缩/工具结果截断时，溢出部分不再被静默丢弃，而是落盘到沙箱 `/workspace/.offload/`（`tool_<id>.txt` / `context_<hash>.txt`），框架会在给模型的 `<system-reminder>` 里附上路径，模型可用 `Read` / `bash` 按需读回。仅在沙箱工具启用（`SANDBOX_TOOLS_ENABLED=true`，默认开）时挂载，写失败永不抛异常、返回降级说明。
 
 ## 会话分享（Chat Shares）
 
@@ -329,29 +374,29 @@ framing 的后端估算。当前回合结束后若后台压缩已启动，`meta.
 
 ## 其它入口
 
-同一编排底座还服务：消息重新生成（`POST /v1/chats/{chat_id}/regenerate`）、编辑重发（`POST /v1/chats/{chat_id}/edit`）、非流式 `POST /v1/chats/send`、批量执行（`orchestration/batch_orchestrator.py`，见 [自动化](automation.md)）与定时自动化（`orchestration/schedulers/`）。
+同一编排底座还服务：消息重新生成（`POST /v1/chats/{chat_id}/regenerate`）、编辑重发（`POST /v1/chats/{chat_id}/edit`）、非流式 `POST /v1/agents/responses`（`stream: false`）与定时自动化（`orchestration/automations/`）。
 
 ## 相关源码
 
 | 主题 | 路径 |
 |---|---|
-| 聊天路由 / SSE 出口 | `src/backend/api/routes/v1/chats.py` |
-| Run 解耦 / Redis Stream / 续播 | `src/backend/orchestration/chat_run_executor.py`，`api/routes/v1/chat_runs.py` |
-| 流式编排主流程 | `src/backend/orchestration/workflow.py` |
-| 事件映射（reply_stream → SSE） | `src/backend/orchestration/streaming.py` |
+| 聊天路由 / SSE 出口 | `src/backend/api/routes/v1/chats/__init__.py` |
+| Run 解耦 / Redis Stream / 续播 | `src/backend/core/chat/runtime/`，`api/routes/v1/chat_runs.py` |
+| 流式编排主流程 | `src/backend/core/agent_runtime/runner.py` |
+| 事件映射（reply_stream → SSE） | `src/backend/core/llm/runtime/streaming.py` |
 | 运行时上下文装配 | `src/backend/core/chat/context.py` |
-| Agent 工厂 | `src/backend/core/llm/agent_factory.py` |
-| 中间件 | `src/backend/core/llm/middlewares.py`（纯函数 helper 在 `core/llm/hooks.py`） |
-| 引用抽取 | `src/backend/orchestration/citations.py` |
-| 跨会话引用（名片 / 摘要 / 分页） | `src/backend/core/services/chat_reference_service.py` |
+| Agent 工厂 | `src/backend/core/llm/factory/build.py` |
+| 中间件 | `src/backend/core/llm/runtime/`（纯函数 helper 在 `core/harness/hooks.py`） |
+| 引用抽取 | `src/backend/core/llm/citations/` |
+| 跨会话引用（名片 / 摘要 / 分页） | `src/backend/core/chat/references.py` |
 | 跨会话历史工具 | `src/backend/core/llm/tools/chat_history_tool.py` |
 | 引用前端渲染 | `src/frontend/src/utils/citations.ts`，`src/frontend/src/components/citation/` |
-| 计划模式 | `src/backend/orchestration/subagents/plan_mode.py`，`api/routes/v1/plans.py` |
-| 子智能体工具 | `src/backend/core/llm/subagent_tool.py`，`api/routes/v1/agents.py` |
-| 标题摘要 / 上下文压缩 / 窗口保护 | `src/backend/core/llm/summarizer.py`、`compaction.py`、`core/services/compaction_service.py`、`context_manager.py` |
-| 超长结果 offload | `src/backend/core/llm/offloader.py` |
+| 计划模式 | `src/backend/orchestration/plans/`，`api/routes/v1/plans.py` |
+| 子智能体工具 | `src/backend/core/llm/subagents/tool.py`，`edition_ee/routes/agents.py` |
+| 标题摘要 / 上下文压缩 / 窗口保护 | `src/backend/core/models/completions/summarizer.py`、`compaction.py`、`core/chat/compaction/service.py`、`context_manager.py` |
+| 超长结果 offload | `src/backend/core/llm/context/offloader.py` |
 | 会话分享 | `src/backend/api/routes/v1/chat_shares.py` |
-| 追问生成 | `src/backend/orchestration/followups.py` |
+| 追问生成 | `src/backend/core/chat/followups.py` |
 | 前端流式解析 / 追加消息 | `src/frontend/src/hooks/chatStream.ts`，`useStreaming.ts`，`components/chat/QueuedMessageCard.tsx` |
 
 ### 桌面端工具权限与操作确认
@@ -372,7 +417,7 @@ framing 的后端估算。当前回合结束后若后台压缩已启动，`meta.
 “仅加载技能”的形式报告成功，其独有技能也不会作为可用能力展示。共享技能仍可由
 另一份完整插件提供。显式调用不可用插件会报告缺少的工具，不会自动替换为其他来源。
 
-混合模式不启动本机内置 MCP launcher。定时任务、批量执行及图表工具与其他
+混合模式不启动本机内置 MCP launcher。定时任务及图表工具与其他
 MCP 一样，使用当前账号授权的云端绑定，不再设按工具名称保留本机的例外。
 旧的本机保留名单和整桥关闭环境变量已取消。用户主动配置的独立本机 MCP 仍可使用，
 同名来源按显式选择及正常解析规则处理。
@@ -390,3 +435,95 @@ MCP 一样，使用当前账号授权的云端绑定，不再设按工具名称�
 
 渠道接入、凭据和消息收发仍由云端负责。本机执行不等于完全离线，模型及已配置的云端工具
 仍使用对应服务，回复和回传文件会经过云端及渠道平台。
+
+微信扫码成功表示绑定已保存。列表先显示“连接中”，收到首次有效收信响应后才显示“已连接”。
+凭据测试同时检查 HTTP 状态与微信业务错误码；测试通过只表示凭据有效，不改变长连接状态。
+云端多进程部署由收信进程约每 3 秒核对机器人绑定，新增、停用和删除无需重启后端。
+
+### 子智能体执行详情
+
+主对话中的子智能体调用行展示运行状态、智能体 Logo、名称与耗时。点击整行会在右侧 Canvas 打开本次调用的独立页签；内部过程不再在消息下方展开。运行状态动画与 Logo 分开显示。普通工具保持原来的折叠交互。
+
+详情直接复用主对话的工具批次、思考和正文 UI，遵循相同的过程显示设置与默认折叠交互，不额外增加参数或执行过程分组。完成后调用行不显示对勾。面板实时跟随当前调用；向上滚动阅读时暂停自动跟随。同一智能体的多次调用分别定位，并可与文件、本体、插件页签共存。历史详情使用已保存的数据：子步骤最多 200 项，单条字符串工具输出约 16,000 字符，已截断内容无法恢复。
+
+技能加载、插件加载以及可唯一确定所属连接器的工具调用行，展示能力中心中对应的 Logo。插件声明的工具专属图标优先使用。运行动画与 Logo 分开显示，点击行为和折叠布局保持不变；普通工具保留原分类图标。
+
+Canvas 正文会去掉工具返回值中固定添加的「【智能体名称】的回复：」开头，保留智能体原文。工具调用展开条从首次显示起占满正文宽度，展开或收起具体工具时宽度保持一致。
+
+连接器下的工具沿用连接器 Logo；插件内的技能和工具统一沿用插件 Logo。
+
+
+### 首次响应超时
+
+普通对话启动工作流后，若 600 秒内没有收到正文、思考文字或工具调用等有效响应，本轮会结束并显示“当前模型调用量大，算力资源紧张，请稍后再试！”。心跳、空增量和准备阶段的状态事件不解除倒计时；首次有效响应后解除该限制，后续仍使用原有无活动超时。超时结果会持久化，刷新或断线续播后仍可查看。
+
+### 多 worker 人工交互
+
+询问用户、文件与定时任务确认、本机/工具权限确认和设计选择的请求与决定保存在共享 TTL 存储中。任意 worker 均可校验并接收回答，原工具调用在原 worker 恢复，不重新发起模型任务，也不重跑工具。首个有效决定生效，重复点击不能覆盖拒绝或批准；会话级批准仍限定在原权限域与路径/命令范围。刷新恢复接口读取同一共享状态。等待 worker 失联后，其待处理记录在租约过期后不再展示；服务重启不会自动重放被中断的操作。无 Redis 的桌面模式使用单进程内存存储。
+
+宜搭扫码登录与组织选择也使用共享 TTL 状态，切换 worker 或刷新页面可继续同一次登录流程。
+
+## Markdown 对话输入
+
+对话保持单个输入框，不增加格式工具栏。直接输入成对的 Markdown 标记（如 **加粗**、*斜体*、行内代码）会在编辑区转换成对应格式；行首标题、列表、引用和代码围栏也可使用。所有正文与结构块统一 Enter 发送、Shift+Enter 换行，发送按钮行为保持不变。列表中 Shift+Enter 继续下一项，空项 Shift+Enter 退出；标题后进入正文，引用继续或退出，代码块内换行。Tab / Shift+Tab 缩进或提升列表项；表格内 Tab 移动单元格，末尾新增行。中文输入法确认候选和 @ / 斜杠菜单选择仍使用各自原有交互。
+
+支持 Ctrl+B 加粗、Ctrl+I 斜体、Ctrl+E 行内代码、Ctrl+Shift+S 删除线、Ctrl+Shift+7 有序列表、Ctrl+Shift+8 无序列表、Ctrl+Alt+C 代码块、Ctrl+Z 撤销，以及 Ctrl+Shift+Z 或 Ctrl+Y 重做。macOS 使用对应的 Command 快捷键。
+
+粘贴 Markdown 或网页格式可保留常见结构。单段内容插入光标所在行，不额外增加换行或空行；原文中的换行和多个段落仍保留。Ctrl+Shift+V 可按字面纯文本粘贴。复制消息同时提供 Markdown 与格式化 HTML，两种格式保持同一内容语义。助手消息中的 HTML 格式标签不会作为文字复制；用户输入的 HTML 示例与代码仍保留字面内容。空的流式文本片段不生成段落，已有段落分隔不会重复添加；列表与代码块末尾不自动追加空段落，代码渲染不追加换行，行内代码中的连续空格保留。普通消息的换行和连续空格保留；多行 HTML 示例按字面代码展示。有序任务的子任务、代码中的反引号及普通文字中的标题和列表标记在重复复制后仍保留原有语义。SSH 地址和其他未明确标记的邮箱形文本保持普通文字；显式 Markdown 邮件链接与网页链接仍保留。选区复制携带的浏览器换行标记不会作为正文粘贴。HTML 标签之间的排版换行不会生成正文空行；显式换行、空段落与代码缩进仍保留。用户消息、历史记录、分享和重新编辑使用一致的格式。HTML 示例和暂不支持编辑的图片 Markdown 保留字面内容；Mermaid 在用户消息中保留为代码。已经丢失的历史网页格式无法恢复。
+
+管道表格可直接逐行输入，输入表头和分隔行后按 Shift+Enter 转换成表格。任务列表可输入 [ ] / [x] 加空格，也支持标准任务列表 Markdown 的粘贴和重新编辑。链接使用 [文本](URL)，输入闭合标记后自动显示为链接。
+
+
+### 上下文统计的更新顺序
+
+面板显示最近一次主模型调用的上下文占用，不累计重复调用的计费用量。
+压缩检查点提交后，接口返回压缩后的基线估算；同一轮后续模型调用也能用新实测值替换该估算。
+快照按服务端采集时间排序。迟到的历史响应不能覆盖新统计，编辑重发会使旧请求失效。
+分类数值仍为估算。切换模型后会提示上一模型快照尚未校准；超过窗口时显示实际百分比，例如 120%，圆环最多绘制一圈。
+
+编辑重发和重新生成会沿用输入框当前选定的模型、对话模式与思考强度。锁定思考强度的模式使用模式默认值。旧客户端未传选择时，后端恢复原消息保存的模型与模式；原有附件与技能引用继续保留。
+
+### 上下文压缩进度与 /compact
+
+自动压缩时，对话中的工具调用栏显示“正在压缩上下文”。展开后可查看独立的压缩步骤；收起时标题仍显示进度。压缩不会计入工具数量。完成、失败与中断分别显示对应状态，历史消息保留这些步骤；后台压缩在刷新页面后继续观察状态。
+
+在输入框输入 `/compact` 并发送，可主动压缩当前对话。也可从 `/` 指令候选中选择“压缩当前对话上下文”。该命令复用现有压缩协调器，不调用主回复模型；上下文较短、已有压缩任务运行或管理员未启用压缩时，会明确说明原因。失败或中断后可再次输入 `/compact` 重试。压缩保留完整的可见聊天记录，只改变后续模型读取的上下文。
+
+上下文统计的历史接口与流式压缩通知使用同一份投影。当前模型窗口配置优先于旧快照；关闭模型切换或调整窗口后，占比按当前窗口计算。轮后压缩刷新会等待轮后阶段的终态，不因同轮较早的轮内压缩检查点提前停止。
+
+
+轮后自动压缩优先使用当前持久化助手消息的上游实测值判断阈值；字节估算不再否决
+有效实测。模型窗口与提供商身份取自实际调用的配置，默认模型和故障切换也遵循同一规则。
+流式增量保存与最终提交按同一个运行记录串行，避免晚到的保存覆盖最终 usage。
+
+
+## 项目和智能体的独立对话链接
+
+在项目或智能体的 API 弹窗中，点击「启用免登录对话」。系统生成该资源的专属链接，支持复制、打开和停用。管理者需具备对应资源的 API 管理权限。
+
+访客获得链接后即可直接对话。页面复用主对话的消息、思考过程和流式渲染，名称使用对应项目或智能体名称；侧栏只显示当前访客在该入口下的会话。历史入口保存在当前浏览器，清理浏览器数据或换浏览器后无法找回原访客记录。不同访客的记录相互隔离。
+
+独立页使用文本输入，不提供账号模块、项目切换、个人空间导入或其他智能体切换。使用量由发布者承担。链接停用后拒绝新请求，并取消该链接的活动任务。运行能力、项目上下文和工具配置沿用现有项目或智能体 API 行为，不新增能力限制。
+
+
+## Personal Agent 会话与云电脑（商业版 EE）
+
+Personal Agent 的消息滚动条位于会话区域右边缘，正文和输入框保持居中限宽。打开右侧画布后，滚动条跟随剩余会话区域。
+
+云电脑分别显示等待启动、准备中、正在恢复、连接异常正在重试和已连接状态。只有已连接时才能打开云电脑。专用云电脑控制器使用独立的认证地址和服务端路由信息，普通沙箱的连接加速不能替换这些信息。
+
+独立对话页沿用主会话的文件/图片上传、模型与思考强度选择、工具执行权限档和逐项确认交互。可选模型由主会话的同一后台配置决定。权限档按链接访客保存，不修改发布者的账号设置。
+
+
+## 侧边栏任务状态提醒
+
+会话侧边栏用蓝色呼吸灯表示运行中、绿色呼吸灯表示完成且结果未读、黄色呼吸灯表示需要输入或确认、红色呼吸灯表示任务失败。等待用户操作的状态优先于运行状态。主动取消任务不会显示成功提醒。
+
+在可见且获得焦点的会话中，滚动到已加载的本轮最终回复后，完成提醒消失，不显示对勾或其他完成标记。点击带有失败红点的历史记录后，本次红点立即消失，无需滚动到失败回复。同一会话之后再次失败时，会显示新的红点。切换页面后，后台任务结果仍会更新。网络请求失败保留现有提醒，不把断线判断为任务完成。开启减弱动态效果时，状态点静态显示。
+
+已读记录按账号和后端环境保存在当前浏览器，并在同浏览器标签页之间同步；不提供跨设备已读同步。首次启用或从旧版升级时，已有结果统一按已读处理，不补发历史完成提醒；之后新完成的任务正常提醒。运行中和需要处理的任务继续显示状态。
+
+普通会话的黄色提醒仅跟随有效的提问框、文件操作确认框或方案选择框。最后一个待操作交互消失后，黄色提醒立即清除；后台暂停状态或历史缓存不会单独点亮黄灯。此变更需更新桌面客户端内置前端。
+
+
+模型历史与展示记录分开管理。压缩进度、展示思考块和工具卡不参与模型历史重建；规范步骤记录保留模型实际产生的推理、工具调用和工具结果。每次切换回退模型前都会重新检查该模型的窗口预算。超预算暂停会保留已完成结果，避免从原提示词自动重放工具。

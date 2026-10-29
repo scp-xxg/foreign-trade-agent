@@ -1,0 +1,22 @@
+/* Geometry adapted from DeepSeek Harness dockkit (MIT); see deepseek-sidebar-controls.txt. */
+.jx-canvasTabs.jx-canvasTabs--strip { box-sizing: border-box; height: 38px; min-height: 38px; padding: 10px 6px 0 10px; gap: 4px; align-items: center; border: 0; border-radius: 0; overflow: visible; background: var(--color-bg-container); }
+.jx-canvasTabs--strip .jx-canvasTabs-list { flex: 0 1 auto; align-items: center; gap: 2px; min-width: 0; overflow-x: auto; overflow-y: hidden; scrollbar-width: none; }
+.jx-canvasTabs--strip .jx-canvasTab { position: relative; display: flex; flex: 0 1 auto; width: auto; min-width: 80px; max-width: 170px; height: 28px; margin: 0; padding: 0 10px; border: 0; border-radius: 6px; background: transparent; box-shadow: none; color: var(--color-text-secondary); font-size: 13px; cursor: pointer; user-select: none; }
+.jx-canvasTabs--strip .jx-canvasTab:hover { background: var(--color-bg-gray); }
+.jx-canvasTabs--strip .jx-canvasTab.is-active { background: var(--color-bg-gray); color: var(--color-text); }
+.jx-canvasTabs--strip .jx-canvasTab-content { display: flex; align-items: center; gap: 5px; width: 100%; min-width: 0; }
+.jx-canvasTabs--strip .jx-canvasTab-title { flex: 1 1 auto; overflow: hidden; padding-right: 0; font-weight: 400; line-height: 1.4; white-space: nowrap; text-overflow: ellipsis; mask-image: none; }
+.jx-canvasTabs--strip .jx-canvasTab-icon { display: inline-flex; flex: none; width: 16px; height: 16px; margin: 0; }
+.jx-canvasTabs--strip .jx-canvasTab-icon img { width: 16px; height: 16px; }
+.jx-canvasTabs--strip .jx-canvasTab-close { position: static; flex: 0 0 20px; display: flex; align-items: center; justify-content: center; width: 20px; height: 20px; margin: 0; padding: 0; border: 0; border-radius: 5px; background: transparent; color: var(--color-text-tertiary); opacity: 0; pointer-events: none; font-size: 10px; cursor: pointer; }
+.jx-canvasTabs--strip .jx-canvasTab:hover .jx-canvasTab-close, .jx-canvasTabs--strip .jx-canvasTab:focus-within .jx-canvasTab-close, .jx-canvasTabs--strip .jx-canvasTab.is-active .jx-canvasTab-close { opacity: 1; pointer-events: auto; }
+.jx-canvasTabs--strip .jx-canvasTab-close:hover { color: var(--color-text); background: var(--color-bg-gray); }
+.jx-canvasTabs--strip .jx-canvasTab-dot { position: static; flex: 0 0 6px; }
+.jx-canvasTabs--strip .jx-canvasTabs-spacer { flex: 1 1 0; min-width: 0; }
+.jx-canvasTabs-add { display: inline-flex; align-items: center; justify-content: center; flex: none; width: 28px; height: 28px; padding: 0; border: 0; border-radius: 6px; background: transparent; color: var(--color-text-secondary); cursor: pointer; }
+.jx-canvasTabs-add:hover { background: var(--color-bg-gray); }
+.jx-canvasTabs-add:focus-visible, .jx-canvasTab:focus-visible, .jx-canvasTab-close:focus-visible { outline: 2px solid var(--color-primary); outline-offset: -2px; }
+.jx-canvasTabs--strip .jx-canvasTabs-actions { gap: 4px; }
+.jx-canvasTabs--strip .jx-canvasTabs-action { border-radius: 6px; }
+.jx-rightSidebar--moduleHeader { position: relative; }
+.jx-rightSidebar--moduleHeader > .jx-canvasTabs--controls { position: absolute; top: 4px; right: 0; z-index: 3; width: auto; min-height: 0; background: transparent; border: 0; }

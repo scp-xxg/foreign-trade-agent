@@ -1,23 +1,25 @@
+import { publicChatHeaders } from './publicChatTransport';
 /**
  * API Client for HugAgentOS Backend.
  *
  * Uses v1 unified response envelope.
  */
 
-import type { Catalog, ChatItem, ChatMessage, ChunkPreviewResult, PlanProgressState, EvolutionSummary, JobBrief, KBChunk, KBIndexMode, KBWikiStatus, WikiConfig, MemoryItem, MemoryProfile, MemoryGraphRelation, ResourceItem, AutomationTask, AutomationRun, AutomationNotification, FileConfirmInfo, FileConfirmDecision, DesignPickInfo, UserQuestionAnswer, UserQuestionRequest, OntologyAssetKind, OntologyTagOption, ReferencableChat } from './types';
-import type { EditionAuthUserFields } from './editionApiTypes';
-import type { EditionChatDetailFields, EditionCreateProjectFields, EditionProjectUpdateFields } from './editionModelTypes';
 import { createEditionAccessError } from './editionAccessError';
-import { createApiResponseError, readErrorMessage } from './utils/apiError';
-import { newOperationId } from './utils/operationId';
-import { t } from './i18n';
+import type { EditionAuthUserFields } from './editionApiTypes';
+import type { EditionChatDetailFields,EditionCreateProjectFields,EditionProjectUpdateFields } from './editionModelTypes';
 import {
-  normalizeSiteEditionFields,
-  normalizeSiteVisibility,
-  type SiteEditionFields,
-  type SiteUpdateEditionFields,
-  type SiteVisibility,
+normalizeSiteEditionFields,
+normalizeSiteVisibility,
+type SiteEditionFields,
+type SiteUpdateEditionFields,
+type SiteVisibility,
 } from './editionSiteVisibility';
+import { t } from './i18n';
+import type { AutomationNotification,AutomationRun,AutomationTask,Catalog,ChatItem,ChatMessage,ChunkPreviewResult,DesignPickInfo,EvolutionSummary,FileConfirmDecision,FileConfirmInfo,JobBrief,KBChunk,KBIndexMode,KBWikiStatus,MemoryGraphRelation,MemoryItem,MemoryProfile,OntologyAssetKind,OntologyTagOption,PlanProgressState,ReferencableChat,ResourceItem,UserQuestionAnswer,UserQuestionRequest,WikiConfig } from './types';
+import { createApiResponseError,readErrorMessage } from './utils/apiError';
+import { conversationTitle } from './utils/conversationTitle';
+import { newOperationId } from './utils/operationId';
 
 type JsonObject = Record<string, unknown>;
 
@@ -84,6 +86,7 @@ export interface SessionListResponse {
 }
 
 export interface CreateSessionRequest {
+  metadata?: Record<string, unknown>;
   title?: string;
   business_topic?: string;
 }
@@ -127,6 +130,12 @@ export interface HealthResponse {
 }
 
 export const getApiUrl = () => import.meta.env.VITE_API_BASE_URL || '/api';
+/** Absolute ws:// or wss:// URL for an API path, matching the page's protocol. */
+export function webSocketUrl(path: string): string {
+  const url = new URL(getApiUrl() + path, window.location.href);
+  url.protocol = url.protocol === 'https:' ? 'wss:' : 'ws:';
+  return url.toString();
+}
 
 // ── Hybrid routing（桌面双模式：云端为主 + 本机执行本地项目）─────────────────
 // 桌面壳的 Rust 反代按请求头分流：带 `x-hugagent-target: local` → 本机执行面
@@ -145,6 +154,20 @@ export function setHybridDual(on: boolean) {
 }
 export function isHybridDual(): boolean {
   return _hybridDual;
+}
+
+let _capabilityPlaneReady = false;
+/** 由 deploymentModeStore 在本机首轮能力同步完成后开启（壳的 /__desktop/events）。
+ *
+ *  闸门是「能力已同步」而不是「身份已认出」：身份一就绪就切到本机读，首轮同步
+ *  还没落完，能力中心会先渲染一版残缺清单，用户看到的是自己的能力凭空少了一半。 */
+export function setCapabilityPlaneReady(ready: boolean) {
+  _capabilityPlaneReady = ready;
+}
+
+/** 四类能力此刻是不是从本机读写（见 capabilityTargetHeaders）。 */
+export function capabilitiesRouteLocal(): boolean {
+  return _hybridDual && _capabilityPlaneReady;
 }
 
 const _localProjects = new Set<string>();
@@ -179,6 +202,68 @@ export function isLocalChat(chatId?: string | null): boolean {
 function localHeader(): Record<string, string> {
   return { [LOCAL_TARGET_HEADER]: 'local' };
 }
+
+/** 路由目标：`local` / `cloud` 是调用方的显式声明，不给就按下面的前缀表自动判定。 */
+export type RequestTarget = 'local' | 'cloud';
+
+/** 「这台机器上装了什么」——四类能力落在本机的接口。整条前缀归本机的写成字符串，
+ *  只有部分子路径归本机的写成正则；新增一个能力入口在这里加一行，判定逻辑不用动。 */
+const LOCAL_CAPABILITY_PATHS: (string | RegExp)[] = [
+  'catalog', //          四类能力的启停目录（catalog.py）
+  'agents', //           智能体（agents.py）
+  'me/skills', //        自建技能（me_capabilities.py，prefix=/v1/me）
+  'me/mcp-servers', //   自建连接器（同上）
+  // 插件只有「本机这份清单长什么样、开还是关」归本机：装什么由云端账号定，市场
+  // 列表与详情、安装、导入、卸载、展示信息、共享应用授权都只存在于云端，打到本机
+  // 会在本机装出第二份——那份的连接器指向本机没人监听的端口，跑不通。界面贡献跟着
+  // 启停走，同样归本机，否则本机关掉的插件面板还留在界面上。
+  /^\/v1\/plugins\/(installed|ui-contributions)$/,
+  /^\/v1\/plugins\/installed\/[^/]+\/(detail|enable)$/,
+  /^\/v1\/plugins\/installed\/plugin(?:%3A|:)local(?:%3A|:)[^/]+(?:\/meta)?$/i,
+  'plugins/import', // Uploaded packages are installed on this device.
+];
+
+/** 前缀命中时仍归云端的例外。
+ *  - 知识库挂在 catalog 下，但它不是装在这台机器上的东西，只存在于云端。 */
+const CLOUD_ONLY_PREFIXES = ['catalog/kb'];
+
+function underPrefix(path: string, entries: (string | RegExp)[]): boolean {
+  return entries.some((entry) =>
+    typeof entry === 'string'
+      ? path === `/v1/${entry}` || path.startsWith(`/v1/${entry}/`)
+      : entry.test(path),
+  );
+}
+
+/** 混合模式下四类能力在本机的**读和写都打本机**：本机自成一套能力体系，启停与增删就地
+ *  生效，不经云端往返。
+ *
+ *  读必须和写同源。读云端、写本机会让能力中心显示的是云端那份、真正生效的是本机那份：
+ *  用户在本机关掉的连接器界面上仍是开着的，插件开关点完当场弹回原位。
+ *
+ *  本机执行面还没认出云端身份时唯一存在的来源就是云端，这段时间照旧读云端——那不是第二
+ *  个真源，是本机那份还不存在。
+ *
+ *  与云端市场打交道的请求（安装、申请上架、OAuth 授权）不在表里，打到云端。装完之后云端
+ *  能力变更号会变，左侧边栏出现同步入口，用户点一下才把它落到本机。
+ *
+ *  纯本机模式的壳本来就把所有请求指向本机后端，不必额外打头。 */
+function capabilityTargetHeaders(url: string): Record<string, string> {
+  if (!capabilitiesRouteLocal()) return {};
+  // 调用方给的可能是裸路径，也可能是带 /api 前缀的整地址，一律从 /v1/ 起算。
+  const pathname = new URL(url, 'http://request.invalid').pathname;
+  const start = pathname.indexOf('/v1/');
+  if (start < 0) return {};
+  const path = pathname.slice(start);
+  // Responses execute on the caller's chat/project target. The neighboring
+  // agent catalog (including key management) still follows the capability plane.
+  if (path === '/v1/agents/responses' || path === '/v1/agents/responses/') return {};
+  if (underPrefix(path, CLOUD_ONLY_PREFIXES) || !underPrefix(path, LOCAL_CAPABILITY_PATHS)) {
+    return {};
+  }
+  return localHeader();
+}
+
 /** 项目作用域请求的路由头：本地项目 → 本机；否则空对象（云端默认）。 */
 export function projectTargetHeaders(projectId?: string | null): Record<string, string> {
   return _hybridDual && isLocalProject(projectId) ? localHeader() : {};
@@ -186,6 +271,12 @@ export function projectTargetHeaders(projectId?: string | null): Record<string, 
 /** 聊天作用域请求的路由头：本地项目的聊天 → 本机。 */
 export function chatTargetHeaders(chatId?: string | null): Record<string, string> {
   return _hybridDual && isLocalChat(chatId) ? localHeader() : {};
+}
+
+/** Capture the upload destination before awaiting any file I/O. Project ownership wins. */
+export function chatUploadTarget(chatId?: string, projectId?: string): 'local' | 'cloud' | undefined {
+  if (!_hybridDual) return undefined;
+  return (projectId ? isLocalProject(projectId) : isLocalChat(chatId)) ? 'local' : 'cloud';
 }
 
 /** 从 API URL 推断混合路由头（authFetch 自动兜底：预览/下载等散点直连调用）。 */
@@ -284,19 +375,25 @@ function toChatItem(raw: JsonObject): ChatItem {
   const metadata = (raw.metadata ?? {}) as JsonObject;
   return {
     id: String(raw.chat_id ?? raw.id ?? ''),
-    title: String(raw.title ?? '新对话'),
+    title: conversationTitle(String(raw.title ?? '新对话')),
     createdAt: toTimestamp(raw.created_at),
     updatedAt: toTimestamp(raw.updated_at),
     messages: [],
     favorite: Boolean(raw.favorite),
     pinned: Boolean(raw.pinned),
     businessTopic: typeof raw.business_topic === 'string' ? raw.business_topic : undefined,
+    automationTaskId: typeof metadata.automation_task_id === 'string' ? metadata.automation_task_id : undefined,
+    automationRun: metadata.automation_run === true,
     agentId: typeof metadata.agent_id === 'string' ? metadata.agent_id : undefined,
     agentName: typeof metadata.agent_name === 'string' ? metadata.agent_name : undefined,
     planChat: metadata.plan_chat === true ? true : undefined,
-    batchChat: metadata.batch_chat === true ? true : undefined,
+    personalAgentTask: typeof metadata.personal_agent_task_id === "string" ? true : undefined,
     workflowChat: metadata.workflow_chat === true ? true : undefined,
     planProgress: toPlanProgress(metadata.plan_progress),
+    modeSlug: typeof metadata.mode_slug === 'string' ? metadata.mode_slug : undefined,
+    thinkingEffort: typeof metadata.thinking_effort === 'string' && ['turbo', 'fast', 'low', 'medium', 'high', 'xhigh', 'max'].includes(metadata.thinking_effort) ? metadata.thinking_effort as ChatItem['thinkingEffort'] : undefined,
+    planModeActive: typeof metadata.plan_mode_active === 'boolean' ? metadata.plan_mode_active : undefined,
+    workflowModeActive: typeof metadata.workflow_mode_active === 'boolean' ? metadata.workflow_mode_active : undefined,
     projectId: typeof raw.project_id === 'string' && raw.project_id ? raw.project_id : undefined,
   };
 }
@@ -332,40 +429,26 @@ function throwIfSessionExpired(status: number, payload: unknown, localTarget = f
   throw new Error('Session expired');
 }
 
-/** 云端每次让能力缓存失效都会换一个变更号，随响应头下发。桌面双模式下发现它变了
- *  就同步一次本机能力——这是「不轮询」下发现云端改动的信号，不产生额外请求。 */
-const CAPABILITY_EPOCH_HEADER = 'x-hugagent-capability-epoch';
-let _capabilityEpoch: string | null = null;
-let _capabilitySyncTimer: ReturnType<typeof setTimeout> | null = null;
-
-function noteCloudCapabilityEpoch(epoch: string | null) {
-  if (!epoch) return;
-  const previous = _capabilityEpoch;
-  _capabilityEpoch = epoch;
-  if (previous === null || previous === epoch || !_hybridDual) return;
-  if (_capabilitySyncTimer) clearTimeout(_capabilitySyncTimer);
-  _capabilitySyncTimer = setTimeout(() => {
-    _capabilitySyncTimer = null;
-    void syncDeviceCapabilities().then(() => _onCapabilitiesSynced?.()).catch(() => {});
-  }, 500);
-}
-
-let _onCapabilitiesSynced: (() => void) | null = null;
-/** 同步完成后刷新界面上的本机/云端标记（由 desktopCapabilityStore 注册）。 */
-export function setCapabilitySyncListener(fn: (() => void) | null) {
-  _onCapabilitiesSynced = fn;
+/** Cloud activity offers a rate-limited account comparison, never a raw epoch prompt.
+ * Content edits may leave the legacy global epoch unchanged, so observe successful
+ * requests too. The store owns readiness, concurrency and the check interval. */
+let _onCapabilityCheck: (() => void) | null = null;
+export function setCapabilityCheckListener(fn: (() => void) | null) {
+  _onCapabilityCheck = fn;
 }
 
 export async function apiRequest<T>(
   path: string,
   options?: RequestInit,
-  target?: 'local',
+  target?: RequestTarget,
 ): Promise<T> {
   const url = `${getApiUrl()}${path}`;
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
+    ...publicChatHeaders(),
     // 混合路由：显式声明本地目标时打头（web / 非双模式下反代忽略该头）。
     ...(target === 'local' ? localHeader() : {}),
+    ...(target === 'cloud' ? {} : capabilityTargetHeaders(path)),
     // 兜底：与 authFetch 同源推断——路径含本地项目/本地会话 id 时自动打头，
     // 否则 file-confirm / pending-confirm 等会话作用域请求会被误发云端，
     // 云端无此会话而报「会话不存在或无权访问」。
@@ -378,7 +461,7 @@ export async function apiRequest<T>(
     credentials: 'include',
     headers,
   });
-  if (!localTarget) noteCloudCapabilityEpoch(response.headers.get(CAPABILITY_EPOCH_HEADER));
+  if (!localTarget && response.ok && _hybridDual) _onCapabilityCheck?.();
 
   if (response.status === 204) {
     return undefined as T;
@@ -390,14 +473,19 @@ export async function apiRequest<T>(
     throwIfSessionExpired(response.status, payload, localTarget);
     const editionError = createEditionAccessError(response.status, payload, readErrorMessage);
     if (editionError) throw editionError;
-    throw createApiResponseError(response.status, payload, `API Error: ${response.status}`);
+    throw createApiResponseError(response.status, payload, `API Error: ${response.status}`, response.headers.get("Retry-After"));
   }
   return payload as T;
 }
 
+import type { ReasoningLevel, ReasoningKey } from './utils/reasoningEffort';
+
 export interface ModelCapabilities {
   /** Whether the main model supports multiple reasoning_effort levels (high/max). When false the frontend hides the "Thinking: high/max" options. */
   supports_reasoning_effort: boolean;
+  reasoning_effort_levels?: ReasoningLevel[];
+  default_reasoning_effort?: ReasoningKey;
+  reasoning_effort_configured?: boolean;
   /** Whether the admin backend allows end users to switch the chat model. */
   user_model_switch_enabled: boolean;
   /** Active chat models selectable on the user side; excludes sensitive info like URL / API Key. */
@@ -419,6 +507,9 @@ export interface UserSelectableModel {
   provider: string;
   is_default: boolean;
   supports_reasoning_effort: boolean;
+  reasoning_effort_levels?: ReasoningLevel[];
+  default_reasoning_effort?: ReasoningKey;
+  reasoning_effort_configured?: boolean;
   /** Real context window (tokens) for this model; 0/undefined when the admin hasn't configured it. */
   context_length?: number;
 }
@@ -508,12 +599,18 @@ export async function getMainModelCapabilities(): Promise<ModelCapabilities> {
         provider: typeof row.provider === 'string' ? row.provider : 'openai_compatible',
         is_default: !!row.is_default,
         supports_reasoning_effort: !!row.supports_reasoning_effort,
+        reasoning_effort_levels: Array.isArray(row.reasoning_effort_levels) ? row.reasoning_effort_levels as unknown as ReasoningLevel[] : undefined,
+        default_reasoning_effort: row.default_reasoning_effort as ReasoningKey | undefined,
+        reasoning_effort_configured: !!row.reasoning_effort_configured,
         context_length: typeof row.context_length === 'number' ? row.context_length : 0,
       };
     })
     .filter((item): item is UserSelectableModel => item !== null);
   return {
     supports_reasoning_effort: !!main.supports_reasoning_effort,
+    reasoning_effort_levels: Array.isArray(main.reasoning_effort_levels) ? main.reasoning_effort_levels as unknown as ReasoningLevel[] : undefined,
+    default_reasoning_effort: main.default_reasoning_effort as ReasoningKey | undefined,
+    reasoning_effort_configured: !!main.reasoning_effort_configured,
     user_model_switch_enabled: !!switchInfo.enabled,
     user_selectable_models: models,
     main_context_length: typeof main.context_length === 'number' ? main.context_length : 0,
@@ -526,13 +623,19 @@ export async function getMainModelCapabilities(): Promise<ModelCapabilities> {
 }
 
 export async function getCatalog(): Promise<Catalog> {
-  const wrapped = await apiRequest<unknown>('/v1/catalog');
-  const data = unwrapData<JsonObject>(wrapped);
+  const items = (value: unknown) => (Array.isArray(value) ? value : []) as CatalogItem[];
+  const data = unwrapData<JsonObject>(await apiRequest<unknown>('/v1/catalog'));
+  // 知识库不是「这台机器上装了什么」，它一直只存在于云端。混合模式下能力那三类
+  // 已经改从本机读（读写必须同源），知识库就得单独再取云端那一份补上，否则界面上
+  // 会整块消失。非混合模式下两次请求打的是同一个后端，取到的也是同一份。
+  const kb = capabilitiesRouteLocal()
+    ? items(unwrapData<JsonObject>(await apiRequest<unknown>('/v1/catalog', undefined, 'cloud')).kb)
+    : items(data.kb);
   return {
-    skills: (Array.isArray(data.skills) ? data.skills : []) as CatalogItem[],
-    agents: (Array.isArray(data.agents) ? data.agents : []) as CatalogItem[],
-    mcp: (Array.isArray(data.mcp) ? data.mcp : []) as CatalogItem[],
-    kb: (Array.isArray(data.kb) ? data.kb : []) as CatalogItem[],
+    skills: items(data.skills),
+    agents: items(data.agents),
+    mcp: items(data.mcp),
+    kb,
   };
 }
 
@@ -623,13 +726,18 @@ export async function listReferencableChats(params: {
 }
 
 export async function getSession(chatId: string): Promise<ChatItem> {
+  const local = isLocalChat(chatId);
   const wrapped = await apiRequest<unknown>(
     `/v1/chats/${chatId}`,
     undefined,
-    isLocalChat(chatId) ? 'local' : undefined,
+    local ? 'local' : undefined,
   );
-  const data = unwrapData<JsonObject>(wrapped);
-  return toChatItem(data);
+  const session = toChatItem(unwrapData<JsonObject>(wrapped));
+  // Task identity includes its execution location in the dual desktop workspace.
+  if (_hybridDual && local && session.automationTaskId) {
+    session.automationTaskId = `local:${session.automationTaskId}`;
+  }
+  return session;
 }
 
 export async function createSession(data: CreateSessionRequest): Promise<ChatItem> {
@@ -769,6 +877,7 @@ export async function getToolCallResult(
 }
 
 export interface ChatContextState {
+  compaction_progress?: unknown;
   context_usage?: unknown;
   context_compaction?: unknown;
 }
@@ -908,35 +1017,45 @@ export interface ActiveChatRunSummary {
   run_id: string;
   status: string;
   started_at: string | null;
+  /** 'local' when the run belongs to this computer's execution side (dual desktop mode). */
+  target?: 'local';
 }
+
+/** A chat whose run started within the requested window; it may already have ended. */
+export type RecentRunChat = Pick<ActiveChatRunSummary, 'chat_id' | 'target'>;
 
 /**
  * 当前用户所有还在跑的会话。
  *
  * 单会话的 ``getActiveChatRun`` 只回答"我正打开的这段在不在跑"，换设备登录时
  * 侧边栏对没点开过的会话一无所知。这个接口一次问完，供侧边栏点亮小圆点。
+ * ``recentSeconds`` 另要这段时间内起过 run 的会话，让别处发起、两次对账之间
+ * 就已跑完的会话也能被发现。
  */
-export async function listActiveChatRuns(): Promise<ActiveChatRunSummary[]> {
+export async function listActiveChatRuns(
+  recentSeconds = 0,
+): Promise<{ items: ActiveChatRunSummary[]; recent: RecentRunChat[] }> {
   // 双模式下侧边栏同时挂着本机执行面的会话，那边跑起来的 run 云端并不知道，两边都要问。
   const targets: Array<'local' | undefined> = isHybridDual() ? [undefined, 'local'] : [undefined];
   const responses = await Promise.allSettled(
     targets.map((target) =>
-      apiRequest<{ items?: ActiveChatRunSummary[] }>('/v1/chats/active-runs', undefined, target),
+      apiRequest<unknown>(`/v1/chats/active-runs?recent_seconds=${recentSeconds}`, undefined, target),
     ),
   );
   // 调用方把返回值当成服务端权威快照，没列进来的会话会被灭灯——所以任一面查询失败就整体
   // 抛错，让调用方保留现有状态等下一轮，绝不能把查不到的一面当成「那边没有在跑的了」。
   const failed = responses.find((response) => response.status === 'rejected');
   if (failed?.status === 'rejected') throw failed.reason;
-  const out: ActiveChatRunSummary[] = [];
-  for (const response of responses) {
-    if (response.status !== 'fulfilled') continue;
-    const { items } = unwrapData<{ items?: ActiveChatRunSummary[] }>(response.value);
-    for (const item of Array.isArray(items) ? items : []) {
-      if (item?.chat_id) out.push(item);
-    }
-  }
-  return out;
+  const items: ActiveChatRunSummary[] = [];
+  const recent: RecentRunChat[] = [];
+  responses.forEach((response, index) => {
+    if (response.status !== 'fulfilled') return;
+    const target = targets[index];
+    const data = unwrapData<{ items?: ActiveChatRunSummary[]; recent_chat_ids?: string[] }>(response.value);
+    for (const item of data.items ?? []) if (item?.chat_id) items.push({ ...item, target });
+    for (const chatId of data.recent_chat_ids ?? []) recent.push({ chat_id: chatId, target });
+  });
+  return { items, recent };
 }
 
 /**
@@ -1821,12 +1940,25 @@ export async function createMyMcpServer(input: CreateMcpServerInput): Promise<{ 
   return unwrapData<{ server_id: string }>(wrapped);
 }
 
+/** Start browser consent for an OAuth-protected private MCP; poll it with getMcpMarketOAuthStatus. */
+export async function startMyMcpOAuth(input: CreateMcpServerInput & {
+  scopes?: string[];
+  client_id?: string;
+  client_secret?: string;
+}): Promise<{ flow_id: string; authorization_url: string; status: string }> {
+  const wrapped = await apiRequest<unknown>('/v1/me/mcp-servers/oauth/start', {
+    method: 'POST',
+    body: JSON.stringify(input),
+  });
+  return unwrapData<{ flow_id: string; authorization_url: string; status: string }>(wrapped);
+}
+
 export async function deleteMyMcpServer(serverId: string): Promise<void> {
   await apiRequest(`/v1/me/mcp-servers/${encodeURIComponent(serverId)}`, { method: 'DELETE' });
 }
 
 // ── MCP marketplace (user side) ─────────────────────────────────────────────
-import type { McpMarketItem, McpMarketListResult, McpMarketSubmission } from './types';
+import type { McpMarketItem,McpMarketListResult,McpMarketSubmission } from './types';
 
 export async function getMcpMarketItems(): Promise<McpMarketListResult> {
   const wrapped = await apiRequest<unknown>('/v1/mcp-market/items');
@@ -1913,9 +2045,10 @@ export async function withdrawMcpMarketSubmission(submissionId: string): Promise
 export async function uploadMySkill(file: File): Promise<{ id: string; skipped?: unknown[] }> {
   const form = new FormData();
   form.append('file', file);
-  // Cannot use apiRequest (it forces a JSON Content-Type); multipart goes through fetch directly.
+  // apiRequest 会强制 JSON Content-Type，multipart 用不了；改走 authFetch——它和
+  // apiRequest 挂的是同一套混合路由判定，不会漏标成云端写入。
   const url = `${getApiUrl()}/v1/me/skills/upload`;
-  const response = await fetch(url, { method: 'POST', credentials: 'include', body: form });
+  const response = await authFetch(url, { method: 'POST', body: form });
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) {
     throw new Error(readErrorMessage(payload, t('上传失败：{status}', { status: response.status })));
@@ -2019,9 +2152,9 @@ export async function uploadMySkillFile(
   const form = new FormData();
   form.append('file', file);
   if (path) form.append('path', path);
-  // multipart cannot go through apiRequest (it forces a JSON Content-Type)
+  // multipart 走不了 apiRequest（它强制 JSON Content-Type），authFetch 带同一套路由判定
   const url = `${getApiUrl()}/v1/me/skills/${encodeURIComponent(skillId)}/files/upload`;
-  const response = await fetch(url, { method: 'POST', credentials: 'include', body: form });
+  const response = await authFetch(url, { method: 'POST', body: form });
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) {
     throw new Error(readErrorMessage(payload, t('上传失败：{status}', { status: response.status })));
@@ -2032,7 +2165,7 @@ export async function uploadMySkillFile(
 // Export my private skill as a zip and trigger a browser download.
 export async function exportMySkillZip(skillId: string): Promise<void> {
   const url = `${getApiUrl()}/v1/me/skills/${encodeURIComponent(skillId)}/export`;
-  const response = await fetch(url, { credentials: 'include' });
+  const response = await authFetch(url);
   if (!response.ok) {
     const payload = await response.json().catch(() => ({}));
     throw new Error(readErrorMessage(payload, t('导出失败：{status}', { status: response.status })));
@@ -2047,7 +2180,7 @@ export async function exportMySkillZip(skillId: string): Promise<void> {
 }
 
 // ── Skill marketplace (user side) ───────────────────────────────────────────
-import type { MarketplaceListResult, MarketplaceSkillDetail, MarketplaceSubmission } from './types';
+import type { MarketplaceListResult,MarketplaceSkillDetail,MarketplaceSubmission } from './types';
 
 export async function getMarketplaceSkills(): Promise<MarketplaceListResult> {
   const wrapped = await apiRequest<unknown>('/v1/marketplace/skills');
@@ -2073,12 +2206,20 @@ export interface DeviceCapabilityItem {
   /** 'cloud' | 'local' | 'builtin' | 'plugin' */
   source: string;
   server_id?: string;
+  display_name?: string;
+  description?: string;
+  enabled?: boolean;
+  usable?: boolean;
+  change_state?: 'new' | 'modified' | 'synced' | 'compare' | 'unavailable';
+  created_at?: string | null;
+  resolution?: { outcome: string; reason?: string | null };
 }
 
 export interface DeviceCapabilityListing {
   kind: DeviceCapabilityKind;
   profile_id: string | null;
   items: DeviceCapabilityItem[];
+  discovery_errors?: { folder: string; code: string }[];
 }
 
 export async function getDeviceCapabilities(kind: DeviceCapabilityKind): Promise<DeviceCapabilityListing> {
@@ -2086,9 +2227,43 @@ export async function getDeviceCapabilities(kind: DeviceCapabilityKind): Promise
   return unwrapData<DeviceCapabilityListing>(wrapped);
 }
 
+export async function checkDeviceCapabilitySync(): Promise<{ changed: boolean | null }> {
+  return unwrapData(await apiRequest('/v1/desktop/capabilities/sync-check', undefined, 'local'));
+}
+
 export async function syncDeviceCapabilities(): Promise<Record<string, unknown>> {
   const wrapped = await apiRequest<unknown>('/v1/desktop/capabilities/sync', { method: 'POST' }, 'local');
   return unwrapData<Record<string, unknown>>(wrapped);
+}
+
+export interface CapabilityFileChange {
+  path: string;
+  side: string;
+  conflict: boolean;
+  binary: boolean;
+  local: string | null;
+  cloud: string | null;
+  base: string | null;
+}
+export interface CapabilityChangePreview {
+  preview_id: string;
+  changes: CapabilityFileChange[];
+  can_edit: boolean;
+  cloud_exists: boolean;
+  sensitive_paths: string[];
+}
+export type CapabilityChangeChoices = Record<string, { side: string; content?: string; alternate_path?: string }>;
+export async function previewCapabilityChanges(install_id: string): Promise<CapabilityChangePreview> {
+  return unwrapData(await apiRequest('/v1/desktop/capabilities/changes/preview', {
+    method: 'POST', body: JSON.stringify({ install_id }),
+  }, 'local'));
+}
+export async function commitCapabilityChanges(body: {
+  preview_id: string; choices: CapabilityChangeChoices; acknowledge_sensitive: boolean; fork_key?: string;
+}): Promise<{ uploaded: boolean; local_applied: boolean; applied: boolean }> {
+  return unwrapData(await apiRequest('/v1/desktop/capabilities/changes/commit', {
+    method: 'POST', body: JSON.stringify(body),
+  }, 'local'));
 }
 
 export async function installMarketplaceSkill(
@@ -2132,10 +2307,10 @@ export async function withdrawSkillSubmission(submissionId: string): Promise<voi
 
 // ── Sub-Agent Marketplace ───────────────────────────────────────────────────
 import type {
-  MarketplaceAgentListResult,
-  MarketplaceAgentDetail,
-  AgentMarketInstallResult,
-  AgentMarketSubmission,
+AgentMarketInstallResult,
+AgentMarketSubmission,
+MarketplaceAgentDetail,
+MarketplaceAgentListResult,
 } from './types';
 
 export async function getMarketplaceAgents(): Promise<MarketplaceAgentListResult> {
@@ -2187,11 +2362,11 @@ export async function withdrawAgentSubmission(submissionId: string): Promise<voi
 
 // ── Plugins ─────────────────────────────────────────────────────────────────
 import type {
-  PluginListItem,
-  PluginDetail,
-  InstalledPluginItem,
-  InstalledPluginDetail,
-  PluginInstallResult,
+InstalledPluginDetail,
+InstalledPluginItem,
+PluginDetail,
+PluginInstallResult,
+PluginListItem,
 } from './types';
 
 export async function listPlugins(): Promise<PluginListItem[]> {
@@ -2238,7 +2413,7 @@ export async function importPlugin(
   if (secrets && Object.keys(secrets).length > 0) {
     formData.append('secrets', JSON.stringify(secrets));
   }
-  const response = await fetch(url, { method: 'POST', credentials: 'include', body: formData });
+  const response = await authFetch(url, { method: 'POST', body: formData });
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) {
     throwIfSessionExpired(response.status, payload);
@@ -2279,18 +2454,18 @@ export interface LarkAppInitStatus {
   error: string | null;
 }
 
-export async function getLarkAppInitStatus(): Promise<LarkAppInitStatus> {
-  const wrapped = await apiRequest<unknown>('/v1/plugins/feishu-cli/app/status');
+export async function getLarkAppInitStatus(target?: RequestTarget): Promise<LarkAppInitStatus> {
+  const wrapped = await apiRequest<unknown>('/v1/plugins/feishu-cli/app/status', undefined, target);
   return unwrapData<LarkAppInitStatus>(wrapped);
 }
 
-export async function startLarkAppInit(): Promise<LarkAppInitStatus> {
-  const wrapped = await apiRequest<unknown>('/v1/plugins/feishu-cli/app/init', { method: 'POST' });
+export async function startLarkAppInit(target?: RequestTarget): Promise<LarkAppInitStatus> {
+  const wrapped = await apiRequest<unknown>('/v1/plugins/feishu-cli/app/init', { method: 'POST' }, target);
   return unwrapData<LarkAppInitStatus>(wrapped);
 }
 
-export async function resetLarkAppInit(): Promise<LarkAppInitStatus> {
-  const wrapped = await apiRequest<unknown>('/v1/plugins/feishu-cli/app/reset', { method: 'POST' });
+export async function resetLarkAppInit(target?: RequestTarget): Promise<LarkAppInitStatus> {
+  const wrapped = await apiRequest<unknown>('/v1/plugins/feishu-cli/app/reset', { method: 'POST' }, target);
   return unwrapData<LarkAppInitStatus>(wrapped);
 }
 
@@ -2332,8 +2507,11 @@ export interface AuthUser extends EditionAuthUserFields {
   can_create_channel_bot?: boolean;
   /** Whether the user may switch the currently available model from the chat input box (default false) */
   can_switch_model?: boolean;
+  can_use_voice?: boolean;
   /** Whether the user may configure and use ontology validation (default false) */
   can_use_ontology_validation?: boolean;
+  /** Whether Personal Agent is available: module enabled on the server and permission granted (default false) */
+  can_use_personal_agent?: boolean;
   /** Whether the user may enter the /config system settings console without a token (default false) */
   can_system_config?: boolean;
   /** Whether the user may enter the /admin content management console without a token (default false) */
@@ -2535,17 +2713,23 @@ export async function logout(): Promise<string | undefined> {
  * Use in App.tsx for direct fetch() calls that bypass apiRequest().
  */
 export function authFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
-  // 混合路由兜底：按 URL 中的项目/聊天归属自动打本机头（调用方显式头优先）。
-  const inferred = inferTargetHeadersFromUrl(String(input));
-  const mergedInit: RequestInit | undefined =
-    Object.keys(inferred).length > 0
-      ? { ...init, headers: { ...inferred, ...(init?.headers ?? {}) } }
-      : init;
+  const request = input instanceof Request ? input : undefined;
+  const url = request?.url ?? String(input);
+  const headers = new Headers({ ...inferTargetHeadersFromUrl(url), ...publicChatHeaders() });
+  new Headers(init?.headers ?? request?.headers).forEach((value, key) => headers.set(key, value));
+  for (const [key, value] of Object.entries(capabilityTargetHeaders(url))) {
+    headers.set(key, value);
+  }
+  const localTarget = headers.get(LOCAL_TARGET_HEADER) === 'local'
+    || new URL(url, 'http://request.invalid').searchParams.get('hg_target') === 'local';
   return fetch(input, {
-    ...mergedInit,
+    ...init,
+    headers,
     credentials: 'include',
   }).then(async (response) => {
-    if (response.status === 401 && _on401) {
+    // Local file/service authentication cannot invalidate the cloud session.
+    // Keep the response for the preview's own error state and retry action.
+    if (response.status === 401 && !localTarget && _on401) {
       let loginUrl = '';
       try {
         const payload = await response.clone().json();
@@ -2597,6 +2781,7 @@ export function pluginWebAssetUrl(slug: string, entry: string): string {
 // ── File upload API ─────────────────────────────────────────────
 
 export interface UploadedFile {
+  origin?: 'local' | 'cloud';
   file_id: string;
   name: string;
   size: number;
@@ -2608,31 +2793,34 @@ export async function uploadFile(
   file: File,
   chatId?: string,
   folderId?: string | null,
+  options: { apiUrl?: string; target?: 'local' | 'cloud'; projectId?: string; uploadKey?: string } = {},
 ): Promise<UploadedFile> {
-  const url = `${getApiUrl()}/v1/file/upload`;
+  const origin = options.target ?? chatUploadTarget(chatId, options.projectId);
+  const url = `${options.apiUrl ?? getApiUrl()}/v1/file/upload`;
   const formData = new FormData();
-  formData.append('file', file);
+  formData.append('file', file, file.name.split('/').pop()!);
+  if (options.uploadKey) formData.append('upload_key', options.uploadKey);
   if (chatId) formData.append('chat_id', chatId);
   if (folderId) formData.append('folder_id', folderId);
 
-  const response = await fetch(url, {
+  const response = await authFetch(url, {
     method: 'POST',
     credentials: 'include',
+    headers: origin ? { [LOCAL_TARGET_HEADER]: origin } : {},
     body: formData,
   });
 
   if (!response.ok) {
     const payload = await response.json().catch(() => ({}));
-    throwIfSessionExpired(response.status, payload);
-    throw new Error(readErrorMessage(payload, `Upload failed: ${response.status}`));
+    throw createApiResponseError(response.status, payload, `Upload failed: ${response.status}`, response.headers.get("Retry-After"));
   }
 
   const payload = await response.json();
-  return unwrapData<UploadedFile>(payload);
+  return { ...unwrapData<UploadedFile>(payload), ...(origin ? { origin } : {}) };
 }
 
 /** Overwrite existing file content in-place (same file_id & URL). */
-export async function overwriteFile(fileId: string, file: File): Promise<UploadedFile> {
+export async function overwriteFile(fileId: string, file: File, headers: Record<string, string> = {}): Promise<UploadedFile> {
   const url = `${getApiUrl()}/v1/file/${encodeURIComponent(fileId)}`;
   const formData = new FormData();
   formData.append('file', file);
@@ -2640,6 +2828,7 @@ export async function overwriteFile(fileId: string, file: File): Promise<Uploade
   const response = await fetch(url, {
     method: 'PUT',
     credentials: 'include',
+    headers,
     body: formData,
   });
 
@@ -3112,14 +3301,6 @@ export async function getAutomationRuns(taskId: string, limit?: number): Promise
     return { ...run, task_id: taskId };
   });
 }
-export async function activateAutomationSidebar(taskId: string): Promise<AutomationTask> {
-  const target = automationTarget(taskId);
-  const res = await apiRequest<unknown>(automationPath(taskId, '/activate-sidebar'), { method: 'POST' }, target);
-  return locatedTask(unwrapData<AutomationTask>(res), target === 'local');
-}
-export async function listSidebarAutomations(): Promise<AutomationTask[]> {
-  return automationList('?sidebar_activated=true');
-}
 export async function getAutomationNotifications(): Promise<AutomationNotification[]> {
   const fetchSide = async (local: boolean) => {
     const res = await apiRequest<unknown>('/v1/automations/notifications/list', undefined, local ? 'local' : undefined);
@@ -3152,143 +3333,14 @@ export async function deleteNotifications(ids: string[]): Promise<void> {
 // ── Skill Distillation (Lab personal skill distillation) ────────────────
 
 
-// ── Batch execution API ────────────────────────────────────────────────────
-
-export interface BatchPlanDetail {
-  plan_id: string;
-  chat_id?: string | null;
-  source_type: 'xlsx' | 'word_files' | 'text_list';
-  instruction?: string | null;
-  items_total: number;
-  items_preview: Record<string, unknown>[];
-  placeholder_keys: string[];
-  prompt_template: string;
-  max_retries: number;
-  status: string;
-  progress: { done: number; success: number; failed: number };
-  /** Only populated by GET /v1/batch/{plan_id} (not the listing endpoint).
-   *  Each entry mirrors a batch_item_done event payload. */
-  item_results?: Array<{
-    index: number;
-    status: 'success' | 'skipped';
-    content?: string;
-    error?: string;
-    retry_count: number;
-    item_summary?: string;
-    tool_calls?: unknown[];
-    artifacts?: unknown[];
-    citations?: unknown[];
-  }>;
-  created_at?: string | null;
-  updated_at?: string | null;
-  expires_at?: string | null;
-}
-
-export async function getBatchPlan(planId: string): Promise<BatchPlanDetail> {
-  const wrapped = await apiRequest<unknown>(`/v1/batch/${encodeURIComponent(planId)}`);
-  return unwrapData<BatchPlanDetail>(wrapped);
-}
-
-export async function listActiveBatchPlans(chatId: string): Promise<BatchPlanDetail[]> {
-  const wrapped = await apiRequest<unknown>(
-    `/v1/batch/active?chat_id=${encodeURIComponent(chatId)}`,
-  );
-  const data = unwrapData<{ plans: BatchPlanDetail[] }>(wrapped);
-  return data.plans || [];
-}
-
-export async function confirmBatchPlan(
-  planId: string,
-  payload: { prompt_template: string; max_retries?: number },
-): Promise<BatchPlanDetail> {
-  const wrapped = await apiRequest<unknown>(
-    `/v1/batch/${encodeURIComponent(planId)}/confirm`,
-    {
-      method: 'POST',
-      body: JSON.stringify(payload),
-    },
-  );
-  return unwrapData<BatchPlanDetail>(wrapped);
-}
-
-export async function cancelBatchPlan(planId: string): Promise<void> {
-  await apiRequest<unknown>(
-    `/v1/batch/${encodeURIComponent(planId)}/cancel`,
-    { method: 'POST' },
-  );
-}
-
-/** Open the SSE batch execution stream. Calls back with each parsed event.
- *  Returns an AbortController so callers can cancel mid-stream.
- */
-export function openBatchStream(
-  planId: string,
-  onEvent: (event: Record<string, unknown>) => void,
-  onError?: (err: Error) => void,
-): AbortController {
-  const ctrl = new AbortController();
-  const url = `${getApiUrl()}/v1/batch/${encodeURIComponent(planId)}/stream`;
-
-  (async () => {
-    try {
-      const resp = await fetch(url, {
-        method: 'GET',
-        credentials: 'include',
-        headers: { Accept: 'text/event-stream' },
-        signal: ctrl.signal,
-      });
-      if (!resp.ok || !resp.body) {
-        throw new Error(`batch stream failed: ${resp.status}`);
-      }
-      const reader = resp.body.getReader();
-      const decoder = new TextDecoder('utf-8');
-      let buffer = '';
-      try {
-        // eslint-disable-next-line no-constant-condition
-        while (true) {
-          const { value, done } = await reader.read();
-          if (done) break;
-          buffer += decoder.decode(value, { stream: true });
-          let idx = buffer.indexOf('\n\n');
-          while (idx >= 0) {
-            const block = buffer.slice(0, idx);
-            buffer = buffer.slice(idx + 2);
-            const dataLine = block.split('\n').find(l => l.startsWith('data: '));
-            if (dataLine) {
-              const payload = dataLine.slice(6).trim();
-              if (payload === '[DONE]') return;
-              try {
-                onEvent(JSON.parse(payload));
-              } catch {
-                // skip malformed event
-              }
-            }
-            idx = buffer.indexOf('\n\n');
-          }
-        }
-      } finally {
-        // Always release the underlying body reader on early return /
-        // abort / error so the connection isn't kept open for the
-        // browser to GC later.
-        try { await reader.cancel(); } catch { /* already closed */ }
-      }
-    } catch (err) {
-      if ((err as Error).name === 'AbortError') return;
-      onError?.(err as Error);
-    }
-  })();
-
-  return ctrl;
-}
-
 // ─── Projects (Claude-style workspaces) ───────────────────────────────────
 
 import type {
-  ProjectChatSummary,
-  ProjectDetail,
-  ProjectFileItem,
-  ProjectItem,
-  ProjectKind,
+ProjectChatSummary,
+ProjectDetail,
+ProjectFileItem,
+ProjectItem,
+ProjectKind,
 } from './types';
 
 export interface ProjectListResponse {
@@ -3600,23 +3652,23 @@ function _coerceDingTalkStatus(data: JsonObject): DingTalkStatus {
   };
 }
 
-export async function getDingTalkStatus(probe = false): Promise<DingTalkStatus> {
-  const wrapped = await apiRequest<unknown>(`/v1/integrations/dingtalk/status${probe ? '?probe=true' : ''}`);
+export async function getDingTalkStatus(probe = false, target?: RequestTarget): Promise<DingTalkStatus> {
+  const wrapped = await apiRequest<unknown>(`/v1/integrations/dingtalk/status${probe ? '?probe=true' : ''}`, undefined, target);
   return _coerceDingTalkStatus(unwrapData<JsonObject>(wrapped));
 }
 
-export async function startDingTalkLogin(): Promise<DingTalkStatus> {
-  const wrapped = await apiRequest<unknown>('/v1/integrations/dingtalk/login', { method: 'POST' });
+export async function startDingTalkLogin(target?: RequestTarget): Promise<DingTalkStatus> {
+  const wrapped = await apiRequest<unknown>('/v1/integrations/dingtalk/login', { method: 'POST' }, target);
   return _coerceDingTalkStatus(unwrapData<JsonObject>(wrapped));
 }
 
-export async function pollDingTalkLogin(): Promise<DingTalkStatus> {
-  const wrapped = await apiRequest<unknown>('/v1/integrations/dingtalk/login/poll', { method: 'POST' });
+export async function pollDingTalkLogin(target?: RequestTarget): Promise<DingTalkStatus> {
+  const wrapped = await apiRequest<unknown>('/v1/integrations/dingtalk/login/poll', { method: 'POST' }, target);
   return _coerceDingTalkStatus(unwrapData<JsonObject>(wrapped));
 }
 
-export async function disconnectDingTalk(): Promise<DingTalkStatus> {
-  const wrapped = await apiRequest<unknown>('/v1/integrations/dingtalk/disconnect', { method: 'POST' });
+export async function disconnectDingTalk(target?: RequestTarget): Promise<DingTalkStatus> {
+  const wrapped = await apiRequest<unknown>('/v1/integrations/dingtalk/disconnect', { method: 'POST' }, target);
   return _coerceDingTalkStatus(unwrapData<JsonObject>(wrapped));
 }
 
@@ -3651,23 +3703,23 @@ function _coerceLarkStatus(data: JsonObject): LarkStatus {
   };
 }
 
-export async function getLarkStatus(probe = false): Promise<LarkStatus> {
-  const wrapped = await apiRequest<unknown>(`/v1/integrations/lark/status${probe ? '?probe=true' : ''}`);
+export async function getLarkStatus(probe = false, target?: RequestTarget): Promise<LarkStatus> {
+  const wrapped = await apiRequest<unknown>(`/v1/integrations/lark/status${probe ? '?probe=true' : ''}`, undefined, target);
   return _coerceLarkStatus(unwrapData<JsonObject>(wrapped));
 }
 
-export async function startLarkLogin(): Promise<LarkStatus> {
-  const wrapped = await apiRequest<unknown>('/v1/integrations/lark/login', { method: 'POST' });
+export async function startLarkLogin(target?: RequestTarget): Promise<LarkStatus> {
+  const wrapped = await apiRequest<unknown>('/v1/integrations/lark/login', { method: 'POST' }, target);
   return _coerceLarkStatus(unwrapData<JsonObject>(wrapped));
 }
 
-export async function pollLarkLogin(): Promise<LarkStatus> {
-  const wrapped = await apiRequest<unknown>('/v1/integrations/lark/login/poll', { method: 'POST' });
+export async function pollLarkLogin(target?: RequestTarget): Promise<LarkStatus> {
+  const wrapped = await apiRequest<unknown>('/v1/integrations/lark/login/poll', { method: 'POST' }, target);
   return _coerceLarkStatus(unwrapData<JsonObject>(wrapped));
 }
 
-export async function disconnectLark(): Promise<LarkStatus> {
-  const wrapped = await apiRequest<unknown>('/v1/integrations/lark/disconnect', { method: 'POST' });
+export async function disconnectLark(target?: RequestTarget): Promise<LarkStatus> {
+  const wrapped = await apiRequest<unknown>('/v1/integrations/lark/disconnect', { method: 'POST' }, target);
   return _coerceLarkStatus(unwrapData<JsonObject>(wrapped));
 }
 
@@ -3861,8 +3913,9 @@ function _coerceEmailStatus(data: JsonObject): EmailStatus {
   };
 }
 
-export async function getEmailStatus(probe = false): Promise<EmailStatus> {
-  const wrapped = await apiRequest<unknown>(`/v1/integrations/email/status${probe ? '?probe=true' : ''}`);
+// `target` pins the account to one plane — Personal Agent always reads the cloud account.
+export async function getEmailStatus(probe = false, target?: RequestTarget): Promise<EmailStatus> {
+  const wrapped = await apiRequest<unknown>(`/v1/integrations/email/status${probe ? '?probe=true' : ''}`, undefined, target);
   return _coerceEmailStatus(unwrapData<JsonObject>(wrapped));
 }
 
@@ -3871,16 +3924,16 @@ export async function connectEmail(body: {
   secret: string;
   display_name?: string;
   server_overrides?: EmailServerOverrides;
-}): Promise<EmailStatus> {
+}, target?: RequestTarget): Promise<EmailStatus> {
   const wrapped = await apiRequest<unknown>('/v1/integrations/email/connect', {
     method: 'POST',
     body: JSON.stringify(body),
-  });
+  }, target);
   return _coerceEmailStatus(unwrapData<JsonObject>(wrapped));
 }
 
-export async function disconnectEmail(): Promise<EmailStatus> {
-  const wrapped = await apiRequest<unknown>('/v1/integrations/email/disconnect', { method: 'POST' });
+export async function disconnectEmail(target?: RequestTarget): Promise<EmailStatus> {
+  const wrapped = await apiRequest<unknown>('/v1/integrations/email/disconnect', { method: 'POST' }, target);
   return _coerceEmailStatus(unwrapData<JsonObject>(wrapped));
 }
 
@@ -3923,32 +3976,32 @@ function _coerceYidaStatus(data: JsonObject): YidaStatus {
   };
 }
 
-export async function getYidaStatus(probe = false): Promise<YidaStatus> {
-  const wrapped = await apiRequest<unknown>(`/v1/integrations/yida/status${probe ? '?probe=true' : ''}`);
+export async function getYidaStatus(probe = false, target?: RequestTarget): Promise<YidaStatus> {
+  const wrapped = await apiRequest<unknown>(`/v1/integrations/yida/status${probe ? '?probe=true' : ''}`, undefined, target);
   return _coerceYidaStatus(unwrapData<JsonObject>(wrapped));
 }
 
-export async function startYidaLogin(): Promise<YidaStatus> {
-  const wrapped = await apiRequest<unknown>('/v1/integrations/yida/login', { method: 'POST' });
+export async function startYidaLogin(target?: RequestTarget): Promise<YidaStatus> {
+  const wrapped = await apiRequest<unknown>('/v1/integrations/yida/login', { method: 'POST' }, target);
   return _coerceYidaStatus(unwrapData<JsonObject>(wrapped));
 }
 
-export async function pollYidaLogin(corpId?: string): Promise<YidaStatus> {
+export async function pollYidaLogin(corpId?: string, target?: RequestTarget): Promise<YidaStatus> {
   const wrapped = await apiRequest<unknown>('/v1/integrations/yida/login/poll', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(corpId ? { corp_id: corpId } : {}),
-  });
+  }, target);
   return _coerceYidaStatus(unwrapData<JsonObject>(wrapped));
 }
 
-export async function disconnectYida(): Promise<YidaStatus> {
-  const wrapped = await apiRequest<unknown>('/v1/integrations/yida/disconnect', { method: 'POST' });
+export async function disconnectYida(target?: RequestTarget): Promise<YidaStatus> {
+  const wrapped = await apiRequest<unknown>('/v1/integrations/yida/disconnect', { method: 'POST' }, target);
   return _coerceYidaStatus(unwrapData<JsonObject>(wrapped));
 }
 
 // ── Autonomous Loop (long-running autonomous operation) ──────────
-import type { LoopItem, LoopIterationItem, LoopGoalSpec, LoopBudget } from './types';
+import type { LoopBudget,LoopGoalSpec,LoopItem,LoopIterationItem } from './types';
 
 export async function createLoop(data: {
   title?: string;
@@ -4118,6 +4171,8 @@ export interface SiteItem extends SiteEditionFields {
   chat_id: string | null;
   /** Site source project id; when set → the "Edit" action on the card can continue editing; null for legacy sites */
   project_id: string | null;
+  /** 站点已设访问密码（密码本身不会下发）。 */
+  has_password: boolean;
   /** Current actor can edit this source project. */
   editable: boolean;
   permission?: 'none' | 'view' | 'edit' | 'admin';
@@ -4142,6 +4197,7 @@ function toSiteItem(raw: JsonObject): SiteItem {
     total_size_bytes: Number(raw.total_size_bytes ?? 0),
     chat_id: typeof raw.chat_id === 'string' ? raw.chat_id : null,
     project_id: typeof raw.project_id === 'string' ? raw.project_id : null,
+    has_password: raw.has_password === true,
     editable: Boolean(raw.editable),
     permission: raw.permission as SiteItem['permission'],
     can_manage: raw.can_manage === true,
@@ -4183,6 +4239,30 @@ export async function updateSite(
   return { ...toSiteItem(unwrapData<JsonObject>(wrapped)), origin };
 }
 
+/** 设置 / 修改站点访问密码（仅站点管理者）。 */
+export async function setSitePassword(
+  siteId: string,
+  password: string,
+  origin?: 'cloud' | 'local',
+): Promise<SiteItem> {
+  const wrapped = await apiRequest<unknown>(`/v1/sites/${encodeURIComponent(siteId)}/password`, {
+    method: 'PUT',
+    body: JSON.stringify({ password }),
+  }, siteTarget(origin));
+  return { ...toSiteItem(unwrapData<JsonObject>(wrapped)), origin };
+}
+
+/** 清除站点访问密码，站点回到"凭链接直接访问"。 */
+export async function clearSitePassword(
+  siteId: string,
+  origin?: 'cloud' | 'local',
+): Promise<SiteItem> {
+  const wrapped = await apiRequest<unknown>(`/v1/sites/${encodeURIComponent(siteId)}/password`, {
+    method: 'DELETE',
+  }, siteTarget(origin));
+  return { ...toSiteItem(unwrapData<JsonObject>(wrapped)), origin };
+}
+
 export async function deleteSite(siteId: string, origin?: 'cloud' | 'local'): Promise<void> {
   await apiRequest(`/v1/sites/${encodeURIComponent(siteId)}`, { method: 'DELETE' }, siteTarget(origin));
 }
@@ -4192,19 +4272,6 @@ export interface SiteVersionItem {
   file_count: number;
   total_size_bytes: number;
   created_at: string;
-}
-
-export interface SiteSubmissionItem {
-  id: string;
-  form_key: string;
-  payload: Record<string, unknown>;
-  created_at: string | null;
-}
-
-export interface SiteKvItem {
-  key: string;
-  value: string;
-  updated_at: string | null;
 }
 
 export async function getSiteDetail(
@@ -4229,72 +4296,6 @@ export async function rollbackSite(
     body: JSON.stringify({ version }),
   }, siteTarget(origin));
   return { ...toSiteItem(unwrapData<JsonObject>(wrapped)), origin };
-}
-
-export async function listSiteSubmissions(
-  siteId: string, page = 1, pageSize = 50, origin?: 'cloud' | 'local',
-): Promise<{ items: SiteSubmissionItem[]; total: number }> {
-  const wrapped = await apiRequest<unknown>(
-    `/v1/sites/${encodeURIComponent(siteId)}/submissions?page=${page}&page_size=${pageSize}`,
-    undefined, siteTarget(origin),
-  );
-  const data = unwrapData<JsonObject>(wrapped);
-  const pagination = (data.pagination ?? {}) as JsonObject;
-  return {
-    items: Array.isArray(data.items) ? (data.items as SiteSubmissionItem[]) : [],
-    total: Number(pagination.total_items ?? 0),
-  };
-}
-
-export async function exportSiteSubmissions(
-  siteId: string, origin?: 'cloud' | 'local',
-): Promise<{ artifact_id: string; filename: string; rows: number; download_url: string }> {
-  const wrapped = await apiRequest<unknown>(
-    `/v1/sites/${encodeURIComponent(siteId)}/submissions/export`,
-    { method: 'POST' }, siteTarget(origin),
-  );
-  const res = unwrapData<{ artifact_id: string; filename: string; rows: number; download_url: string }>(wrapped);
-  // 本机导出的产物在本机端，下载链接补路由标记（window.open 带不上请求头）。
-  if (siteTarget(origin) === 'local' && res.download_url && !res.download_url.includes('hg_target=local')) {
-    res.download_url += res.download_url.includes('?') ? '&hg_target=local' : '?hg_target=local';
-  }
-  return res;
-}
-
-export async function clearSiteSubmissions(siteId: string, origin?: 'cloud' | 'local'): Promise<number> {
-  const wrapped = await apiRequest<unknown>(
-    `/v1/sites/${encodeURIComponent(siteId)}/submissions`, { method: 'DELETE' }, siteTarget(origin),
-  );
-  return Number(unwrapData<JsonObject>(wrapped).cleared ?? 0);
-}
-
-export async function listSiteKv(
-  siteId: string, origin?: 'cloud' | 'local',
-): Promise<{ items: SiteKvItem[]; total: number }> {
-  const wrapped = await apiRequest<unknown>(
-    `/v1/sites/${encodeURIComponent(siteId)}/kv`, undefined, siteTarget(origin),
-  );
-  const data = unwrapData<JsonObject>(wrapped);
-  return {
-    items: Array.isArray(data.items) ? (data.items as SiteKvItem[]) : [],
-    total: Number(data.total ?? 0),
-  };
-}
-
-export async function deleteSiteKvKey(
-  siteId: string, key: string, origin?: 'cloud' | 'local',
-): Promise<void> {
-  await apiRequest(
-    `/v1/sites/${encodeURIComponent(siteId)}/kv/${encodeURIComponent(key)}`,
-    { method: 'DELETE' }, siteTarget(origin),
-  );
-}
-
-export async function clearSiteKv(siteId: string, origin?: 'cloud' | 'local'): Promise<number> {
-  const wrapped = await apiRequest<unknown>(
-    `/v1/sites/${encodeURIComponent(siteId)}/kv`, { method: 'DELETE' }, siteTarget(origin),
-  );
-  return Number(unwrapData<JsonObject>(wrapped).cleared ?? 0);
 }
 
 // ── Personal system settings (delegated to users on CE: model providers / service configs / my logs) ──
@@ -4373,7 +4374,7 @@ export async function testMyServiceConfig(groupKey: string): Promise<ServiceTest
 export interface ModelProviderItem {
   provider_id: string;
   display_name: string;
-  provider_type: 'chat' | 'embedding' | 'reranker';
+  provider_type: 'chat' | 'embedding' | 'reranker' | 'audio';
   provider: string;
   base_url: string;
   api_key: string; // masked
@@ -4386,7 +4387,7 @@ export interface ModelProviderItem {
 
 export interface ModelProviderInput {
   display_name: string;
-  provider_type: 'chat' | 'embedding' | 'reranker';
+  provider_type: 'chat' | 'embedding' | 'reranker' | 'audio';
   provider?: string;
   base_url?: string;
   api_key?: string;
@@ -4942,14 +4943,14 @@ export async function updateEvolutionPrefs(
 }
 
 import type {
-  WikiCapability,
-  WikiFolder,
-  WikiGraphData,
-  WikiIndexOverview,
-  WikiPageBrief,
-  WikiPageDetail,
-  WikiSourceChunk,
-  WikiStats,
+WikiCapability,
+WikiFolder,
+WikiGraphData,
+WikiIndexOverview,
+WikiPageBrief,
+WikiPageDetail,
+WikiSourceChunk,
+WikiStats,
 } from './types';
 
 // ── 知识库的 LLM Wiki / 概念图谱 ─────────────────────────────────────────────

@@ -8,26 +8,32 @@ HugAgentOS 的工具生态构建在 [MCP（Model Context Protocol）](https://mo
 - **故障隔离**——单个工具崩溃由 launcher 自动重启，不影响后端主进程；
 - **生态开放**——管理员可接入任意第三方 MCP Server（stdio / HTTP / SSE），用户也可自助添加私有远程 MCP。
 
+## 工具并发执行
+
+同一轮模型响应中的多个 MCP 工具调用允许并发执行，使用 AgentScope 的并发批次执行器。
+普通 MCP、云端网关 MCP 和管理类 MCP 使用相同策略，平台不新增并发数量限制。
+权限检查和写操作确认仍逐个执行；服务器自身的串行处理或限流仍然生效。
+模型必须在同一轮返回多个调用才能形成并发批次。存在先后依赖的操作应分轮执行。
+
 ## 整体架构
 
 ```
                        ┌──────────────────────── mcp 容器 (docker/Dockerfile.mcp) ───┐
-                       │  mcp_servers._launcher（每个 server 一个子进程）       │
+                       │  extensions.mcp_servers._launcher（每个 server 一个子进程）       │
 ┌─────────┐  HTTP  ┌───┴────┐   :9100  retrieve_dataset_content（知识库检索）   │
 │ backend │───────▶│streama-│   :9101  query_database（数仓查询，EE）           │
 │ (FastAPI│        │ble-http│   :9102  internet_search（联网搜索）              │
 │  agent) │        │        │   :9103  产业知识中心统一 MCP（插件，EE）       │
-└─────────┘        │        │   :9104  generate_chart_tool（图表生成）          │
+└─────────┘        │        │   :9104  保留（图表 MCP 已退役）                  │
      │             │        │   :9105  保留（原报告导出 MCP）                  │
- MCPConnectionPool │        │   :9106  web_fetch（网页抓取）                    │
- (core/llm/        │        │   :9107  batch_runner（批量计划）                 │
+ Native MCP Client │        │   :9106  web_fetch（网页抓取）                    │
   mcp_pool.py)     └───┬────┘   :9108  automation_task（自动化插件提供）      │
                        │        9109–9111 保留（原 excel/ppt/pdf MCP）        │
                        │        :9112  skill_manager（技能管理）              │
                        └──────────────────────────────────────────────────────┘
 ```
 
-端口分配的唯一真源是 `src/backend/mcp_servers/_ports.py`：`core/config/mcp_config.py`（后端拼 `http://mcp:NNNN/mcp/` URL）和 `mcp_servers/_launcher.py`（容器内绑定端口）都从这里读取。
+内置服务的安装位置、包名和基础端口由 `src/backend/extensions/mcp_servers/registry.py` 统一声明。`_ports.py` 应用桌面端口偏移：`core/config/mcp_config.py`（后端拼 `http://mcp:NNNN/mcp/` URL）和 `extensions/mcp_servers/_launcher.py`（容器内绑定端口）都从这里读取。
 
 > 历史说明：办公文档编辑与导出（word / excel / ppt / pdf）已整体迁出
 > `mcp` 容器，改为以 [Agent 技能](agent-skills.md)（officecli-docx /
@@ -44,9 +50,7 @@ HugAgentOS 的工具生态构建在 [MCP（Model Context Protocol）](https://mo
 | `query_database_mcp` | 9101 | `query_database` | **商业版 EE** |
 | `internet_search_mcp` | 9102 | `internet_search` | 社区版 CE |
 | `ai_chain_information_mcp` | 9103 | 27 个产业链、企业、资讯、政策、报告、专利与技术工具 | **商业版 EE（产业知识中心插件）** |
-| `generate_chart_tool_mcp` | 9104 | `generate_chart_tool` | 社区版 CE |
 | `web_fetch_mcp` | 9106 | `web_fetch` | 社区版 CE |
-| `batch_runner_mcp` | 9107 | `batch_plan` | 社区版 CE |
 | `automation_task_mcp` | 9108 | `create_scheduled_task` / `list_scheduled_tasks` / `update_scheduled_task` 等 | 社区版 CE（自动化插件提供） |
 | `skill_manager_mcp` | 9112 | `search_marketplace` / `install_from_marketplace` / `register_skill` / `list_my_skills` / `submit_to_marketplace` / `delete_skill` | 社区版 CE |
 
@@ -62,7 +66,7 @@ HugAgentOS 的工具生态构建在 [MCP（Model Context Protocol）](https://mo
 - **`list_datasets()`**：列出当前用户可用的全部知识库（公有 + 私有），含名称、简介与文档列表，供模型先探查再检索；
 - **`retrieve_local_kb(kb_id, query, top_k)`**：检索平台自建私有知识库。
 
-它是唯一的 **per-request** Server：每次对话请求按当前用户把允许访问的知识库 ID、用户 ID、重排序开关通过 **HTTP 请求头**（`X-Allowed-Dataset-Ids` / `X-Allowed-Kb-Ids` / `X-Current-User-Id` / `X-Reranker-Enabled`）注入（见 `core/llm/agent_factory.py::_apply_runtime_kb_constraints`），Server 端用 `ctx.request_context` 读头实现多用户隔离。详见[知识库模块](knowledge-base.md)。
+它是唯一的 **per-request** Server：每次对话请求按当前用户把允许访问的知识库 ID、用户 ID、重排序开关通过 **HTTP 请求头**（`X-Allowed-Dataset-Ids` / `X-Allowed-Kb-Ids` / `X-Current-User-Id` / `X-Reranker-Enabled`）注入（见 `core/llm/factory/build.py::_apply_runtime_kb_constraints`），Server 端用 `ctx.request_context` 读头实现多用户隔离。详见[知识库模块](knowledge-base.md)。
 
 ### query_database — 数据仓库查询（商业版 EE）
 
@@ -70,12 +74,26 @@ HugAgentOS 的工具生态构建在 [MCP（Model Context Protocol）](https://mo
 
 ### internet_search — 联网搜索（CE）
 
-`internet_search(query, max_results, topic, search_depth, include_raw_content,
-cn_only)`：通过 `INTERNET_SEARCH_ENGINE` 选择 Tavily、百度或 LangSearch，
-并且只读取所选引擎对应的 API Key。三种引擎的结果统一为
-`title / url / content`；`topic`、`search_depth` 和原始正文参数仅由 Tavily
-原生支持，LangSearch 会将搜索摘要映射到 `content`。该工具是兜底工具，
-仅在用户配置的知识库和其他专业工具都没有结果时使用。
+`internet_search(query, queries, max_results, topic, search_depth, include_raw_content)`
+通过 `INTERNET_SEARCH_ENGINE` 选择 Tavily、百度、LangSearch 或 DeepSeek，只读取所选引擎的 API Key。
+单个 `query` 与 `queries` 二选一；批量最多 4 个不同查询并发，按输入查询顺序轮流取结果，
+按 URL 去重后返回最多 8 条来源。默认返回 5 条，复杂调研可显式设置 `max_results=8`。
+不限制来源语言；Tavily 国家偏好仅在显式配置且 `topic=general` 时发送，没有默认中国偏好。
+
+公开资料和技术调研可直接使用；内部业务问题优先内部权威来源。摘要不足以支持关键结论时，
+可自主调用 `web_fetch` 核验原文。`topic`、`search_depth`、原始正文参数由 Tavily 支持；
+LangSearch 的 summary 映射为 content。DeepSeek 的 summary 映射为 content，`include_raw_content`
+映射为页面正文；单个查询最长 128 字符（超出返回 `query_too_long`）；`topic=news` 时用 `after:`
+限定最近 30 天（无日期页面会被排除）；`rerank_score` 低于 0.5 的结果会被丢弃。
+
+来源统一保存在 `result.results`，包含标题、URL、摘要、可用发布时间、获取时间和命中查询序号。
+百度日期原值以 `date_raw` 保留，未知日期不会替换为抓取时间。`content_truncated` 表示内容裁剪，
+`results_limited` 表示已知候选因来源限额被舍弃，未知上游截断状态为 null。
+部分查询失败返回 `status=partial` 和逐查询状态，成功来源仍可引用；全部失败明确报错。
+一次搜索批次最长 45 秒，包含排队、请求与有界退避。搜索 HTTP 传输默认 50 秒，显式配置优先。
+
+`web_fetch` 返回正文 `result`、请求 URL、最终 URL、标题、获取时间及截断状态；正文默认最多
+50,000 字符，可设置 1–100,000 字符。下载最多 2 MB（解压后），超出明确标记截断。
 
 ### 产业知识中心插件（商业版 EE）
 
@@ -114,17 +132,9 @@ MCP（即使工具同名）也统一使用通用 JSON 卡片展示。两类结�
 内部仍审计页面发现的 240 条接口，但能力目录、任意接口调用、地区树、通用实体解析、个人
 资料库、收藏订阅、上游报告工作台和写入操作均不再暴露给智能体。
 
-### generate_chart_tool — 数据可视化（CE）
-
-`generate_chart_tool(data, query)`：接收 JSON 数据与绘图指令，用 matplotlib 渲染折线图/柱状图/饼图等（mcp 容器内置文泉驿 + 方正中文字体保证 CJK 渲染），图片保存为平台 artifact 并返回 `file_id` / 下载 URL。工具描述强制要求"先用数据查询工具拿到真实数据再绘图"，并给出了与沙箱协作的标准链路（`sandbox_put_artifact` 把图表拷入沙箱后再插入 Word/PPT）。
-
 ### web_fetch — 网页抓取（CE）
 
 `web_fetch(url, extractMode, maxChars)`：抓取指定 URL 并提取正文，支持 `text` / `markdown` / `html` 三种提取模式。典型搭配是"先 `internet_search` 拿 URL，再 `web_fetch` 取正文"；多个搜索类市场技能也通过它调用专门搜索引擎 URL。
-
-### batch_runner — 批量执行调度器（CE）
-
-`batch_plan(instruction, file_ids, text_items, chat_id)`：识别"对一组对象逐个做同一件事"的批量意图（枚举对象 / 上传 Excel 行 / 多份文档），生成带 prompt 模板与占位符的**执行计划**并立即暂停回合——前端弹出确认对话框，用户审阅/修改模板后由后端逐条执行并实时推送结果。详见[批量执行 / 自动化模块](automation.md)。
 
 ### automation_task — 定时任务管理（CE）
 
@@ -139,20 +149,21 @@ MCP（即使工具同名）也统一使用通用 JSON 卡片展示。两类结�
 每个内置 Server 遵循同一套目录约定：
 
 ```
-mcp_servers/<name>_mcp/
+extensions/mcp_servers/<name>_mcp/
 ├── server.py        # FastMCP 实例 + @mcp.tool() 薄壳（参数容错、stdout 重定向到 stderr）
 ├── impl.py          # 业务实现（server.py 内延迟 import，保持启动轻量）
 ├── _selftest.py     # 自检脚本：不出网验证模块可导入、签名正确
 └── README.md        # 运行/调试说明
 ```
 
-公共层（`mcp_servers/` 根目录）：
+公共层（`extensions/mcp_servers/` 根目录）：
 
 | 文件 | 职责 |
 |---|---|
 | `_serve.py` | 所有 Server `main()` 的统一入口：`run(mcp, default_port)` 按 `--transport` 选 stdio（本地调试默认）或 streamable-http（容器内），HTTP 模式下绑 `0.0.0.0` 并关闭 DNS-rebinding 防护（私有 Docker 网络） |
 | `_launcher.py` | `mcp` 容器的 CMD：为每个 Server 起一个 streamable-http 子进程，stdout/stderr 加 `[server]` 前缀，崩溃指数退避重启，60 秒内崩溃超 5 次则整容器退出交给 Docker 重启 |
-| `_ports.py` | server_id → 端口映射的唯一真源，含 `package_name()` 包名换算 |
+| `registry.py` | 内置 MCP 的本机、云端、两端安装位置，以及进程或桌面网关暴露方式 |
+| `_ports.py` | 从注册表生成实际端口映射，应用桌面端口偏移 |
 | `_common.py` | 共享工具函数 |
 
 两条铁律：**stdout 保留给 MCP 协议**（业务日志一律走 stderr，server.py 里用 `contextlib.redirect_stdout` 兜底）；**对 LLM 生成的畸形参数保持容错**（如 dict 误塞进字符串参数时自动拆包）。
@@ -181,7 +192,7 @@ mcp_servers/<name>_mcp/
    - 中间件（`CitationAnchorMiddleware`）会**优先采用**该声明，就地为每条注入
      `"cite_id": "eN"`，模型引用时原样复制。
 2. **标准列表结构 → 加一行注册表配置**：结果形如 `{"items": [{"title": …, "content": …}]}`
-   的列表型工具，在 `orchestration/citation_anchor.py::TOOL_SPECS` 里登记
+   的列表型工具，在 `core/llm/citations/hook.py::TOOL_SPECS` 里登记
    `items_paths` + 字段别名即可逐条编号，不改工具代码。
 3. **什么都不做 → 自动兜底**：通用启发式能识别顶层（或 `result` 下一层）唯一的
    字典数组字段并逐条编号；彻底认不出时整份结果作为 1 个锚点。
@@ -192,21 +203,18 @@ mcp_servers/<name>_mcp/
 Server 同样适用（返回 JSON 即可）。回注发生在结果进模型上下文与落库之前，前端工具卡片
 会把 `cite_id` 渲染成条目徽章，与正文 `[锚文本](cite:eN)` 引用一一对应。
 
-## 后端客户端：连接池与裸名还原
+## 后端客户端：原生 MCP 生命周期
 
-后端基于 AgentScope 2.0 的 `MCPClient` 连接 MCP Server，核心在两个文件：
+后端使用 MCP SDK 2.3 的 `Client(mode="auto")` 和 AgentScope `ToolBase`。`client.py` 处理传输授权，`lifetime.py` 管理 SDK 上下文并完整遍历分页。HTTP 在一次运行内复用客户端。STDIO 按执行用户、聊天和配置独占租用，成功结束后保留 60 秒；失败或取消则销毁。已删除稳定连接开关和启动连接池。
 
-- **`core/llm/mcp_pool.py` — `MCPConnectionPool`**（进程级单例）：启动时 `warmup_mcp_tools()` 从 DB 读取全部启用的 Server 配置并预连接。注意 2.0 语义下的池化策略：
-  - **stdio 且 `is_stable=true`** 的 Server 跨请求保持连接（省掉 1–7 秒子进程冷启动）；
-  - **HTTP Server 一律不池化**——2.0 的 stateful HTTP 客户端与 asyncio task 绑定，跨请求复用会触发 cancel-scope 崩溃，因此每请求用 `is_stateful=False` 新建连接；
-  - per-request Server（知识库检索带用户头）每次现连，请求结束 `close_transient()` 关闭。
-- **`core/llm/mcp_manager.py` — `BareNameMCPClient`**：AgentScope 2.0 默认把工具名改写为 `mcp__<server>__<tool>`，该子类还原为服务器侧裸名（`internet_search` 而非 `mcp__internet_search__internet_search`），保证展示名映射（`core/config/display_names.py`）、[引用溯源](chat.md)的按工具名分发、前端图标渲染等 1.x 约定继续成立。
+`callbacks.py` 将隔离的文本 Sampling 与用户 Elicitation 绑定到当前运行。资源、URI 模板和提示词转换为受权限控制的工具。进度显示在现有工具卡片。结构化输出和资源链接保留在工具 metadata 与模型输出中。SDK 2.3 尚未提供新版 Tasks 扩展。
 
-`Toolkit` 在 2.0 是一次性构造，由 `core/llm/agent_factory.py` 统一执行 `Toolkit(tools=[...], mcps=clients)`。
+MCP 工具的执行预算不包含等待用户回答的时间。有效提问会暂停当前调用的计时；回答或放弃后，从剩余预算继续。多次、重叠提问不会重置预算，其他调用继续独立计时。用户交互仍受现有等待期限约束，取消运行会清理待回答问题。SDK 请求和 HTTP 读取由调用预算约束，连接、写入和发现仍保留超时。
+
 
 ## 统一工具权限网关
 
-`core/llm/tool_permissions.py` 提供运行级 `ToolPermissionRegistry` 与
+`core/llm/tool_permissions/` 提供运行级 `ToolPermissionRegistry` 与
 `ToolPermissionMiddleware`。Registry 是**受控工具清单**，不是全工具声明表：
 
 - 工具名没有进入 Registry 时保持既有行为，直接放行，不要求新工具声明权限；
@@ -219,7 +227,7 @@ Server 同样适用（返回 JSON 即可）。回注发生在结果进模型上�
   一律拒绝，不会再以“记录审计后继续执行”降级；
 - 渐进加载插件把新出现的 MCP 工具加入同一个运行级 Registry，因此热加载不会绕开网关。
 
-原生工具可以在 `ToolCollector.register_tool_function(..., permission=spec)` 注册规则；平台
+原生工具可以在 `ToolAssembly.append(function_tool(..., dispatch_spec=spec))` 注册规则；平台
 内置的本机文件、Bash 与 MySpace 工具集中列在 `builtin_tool_permission()`。没有传
 `permission` 且不在该表中的原生工具不受网关管理。
 
@@ -242,7 +250,7 @@ MCP 规则只接受平台/管理员持有的可信连接配置，不采信远端
 
 ## 配置注册：DB 驱动 + catalog 门控
 
-MCP Server 的配置真源是数据库表 `admin_mcp_servers`（ORM：`core/db/models.py::AdminMcpServer`），由 `core/services/mcp_service.py::McpServerConfigService` 以 30 秒 TTL 缓存读出，格式与旧 `MCP_SERVERS` dict 兼容（`transport / command / args / env / url / headers / is_stable`）。`core/config/mcp_config.py` 保留为内置 Server 的 URL 构造器（首次部署种子）。
+MCP Server 的配置真源是数据库表 `admin_mcp_servers`（ORM：`core/db/models/`），由 `core/capabilities/mcp/service.py::McpServerConfigService` 以 30 秒 TTL 缓存读出，使用原生客户端配置（`transport / command / args / env / url / headers`）。`core/config/mcp_config.py` 保留为内置 Server 的 URL 构造器（首次部署种子）。
 
 是否**对模型可见**还要过一道 [catalog](catalog.md) 门控：`core/config/catalog.json` 中 `mcp` 段的每项对应一个 server_id，`is_enabled(id, "mcp_server")` 为 false 的 Server 即使连接着也不会注册给智能体。
 
@@ -254,7 +262,7 @@ MCP Server 的配置真源是数据库表 `admin_mcp_servers`（ORM：`core/db/m
 - **创建即试连**：`_probe_connectivity` 真实连一次，失败拒绝落库；
 - **开关与排序**：`POST /{id}/toggle` 即时启停（联动刷新 catalog 与连接池）；
 - **密钥保护**：HTTP Header 值加密存储、接口统一以 `***` 返回；`env_vars` 中疑似密钥的值同样脱敏；
-- **测试与重载**：`POST /{id}/test` 单独试连；`POST /reload-pool` 热重建连接池；
+- **测试与重载**：`POST /{id}/test` 单独试连；`配置更新自动失效缓存` 更新后下一次运行重新发现；
 - **移至 MCP 市场**：把现有远程 HTTP/SSE MCP 生成无凭据的市场快照，
   并停用原全局实例；该服务随后从 MCP 服务管理列表移除，可在市场中复核、
   编辑展示信息，再按需全局安装。原服务已配置的 Token 仍加密保留在服务端，
@@ -270,7 +278,7 @@ MCP Server 的配置真源是数据库表 `admin_mcp_servers`（ORM：`core/db/m
 - `POST /v1/me/mcp-servers`：添加私有远程 MCP，支持公网 HTTP/HTTPS 上的 HTTP/SSE——用户入口禁止 stdio，避免在服务器执行任意命令；地址会经过 DNS/IP 检查以阻断 localhost、内网、链路本地与保留地址；创建即试连，连不上不落库。HTTP 为明文传输，生产环境仍建议使用 HTTPS；
 - `DELETE /v1/me/mcp-servers/{id}`：删除自己的私有 MCP。
 
-实现上复用同一张 `admin_mcp_servers` 表：`owner_user_id` = 当前用户实现 owner 隔离，server_id 自动生成 `umcp_<hex>` 防冲突，`is_stable=False` 不进 warmup 池。HTTP Header 值使用 Fernet 加密后落库，运行时才解密。该功能由管理台的 per-user 权限位 `can_add_mcp` 控制（社区版单租户默认即可放开；商业版由组织管理员按用户授予，见[版本说明](../editions/overview.md)）。
+实现上复用同一张 `admin_mcp_servers` 表：`owner_user_id` = 当前用户实现 owner 隔离，server_id 自动生成 `umcp_<hex>` 防冲突。HTTP Header 值使用 Fernet 加密后落库，运行时才解密。该功能由管理台的 per-user 权限位 `can_add_mcp` 控制（社区版单租户默认即可放开；商业版由组织管理员按用户授予，见[版本说明](../editions/overview.md)）。
 
 ## MCP 市场
 
@@ -279,9 +287,11 @@ MCP Server 的配置真源是数据库表 `admin_mcp_servers`（ORM：`core/db/m
 能力中心的「MCP 市场」与技能、子智能体、插件市场使用同一套可见范围模型，支持公开、指定用户、团队与角色授权。市场条目本身只保存**无凭据的、已审核版本快照**；管理员发布的条目可以在源 `admin_mcp_servers` 上保留管理员托管凭据，用户安装时由后端加密复制到个人实例，凭据值不会进入市场表或返回前端：
 
 - 用户浏览条目详情、工具列表、输入 Schema 和风险等级，并一键安装为仅自己可见的私有 MCP；若市场认证策略选择“管理员统一配置”且已保存完整 Token，界面显示“管理员托管”并免填安装；选择“用户自行填写”时，每个用户安装时填写自己的 Token 或完成 OAuth；
+- 用户在能力中心“连接私有 MCP”时可选择鉴权方式：无需鉴权、请求头 / Token 或 OAuth。选 OAuth 时在新标签页完成授权（客户端按 CIMD、DCR 自动注册，也可在高级选项填写自己的 OAuth App 与 Scopes），令牌加密保存在该私有实例上；
 - 用户可以把自己已经试连成功的私有 MCP 提交上架，查看待审、通过、驳回状态，并在审核前撤回；从 MCP 市场安装的实例不会再次提供申请入口，后端也拒绝重复上架；
-- 管理端新建远程 HTTP/SSE MCP 时可勾选“安装时需要 Token/Auth”，并选择 Token 或 OAuth。Token 可由管理员直接填写，也可留空：填写后用户安装免填，留空后每个用户自行填写；OAuth 由每个用户安装时授权。无管理员凭据导致首次连接返回未授权时，条目仍可先上架，并在用户完成认证后按 `per_install` 模式动态发现工具。远程 MCP 不会直接全局生效；StdIO 仍直接受全局服务管理，跨环境分发必须走插件市场；
-- 管理员可以编辑市场条目的名称、简介、用户提示、分类、标签、图标与认证策略。认证策略明确分为“无需认证”“用户自行填写”“管理员统一配置”；统一 Token 也只在编辑窗口维护，市场列表不再提供“更新全局凭据”。展示信息与管理员统一 Token 的更新会同步到现有安装实例。已审核的端点、工具 Schema、风险报告和版本号仍是版本快照；
+- 管理端新建远程 HTTP/SSE MCP 时可勾选“安装时需要 Token/Auth”，并选择 Token 或 OAuth。Token 可由管理员直接填写，也可留空：填写后用户安装免填，留空后每个用户自行填写；OAuth 由每个用户安装时授权，管理员可先点“检测授权服务器”查看 PKCE、DCR、CIMD 支持情况，并选择客户端注册方式（见下方“OAuth 客户端注册”）。无管理员凭据导致首次连接返回未授权时，条目仍可先上架，并在用户完成认证后按 `per_install` 模式动态发现工具。远程 MCP 不会直接全局生效；StdIO 仍直接受全局服务管理，跨环境分发必须走插件市场；
+- OAuth 连接的私有 MCP 提交上架时，申请只记录“OAuth 登录”这一认证方式和授权范围，不含令牌、客户端信息或 Client Secret；提交者使用自动注册时，安装者同样自动注册；提交者自备 OAuth App 时，安装者也需自备，直到管理员配置统一 OAuth App。审核窗口会显示认证方式；
+- 管理员可以编辑市场条目的名称、简介、用户提示、分类、标签、图标与认证策略，并可在 Token 与 OAuth 之间切换非精选条目的认证方式（切换后已有安装保留原凭据，用户重新安装后生效）。认证策略明确分为“无需认证”“用户自行填写”“管理员统一配置”；统一 Token 也只在编辑窗口维护，市场列表不再提供“更新全局凭据”。展示信息与管理员统一 Token 的更新会同步到现有安装实例。已审核的端点、工具 Schema、风险报告和版本号仍是版本快照；
 - 管理端支持上架/下架、按用户/团队/角色控制可见范围、人工复检、软删除，以及安全封禁；人工复检确认真实工具变化时，会保留旧快照并自动生成新的补丁版本后恢复安装。若原始 MCP 连接记录已被清理，系统会改用已审核版本中的无凭据端点复检，快照一致时直接恢复安装；封禁会立即停用该条目派生出的所有安装实例，解除封禁时恢复这些实例；
 - 工具名或输入 Schema 命中删除、执行、写入等语义时会标记中高风险，高风险安装需要再次明确确认；
 - 后端默认每 6 小时重新连接远程 MCP 并比较工具快照哈希。发生漂移时条目进入 `changed`，暂停新安装，等待管理员复核；定时任务只检测变化，不会自动接受新快照。周期可用 `MCP_MARKET_REVALIDATE_INTERVAL` 调整。
@@ -292,7 +302,7 @@ MCP Server 的配置真源是数据库表 `admin_mcp_servers`（ORM：`core/db/m
 |---|---|---|
 | 高德地图 MCP | 高德 Web 服务 API Key | Key 加密保存，运行时才注入 URL 的 `key` 查询参数；市场 URL 永不包含 Key。 |
 | 秘塔搜索 MCP | 秘塔 API Key | 运行时自动组装 `Authorization: Bearer …`。 |
-| GitHub MCP | Fine-grained PAT，或 OAuth App 登录 | GitHub 官方远程 MCP 不支持 DCR；OAuth 方式需填写自行注册的 Client ID/Secret。 |
+| GitHub MCP | Fine-grained PAT，或 OAuth App 登录 | GitHub 官方远程 MCP 不支持 DCR 与 CIMD；管理员可在市场编辑中统一配置 OAuth App，配置后用户只需授权，否则用户需填写自行注册的 Client ID/Secret。 |
 | GitLab MCP | 浏览器 OAuth（推荐），或带 `mcp` scope 的 access token | GitLab 官方 MCP 仍为 Beta；浏览器方式支持 DCR、PKCE 和刷新令牌，普通 PAT 可能无法连接。 |
 | 阿里云可观测 MCP | 已配置好的个人 SSE 地址 | 按阿里云安全建议先在 ModelScope Hosted、函数计算或受保护环境配置 AK/SK；平台不直接接收云 AK/SK。 |
 
@@ -304,7 +314,19 @@ MCP Server 的配置真源是数据库表 `admin_mcp_servers`（ORM：`core/db/m
 
 管理员在新增或市场编辑窗口选择“管理员统一配置”后，后端会检查源服务是否保存全部必填凭据。满足时，列表与详情仅返回 `credentials_managed_by_admin=true`，安装接口在服务端复用这些值并重新加密到具体安装实例；任何 Token 内容都不会出现在响应中。选择“用户自行填写”后，即使源服务仍保留用于复检的 Token，市场安装也不会复用它。社区用户提交的 MCP 与平台精选模板仍坚持安装者独立认证，不复用发布者凭据。
 
-OAuth 远程 MCP 按 MCP 授权规范执行受保护资源元数据与授权服务器元数据发现、Authorization Code + PKCE、`state` 校验、RFC 8707 resource 参数，并在提供 DCR 时动态注册客户端；不支持 DCR 的服务由安装界面采集 Client ID/Secret。OAuth 的 MCP 端点、授权元数据地址与回调基址均允许公网 HTTP/HTTPS，但 HTTP 会明文传输授权码和 Token，仅建议用于受控测试环境。access token、refresh token、客户端信息与过期时间作为一个加密 bundle 只存入具体安装实例，运行时自动刷新，任何 OAuth 凭据都不会进入市场条目或工具快照。
+OAuth 远程 MCP 按 MCP 授权规范执行受保护资源元数据与授权服务器元数据发现、Authorization Code + PKCE、`state` 校验、RFC 8707 resource 参数。OAuth 的 MCP 端点、授权元数据地址与回调基址均允许公网 HTTP/HTTPS，但 HTTP 会明文传输授权码和 Token，仅建议用于受控测试环境。access token、refresh token、客户端信息与过期时间作为一个加密 bundle 只存入具体安装实例，运行时自动刷新，任何 OAuth 凭据都不会进入市场条目或工具快照。
+
+#### OAuth 客户端注册
+
+每个 OAuth 条目按以下方式获得 OAuth 客户端，用户安装时都只需在新标签页登录并同意授权：
+
+| 方式 | 适用 | 说明 |
+|---|---|---|
+| 自动（默认） | 授权服务器支持 CIMD 或 DCR | 授权服务器声明 `client_id_metadata_document_supported` 且本部署配置了 HTTPS 的 `MCP_OAUTH_PUBLIC_BASE_URL` 时使用客户端元数据文档（CIMD），`client_id` 即 `{基址}/v1/mcp-market/oauth/client-metadata.json`；否则动态注册（DCR）。 |
+| 仅动态注册 | 授权服务器声明了 CIMD 但访问不到本部署 | 跳过 CIMD，始终走 DCR。 |
+| 管理员统一 OAuth App | 两者都不支持（GitHub、多数企业 IdP） | 管理员在授权服务器上注册一次 OAuth App，回调地址填界面显示的 `/api/v1/mcp-market/oauth/callback`，再在新增或市场编辑窗口填写 Client ID/Secret。凭据加密存入 `mcp_market_oauth_clients`，只有后端发起授权时使用；每个用户的令牌仍各自独立。精选模板也可配置，重新播种不会清除。 |
+
+CIMD 要求授权服务器能从自身网络访问到本部署的 HTTPS 地址，因此只在 `MCP_OAUTH_PUBLIC_BASE_URL` 为 HTTPS 时启用，不从请求 `Host` 推导。回调地址每个部署固定，不再带 `flow_id` 参数；回调通过 SDK 生成的 `state` 找到对应登录流程。管理员上架的端点（包括内网地址）在安装、授权、令牌刷新的每次请求中都沿用安装时的内网放行；用户自助端点只有开启 `MCP_SELF_SERVICE_ALLOW_PRIVATE_NETWORK` 才放行内网；开启后，同一开关也作用于这类 MCP 的上架申请、审核复检、市场安装与定期复检，避免内网 MCP 能连接却无法上架。链路本地与云元数据地址始终拦截。
 
 同源部署会自动使用浏览器当前站点的 `/api/v1/mcp-market/oauth/callback`；前后端跨域部署必须设置 `MCP_OAUTH_PUBLIC_BASE_URL` 为浏览器可访问的 API 基址，避免从请求 `Host` 反射不可信回调地址。
 
@@ -312,7 +334,7 @@ OAuth 远程 MCP 按 MCP 授权规范执行受保护资源元数据与授权服�
 
 ### 数据边界
 
-市场使用四张独立表：`mcp_market_items` 保存条目元数据，`mcp_market_versions` 保存不可变工具快照、风险报告和无密钥认证契约，`mcp_market_submissions` 保存审核申请快照，`mcp_market_installations` 关联条目版本和实际 MCP 实例。任何 Header、Token、OAuth bundle、查询参数 Key 或个人端点都不会进入市场条目、版本或申请。社区条目与精选模板由安装者独立认证；管理员发布的 Token 条目可从源 `admin_mcp_servers` 读取加密托管凭据，并把凭据重新加密保存到具体安装实例，全程不向前端暴露。
+市场使用四张独立表（另有 `mcp_market_oauth_clients` 只保存管理员统一 OAuth App 的加密凭据）：`mcp_market_items` 保存条目元数据，`mcp_market_versions` 保存不可变工具快照、风险报告和无密钥认证契约，`mcp_market_submissions` 保存审核申请快照，`mcp_market_installations` 关联条目版本和实际 MCP 实例。任何 Header、Token、OAuth bundle、查询参数 Key 或个人端点都不会进入市场条目、版本或申请。社区条目与精选模板由安装者独立认证；管理员发布的 Token 条目可从源 `admin_mcp_servers` 读取加密托管凭据，并把凭据重新加密保存到具体安装实例，全程不向前端暴露。
 
 用户市场、认证与运行时刷新位于 `core/` 和 CE 路由，是社区版能力；`/config` 管理端路由与 `components/admin` 仍由 EE 注册表和 CE 派生清单物理剔除。主仓使用 `mcpmkt01`～`mcpmkt04retire` 迁移链，CE 通过独立的 `ce_0003` 与 `ce_0004` 迁移获得相同核心表和退役清理，不依赖任何 `edition_ee` 实现。
 
@@ -322,14 +344,14 @@ OAuth 远程 MCP 按 MCP 授权规范执行受保护资源元数据与授权服�
 
 ```bash
 # 以 stdio 方式跑单个 server（配合 MCP Inspector 等客户端调试）
-PYTHONPATH=src/backend python -m mcp_servers.internet_search_mcp.server
+PYTHONPATH=src/backend python -m extensions.mcp_servers.internet_search_mcp.server
 
 # 以 streamable-http 方式跑（模拟容器内形态）
-PYTHONPATH=src/backend python -m mcp_servers.internet_search_mcp.server \
+PYTHONPATH=src/backend python -m extensions.mcp_servers.internet_search_mcp.server \
   --transport streamable-http --port 9102
 
 # 不出网自检（验证导入、工具签名）
-PYTHONPATH=src/backend python -m mcp_servers.internet_search_mcp._selftest
+PYTHONPATH=src/backend python -m extensions.mcp_servers.internet_search_mcp._selftest
 
 # 容器内整体健康检查（launcher 起的最低端口）
 curl -fsS http://localhost:9100/mcp/
@@ -345,23 +367,26 @@ docker-compose up -d --build mcp
 
 | 路径 | 说明 |
 |---|---|
-| `src/backend/mcp_servers/<name>_mcp/` | 各 MCP Server（server.py / impl / _selftest） |
-| `src/backend/mcp_servers/_launcher.py` | mcp 容器入口：多进程拉起 + 崩溃重启 |
-| `src/backend/mcp_servers/_serve.py` | stdio / streamable-http 双 transport 统一入口 |
-| `src/backend/mcp_servers/_ports.py` | server_id → 端口映射唯一真源 |
-| `src/backend/core/llm/mcp_pool.py` | MCP 连接池（stdio 池化 / HTTP per-request） |
-| `src/backend/core/llm/mcp_manager.py` | MCPClient 构造 + 工具裸名还原 |
-| `src/backend/core/llm/tool_permissions.py` | 受控工具 Registry、权限判定、确认路由与执行票据 |
-| `src/backend/core/services/mcp_service.py` | DB 驱动的 Server 配置服务（30s 缓存） |
-| `src/backend/core/services/mcp_marketplace_service.py` | 市场发布、审核、安装、可见性与安全控制 |
-| `src/backend/core/services/mcp_oauth_service.py` | OAuth 2.1 登录、SDK 元数据发现、加密令牌存储与刷新 |
-| `src/backend/core/services/mcp_marketplace_monitor.py` | 远程工具快照定期复检与漂移监控 |
+| `src/backend/extensions/mcp_servers/<name>_mcp/` | 各 MCP Server（server.py / impl / _selftest） |
+| `src/backend/extensions/mcp_servers/_launcher.py` | mcp 容器入口：多进程拉起 + 崩溃重启 |
+| `src/backend/extensions/mcp_servers/_serve.py` | stdio / streamable-http 双 transport 统一入口 |
+| `src/backend/extensions/mcp_servers/registry.py` | 安装位置、暴露方式、包名和基础端口 |
+| `src/backend/extensions/mcp_servers/_ports.py` | 实际部署端口映射 |
+| `src/backend/core/llm/mcp/` | MCP 连接池（stdio 池化 / HTTP per-request） |
+| `src/backend/core/llm/mcp/manager.py` | MCPClient 构造 + 工具裸名还原 |
+| `src/backend/core/llm/tool_permissions/` | 受控工具 Registry、权限判定、确认路由与执行票据 |
+| `src/backend/core/capabilities/mcp/service.py` | DB 驱动的 Server 配置服务（30s 缓存） |
+| `src/backend/features/marketplace/` | 市场发布、审核、安装、可见性与安全控制 |
+| `src/backend/core/capabilities/mcp/oauth.py` | OAuth 2.1 登录、SDK 元数据发现、加密令牌存储与刷新 |
+| `src/backend/core/capabilities/mcp/oauth_client.py` | 固定回调地址、CIMD 客户端元数据文档、授权服务器能力检测 |
+| `src/backend/features/marketplace/mcp_oauth_clients.py` | 客户端注册方式与管理员统一 OAuth App |
+| `src/backend/features/marketplace/` | 远程工具快照定期复检与漂移监控 |
 | `src/backend/core/config/mcp_config.py` | 内置 Server URL 构造（http://mcp:NNNN/mcp/） |
 | `src/backend/core/config/catalog.json` | 能力目录：MCP 启停门控种子 |
 | `src/backend/api/routes/v1/admin_mcp_servers.py` | 管理员自定义 MCP API |
 | `src/backend/api/routes/v1/me_capabilities.py` | 用户自助私有 MCP / 技能 API |
-| `src/backend/api/routes/v1/mcp_marketplace.py` | 用户端 MCP 市场 API |
-| `src/backend/api/routes/v1/admin_mcp_marketplace.py` | 管理端 MCP 市场与审核 API |
+| `src/backend/features/marketplace/api/mcp_marketplace.py` | 用户端 MCP 市场 API |
+| `src/backend/features/marketplace/api/admin_mcp_marketplace.py` | 管理端 MCP 市场与审核 API |
 | `docker/Dockerfile.mcp` | mcp 容器镜像（MCP 运行时、绘图依赖与中文字体） |
 
 相关文档：[能力目录](catalog.md) · [技能系统](agent-skills.md) · [知识库](knowledge-base.md) · [版本与许可](../editions/overview.md)

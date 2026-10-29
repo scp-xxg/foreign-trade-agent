@@ -8,12 +8,17 @@ on:
     branches: [main]
     paths:
       - "extensions/foreign_trade/**"
+      - "packages/**"
+      - "tests/**"
       - "tests/test_foreign_trade*.py"
       - "src/frontend/**"
       - "src/backend/**"
       - "tests/test_inquiry*.py"
       - "tests/test_buyer_public_data.py"
       - "tests/test_product_content*.py"
+      - "tests/test_trade*.py"
+      - "tests/test_tool_result_identity.py"
+      - "tests/test_compaction_failure*.py"
       - "pyproject.toml"
       - "requirements.txt"
       - ".github/workflows/foreign-trade-ci.yml"
@@ -21,12 +26,17 @@ on:
     branches: [main]
     paths:
       - "extensions/foreign_trade/**"
+      - "packages/**"
+      - "tests/**"
       - "tests/test_foreign_trade*.py"
       - "src/frontend/**"
       - "src/backend/**"
       - "tests/test_inquiry*.py"
       - "tests/test_buyer_public_data.py"
       - "tests/test_product_content*.py"
+      - "tests/test_trade*.py"
+      - "tests/test_tool_result_identity.py"
+      - "tests/test_compaction_failure*.py"
       - "pyproject.toml"
       - "requirements.txt"
       - ".github/workflows/foreign-trade-ci.yml"
@@ -41,12 +51,13 @@ concurrency:
 
 jobs:
   inquiry-api:
-    name: Inquiry and product content workflows, evidence safety, and AI suggestions
+    name: Three trade workflows, migration, evidence safety and native tools
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     env:
       HUGAGENT_SKIP_ENV_FILES: "1"
       MEM0_ENABLED: "false"
+      PYTHONPATH: src/backend
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -59,7 +70,16 @@ jobs:
           python -m pip install -r requirements.txt pytest pytest-asyncio
           python -m pip install --no-deps -e .
       - name: Test owned inquiries and bounded public sources without live network
-        run: python -m pytest tests/test_inquiry_workflow.py tests/test_inquiry_ai.py tests/test_buyer_public_data.py tests/test_product_content.py tests/test_product_content_generation.py -q
+        run: |
+          python -m pytest tests -q
+          python -m pytest \
+            src/backend/tests/llm/test_compaction_mid_turn.py src/backend/tests/llm/test_compaction_watermark.py \
+            src/backend/tests/llm/test_compaction_e2e.py src/backend/tests/orchestration/test_model_steps_pipeline.py \
+            src/backend/tests/orchestration/test_context_budget_stop.py \
+            src/backend/tests/orchestration/test_user_question_passthrough.py src/backend/tests/orchestration/test_chat_run_cancel_persistence.py \
+            src/backend/tests/test_plugin_progressive_loading.py src/backend/tests/llm/test_local_plugin_sticky_ids.py \
+            src/backend/tests/llm/test_tool_call_response_ids.py src/backend/tests/llm/test_chat_model_text_content.py \
+            src/backend/tests/llm/test_project_environment_factory.py src/backend/tests/llm/test_mcp_factory_e2e.py -q
 
   quote-and-web:
     name: Quote engine, bilingual exports, and CE web build
@@ -84,7 +104,9 @@ jobs:
         run: python -m venv --without-pip .venv
 
       - name: Test the deterministic quote engine
-        run: .venv/bin/python -m unittest discover -s tests -p 'test_foreign_trade*.py' -v
+        run: |
+          .venv/bin/python -m unittest discover -s tests -p 'test_foreign_trade_engine.py' -v
+          .venv/bin/python -m unittest discover -s tests -p 'test_foreign_trade_quote*.py' -v
 
       - name: Set up Node.js
         uses: actions/setup-node@v4
@@ -100,6 +122,14 @@ jobs:
       - name: Test quote cards and bilingual document exports
         working-directory: src/frontend
         run: npm run test:foreign-trade-quote
+
+      - name: Test structured content receipts and revision-bound downloads
+        working-directory: src/frontend
+        run: npm run test:foreign-trade-content-card
+
+      - name: Test collaboration review and handoff download guards
+        working-directory: src/frontend
+        run: npm run test:foreign-trade-collaboration
 
       - name: Build the public CE web app
         working-directory: src/frontend

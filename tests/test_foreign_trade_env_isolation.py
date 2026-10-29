@@ -9,7 +9,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 class EnvIsolationTests(unittest.TestCase):
     def test_opt_out_never_opens_repository_env(self):
-        source = (ROOT / "src/backend/core/config/settings.py").read_text()
+        source = (ROOT / "src/backend/core/config/environment.py").read_text()
         fn = next(n for n in ast.parse(source).body if isinstance(n, ast.FunctionDef) and n.name == "_load_env_files")
         code = compile(ast.Module(body=[fn], type_ignores=[]), str(ROOT), "exec")
         def reject_read(*args, **kwargs):

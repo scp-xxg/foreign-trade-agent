@@ -8,7 +8,7 @@
 
 ## 数据画布（Canvas）
 
-数据画布是聊天界面右侧的滑出面板（`src/frontend/src/components/canvas/CanvasPanel.tsx`），点击聊天附件卡片（`components/chat/ArtifactCardList.tsx`）或「我的空间」中的文件（`components/myspace/MySpacePanel.tsx`）即可打开。面板按文件类型选择渲染器：
+数据画布是聊天界面右侧的滑出面板（`src/frontend/src/components/canvas/CanvasPanel.tsx`），点击聊天附件卡片（`components/chat/MessageArtifacts.tsx`）或「我的空间」中的文件（`components/myspace/MySpacePanel.tsx`）即可打开。面板按文件类型选择渲染器：
 
 | 文件类型 | 渲染方式 | 可编辑 |
 |---|---|---|
@@ -21,6 +21,24 @@
 | `.html` | HTML 预览 | 只读 |
 
 面板状态由 `stores/canvasStore.ts` 管理（`openCanvas` / `closeCanvas` / `updateArtifact`，`openSeq` 用于区分「打开新文件」与「同文件保存后刷新」）。
+
+预览标题栏和文件卡片中的操作按钮按文字内容保留宽度。长文件名使用省略号，下载或打开操作保持单行。手机端的空间导入弹窗上下排列文件列表与预览，两个区域分别滚动。
+
+### 右侧面板按钮与分屏
+
+没有活动内容时，展开面板会显示「新标签页」。新标签页在全屏时铺满可用面板宽度。
+面板右上角依次提供「分屏」「全屏」「收起」。点击「分屏」后，面板分为左右两个区域。
+每个区域独立切换标签页和编辑文件；同一标签页只在一个区域中显示。新打开的内容进入当前操作的区域。
+拖动中间分隔线可调整宽度；聚焦分隔线后也可用左右方向键调整，双击恢复等宽。
+再次点击「合并分屏」可恢复单个区域。全屏时按 Esc 返回；收起后点击对话右上角的面板按钮重新展开。
+切换、关闭、合并或收起会丢弃未保存编辑时，界面先要求确认。
+
+文件标签采用紧凑布局，下面独立显示路径与文件操作栏。本机文件显示经权限校验的真实路径，
+右侧提供刷新、可用的保存操作及系统关联应用菜单；没有关联应用时可打开所在文件夹。
+云端文件显示在“我的空间”或团队空间中的实际路径，右侧提供下载。
+尚未归档或无法读取位置时明确显示状态，不显示服务器物理路径。
+长路径会保留末尾文件名，悬停可查看完整路径。刷新有未保存编辑的文件前会要求确认。
+分屏中的标签分别归属于各自区域；合并分屏后标签回到同一个区域。
 
 ### 大文件预览保护
 
@@ -60,14 +78,14 @@ Web Worker 中执行，并按真实存在的单元格稀疏转换，不遍历工
 
 ### 产物的产生与落库
 
-对话流式过程中，工具产出的文件先进入会话**工作区**（`core/llm/workspace`），只有被「钉住」（pinned）的文件才会在回合结束时由 `core/services/artifact_service.py::persist_artifacts` 写入 `artifacts` 表——这道**严格工作区闸门**保证临时中间文件不会污染我的空间。
+对话流式过程中，工具产出的文件先进入会话**工作区**（`core/sandbox/workspace`），只有被「钉住」（pinned）的文件才会在回合结束时由 `core/files/artifacts/service.py::persist_artifacts` 写入 `artifacts` 表——这道**严格工作区闸门**保证临时中间文件不会污染我的空间。
 
-物理存储由 `core/artifacts/store.py` 管理，按 `STORAGE_TYPE` 双模式：
+物理存储由 `core/files/artifacts/store.py` 管理，按 `STORAGE_TYPE` 双模式：
 
 - `local`（默认，社区版）：文件写在 `${STORAGE_PATH:-result}/artifacts/`，维护本地 JSON 索引（`index.json`），FileResponse 直出。
-- `oss`（商业版 EE，`cloud_storage`）：上传到阿里云 OSS，本地索引同时备份到 OSS，容器重启不丢。S3 后端见 `core/storage/`。
+- `oss`（商业版 EE，`cloud_storage`）：上传到阿里云 OSS，本地索引同时备份到 OSS，容器重启不丢。S3 后端见 `core/files/storage/`。
 
-下载统一走 `GET /files/{file_id}`（`api/routes/files.py`），按 `core/auth/permissions_iface.py::resolve_artifact_access` 做 owner ∪ team 权限判定，Office 文件支持转 PDF 在线预览。
+下载统一走 `GET /files/{file_id}`（`api/routes/files.py`），按 `core/auth/personal_permissions_iface.py::resolve_artifact_access` 做 owner ∪ team 权限判定，Office 文件支持转 PDF 在线预览。
 
 ### REST 接口（`/v1/artifacts`，`api/routes/v1/artifacts.py`）
 
@@ -94,16 +112,10 @@ Web Worker 中执行，并按真实存在的单元格稀疏转换，不遍历工
 
 分享内容是消息**快照**，存储在 Redis（`chat_share:*` 三组 Key），Redis 不可用时退化为进程内字典。访问端是独立的轻量页面 `src/frontend/src/SharePreviewApp.tsx`——`main.tsx` 检测到 URL 带 `?share=<share_id>` 参数即渲染分享视图而非主应用。分享记录管理页在 `src/frontend/src/components/share/ShareRecordsPage.tsx`。
 
-## 图表生成如何落到产物
+## 图表产物
 
-MCP 工具 `generate_chart_tool`（`src/backend/mcp_servers/generate_chart_tool_mcp/`）用 matplotlib 按数据 + 指令绘图（折线 / 柱状 / 饼图等），生成的 PNG 通过 `core/artifacts/store.py::save_artifact_bytes` 直接落为产物，返回：
-
-```json
-{"ok": true, "file_id": "<artifact id>", "url": "/files/<file_id>",
- "name": "chart_xxx.png", "mime_type": "image/png"}
-```
-
-图表立即出现在聊天附件区，可在画布中预览、在我的空间收纳。工具描述中强制「先取数后绘图」，禁止凭空编数据。若要把图表插入沙箱里正在生成的 Word/PPT，需先用 `sandbox_put_artifact` 把 `file_id` 拷进沙箱再由 CLI 引用沙箱路径——artifact 存储与沙箱文件系统是两个世界。
+图表由沙箱中的绘图脚本或数据分析技能生成。使用 `sandbox_get_artifact`
+登记图片，再用 `pin_to_workspace` 交付。模型管理无需配置专用图表生成角色。
 
 ## 文档导出如何落到产物
 
@@ -118,7 +130,7 @@ officecli-xlsx、officecli-pptx 三个基座技能（以及它们之上的表单
 > 用户：「查一下近五年新能源汽车产量，画成柱状图，再把分析导出成 Word。」
 
 1. 智能体先用搜索 / 数据工具取数；
-2. 调 `generate_chart_tool` 生成柱状图 → artifact A（PNG，附件区可见，画布可预览）；
+2. 在沙箱中生成柱状图，通过 `sandbox_get_artifact` 登记 → artifact A（PNG，附件区可见，画布可预览）；
 3. 撰写分析文本后调用 officecli-docx 技能生成 artifact B（docx）；
 4. 两个产物随 `meta` 事件钉入工作区、由 `persist_artifacts` 落库，出现在「我的空间」；
 5. 用户点击 docx 在画布预览，满意后 `POST /v1/chat-shares` 生成 15 天有效的分享链接发给同事。
@@ -129,13 +141,12 @@ officecli-xlsx、officecli-pptx 三个基座技能（以及它们之上的表单
 |---|---|
 | 画布面板 / Univer 表格 | `src/frontend/src/components/canvas/CanvasPanel.tsx`、`UniverSpreadsheet.tsx`、`src/frontend/src/stores/canvasStore.ts` |
 | Artifact REST API | `src/backend/api/routes/v1/artifacts.py` |
-| Artifact 存储（local/OSS） | `src/backend/core/artifacts/store.py` |
-| 产物落库（工作区闸门） | `src/backend/core/services/artifact_service.py` |
+| Artifact 存储（local/OSS） | `src/backend/core/files/artifacts/store.py` |
+| 产物落库（工作区闸门） | `src/backend/core/files/artifacts/service.py` |
 | 文件下载 / 预览 | `src/backend/api/routes/files.py` |
 | 会话分享 API | `src/backend/api/routes/v1/chat_shares.py` |
 | 分享前端 | `src/frontend/src/SharePreviewApp.tsx`、`src/frontend/src/components/share/ShareRecordsPage.tsx` |
-| 图表生成 MCP | `src/backend/mcp_servers/generate_chart_tool_mcp/server.py`、`chart.py` |
-| 文档导出技能 | `src/backend/skill_bundles/default/officecli-*/`、`src/backend/skill_bundles/default/pdf-editing/` |
+| 文档导出技能 | `src/backend/extensions/skills/default/officecli-*/`、`src/backend/extensions/skills/default/pdf-editing/` |
 | 我的空间前端 | `src/frontend/src/components/myspace/`、`src/frontend/src/stores/mySpaceStore.ts` |
 
 延伸阅读：[沙箱](sandbox.md) · [项目与我的空间](projects-myspace.md) · [存储](storage.md) · [MCP 工具](mcp-tools.md)

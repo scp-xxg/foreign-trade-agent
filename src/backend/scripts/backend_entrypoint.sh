@@ -15,7 +15,7 @@ echo "[entrypoint] Starting backend bootstrap..."
 DB_URL="${DATABASE_URL:-sqlite:///./hugagent.db}"
 if echo "${DB_URL}" | grep -qi "^sqlite"; then
   echo "[entrypoint] SQLite detected – using create_all() instead of alembic..."
-  python -c "from core.db.engine import init_db; init_db()"
+  python -c "from features.installed import INSTALLED_FEATURES; from core.harness.registry import load_models; load_models(INSTALLED_FEATURES); from core.harness.registry.schema_lifecycle import load_schema_lifecycle; load_schema_lifecycle(INSTALLED_FEATURES); from core.db.engine import init_db; init_db()"
   echo "[entrypoint] SQLite tables created successfully."
 else
   echo "[entrypoint] Running database migrations (alembic upgrade head)..."
@@ -32,11 +32,18 @@ else
   echo "[entrypoint] Migrations applied successfully."
   if [ "${JX_EDITION:-ee}" = "ce" ]; then
     echo "[entrypoint] Reconciling the CE schema against the current metadata..."
-    python -c "from core.db.engine import init_db; init_db()"
+    python -c "from features.installed import INSTALLED_FEATURES; from core.harness.registry import load_models; load_models(INSTALLED_FEATURES); from core.harness.registry.schema_lifecycle import load_schema_lifecycle; load_schema_lifecycle(INSTALLED_FEATURES); from core.db.engine import init_db; init_db()"
     echo "[entrypoint] CE schema reconciliation completed."
   fi
 fi
 
 echo "[entrypoint] Starting API server..."
 
-exec uvicorn api.app:app --host 0.0.0.0 --port "${PORT:-3001}"
+# The worker count is resolved in Python rather than taken from the environment:
+# several deployment shapes must run exactly one worker no matter what was asked
+# for, and core/infra/worker_count.py is where that is decided and logged.
+# Exporting the result keeps uvicorn and the app reading the same number.
+export WEB_CONCURRENCY="$(python -m core.infra.worker_count)"
+echo "[entrypoint] uvicorn workers: ${WEB_CONCURRENCY}"
+
+exec uvicorn api.app:app --host 0.0.0.0 --port "${PORT:-3001}" --workers "${WEB_CONCURRENCY}"

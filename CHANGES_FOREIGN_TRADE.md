@@ -4,6 +4,10 @@ This public derivative is based on ZJU-REAL/HugAgentOS Community Edition
 `desktop-v1.0.2`, commit `d16a09be1e408c1acf3ef6ff89523cda1341ef41`.
 The original LICENSE, NOTICE and Git history are retained.
 
+On 2026-10-28 this public derivative was synchronized with upstream main
+`d969492ffb77819a48b34d948b1993a4fc99809b` (2026-10-27). Old core patches that
+are covered by upstream are replaced by the corresponding upstream modules.
+
 ## Added by the foreign-trade-agent contributors (2026-10-21)
 
 - Synthetic eight-SKU product catalog and deterministic Decimal quotation tools.
@@ -14,6 +18,7 @@ The original LICENSE, NOTICE and Git history are retained.
 - Team setup, isolated data directories, deployment documentation and CI.
 - Scenario-one inquiry workspace: owner-scoped persistence, bounded public website/GLEIF evidence, grounded AI extraction, bilingual draft replies and follow-up tasks.
 - Scenario-two product content workspace: bounded document/photo uploads, confirmed source facts, AI English fact translations, listing/FAQ drafts, original-photo layouts, provenance-preserving downloads and an attributed Raspberry Pi 5 public example.
+- Version 0.2.0 chat-first trade plugin: three skills, authenticated native inquiry/content tools, activation and cross-turn restoration, attachment import and version-checked content download cards. Existing workspaces remain auxiliary views of the same records.
 
 ## Public framework fixes
 
@@ -22,9 +27,31 @@ The original LICENSE, NOTICE and Git history are retained.
 - Restore per-user local plugin capabilities in follow-up turns.
 - Use the actual sandbox Python interpreter instead of a fixed environment path.
 - Allow isolated team installs to skip repository environment files.
+- Extend progressive plugin activation to stage authenticated native tools together with skills/connectors; retain the execution-surface refresh and plugin gates. The activation checkpoint regression fixture explicitly summarizes its short history instead of retaining all of it.
+- Reject malformed JSON before trade business writes and require full skill loading with current user enablement. Use non-streaming completion only for requests containing these stateful trade tools to avoid a verified compatible-gateway streamed-argument defect; ordinary requests keep their configured transport.
+- Match persisted and live tool results by call ID before legacy name fallback, preventing concurrent same-name operations from exchanging receipts.
+- Stop with an explicit incomplete-run error when context summarization fails, preserving the original context and committed tool results instead of manufacturing a successful placeholder summary.
 - Correct package license metadata to reference the full existing LICENSE.
 
 Source files changed from the upstream baseline carry a modification notice.
 The temporary repository name is `foreign-trade-agent`; product renaming and a
 new logo are deferred. Model credentials, accounts, databases and conversations
 are local deployment state and are not distributed.
+
+## Public synchronization and collaboration (2026-10-28)
+
+- Adopt the new AgentScope/MCP 2.x runtime, module layout, application registry and frontend architecture.
+- Move trade services to core/foreign_trade; migrate authenticated native tools and preserve strict arguments, skill visibility and record ownership.
+- Add four-skill/seven-native-tool plugin 0.3.0 with source-versioned role coordination, human review and guarded internal handoff downloads.
+- Add explicitly synthetic DESK-001 source material for a single-order demonstration, separate from the real Raspberry Pi example.
+- Add snapshot-first local SQLite upgrades, legacy model protocol preservation and explicit non-deleting duplicate filename repair.
+- Validate real MCP 2.x queries and quotations and preserve existing bilingual exports. Runtime and real-model acceptance are recorded separately from automated checks.
+- Add explicit no-model template mode for confirmed English product facts; include public demo sources and licenses in the plugin archive.
+- Preserve the stored provider protocol in AI helper calls using the upstream resolved configuration contract.
+
+## Team handoff and main deployment (2026-10-29)
+
+- Document main-branch setup, existing-instance updates, old-database migration order and concrete three-scenario demonstrations.
+- Keep no-model workbench demonstrations separate from model-dependent chat acceptance.
+- Make the quick-check command select explicit unittest suites and the configured Python environment; retain full business regression in CI.
+- Include the deployment and walkthrough guides in the public plugin archive.

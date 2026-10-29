@@ -1,0 +1,9 @@
+key,label,value,source_url,verified_at,evidence
+model,Product model,Raspberry Pi 5,https://www.raspberrypi.com/products/raspberry-pi-5/,2026-10-21,Raspberry Pi 5
+processor,Processor,Broadcom BCM2712; 2.4GHz; quad-core 64-bit Arm Cortex-A76,https://www.raspberrypi.com/products/raspberry-pi-5/,2026-10-21,Broadcom BCM2712 2.4GHz
+display,Display output,Two HDMI outputs supporting 4K at 60fps and HDR,https://www.raspberrypi.com/products/raspberry-pi-5/,2026-10-21,Dual 4Kp60
+usb,USB ports,Two USB 3.0 and two USB 2.0 ports,https://www.raspberrypi.com/products/raspberry-pi-5/,2026-10-21,USB 3.0; USB 2.0
+ethernet,Wired networking,Gigabit Ethernet,https://www.raspberrypi.com/products/raspberry-pi-5/,2026-10-21,Gigabit Ethernet
+wifi,Wireless networking,Dual-band 802.11ac Wi-Fi,https://www.raspberrypi.com/products/raspberry-pi-5/,2026-10-21,802.11ac
+bluetooth,Bluetooth,Bluetooth 5.0 with BLE,https://www.raspberrypi.com/products/raspberry-pi-5/,2026-10-21,Bluetooth 5.0
+power,Power input,5V/5A DC via USB-C with Power Delivery support,https://www.raspberrypi.com/products/raspberry-pi-5/,2026-10-21,5V/5A

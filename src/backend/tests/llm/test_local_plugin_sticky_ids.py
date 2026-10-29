@@ -4,7 +4,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from core.llm import plugin_loader
+from core.capabilities.plugins.runtime import sticky_selection as plugin_loader
 
 USER = "sticky-owner"
 
@@ -78,7 +78,7 @@ def test_aliases_select_each_installation_once():
 @pytest.fixture
 def local_runtime(tmp_path, monkeypatch):
     import core.db.engine as dbe
-    import core.config.catalog_resolver as resolver
+    import core.capabilities.catalog.resolver as resolver
     from core.db.models import InstalledPlugin
     from sqlalchemy import create_engine
     from sqlalchemy.orm import sessionmaker
@@ -97,7 +97,7 @@ def local_runtime(tmp_path, monkeypatch):
             component_ids={"skills": ["trade-skill"], "mcp": ["trade-mcp"]},
         ))
         db.commit()
-    monkeypatch.setattr(plugin_loader, "load_activated_plugin_slugs", lambda chat_id: [
+    monkeypatch.setattr(plugin_loader.plugin_activation_history, "load_activated_plugin_slugs", lambda chat_id: [
         "plugin:local:trade"
     ])
     monkeypatch.setattr(plugin_loader, "_cloud_sticky_selection", lambda *a, **kw: [])
@@ -122,7 +122,7 @@ def test_resolver_restores_canonical_local_components_on_later_turn(local_runtim
 
 
 def test_resolver_keeps_component_availability_gate(local_runtime, monkeypatch):
-    import core.config.catalog_resolver as resolver
+    import core.capabilities.catalog.resolver as resolver
 
     monkeypatch.setattr(
         resolver, "resolve_explicit_runtime_capabilities",
@@ -134,12 +134,12 @@ def test_resolver_keeps_component_availability_gate(local_runtime, monkeypatch):
 
 
 def test_resolver_preserves_cloud_account_denial(local_runtime, monkeypatch):
-    from core.capabilities.errors import PermissionDenied
+    from core.harness.capability_errors import PermissionDenied
 
     def reject_cloud(*args, **kwargs):
         raise PermissionDenied("saved plugin belongs to another cloud account")
 
-    monkeypatch.setattr(plugin_loader, "load_activated_plugin_slugs", lambda chat_id: [
+    monkeypatch.setattr(plugin_loader.plugin_activation_history, "load_activated_plugin_slugs", lambda chat_id: [
         "plugin:other-account:trade"
     ])
     monkeypatch.setattr(plugin_loader, "_cloud_sticky_selection", reject_cloud)

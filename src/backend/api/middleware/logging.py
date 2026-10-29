@@ -15,12 +15,18 @@ from fastapi.responses import JSONResponse
 from starlette.types import ASGIApp, Receive, Scope, Send
 
 from core.config.settings import settings
-from core.infra.logging import get_logger, generate_trace_id, LogContext
+from core.infra.logging import (
+    LogContext,
+    generate_trace_id,
+    get_logger,
+    is_quiet_access_log,
+)
 
 logger = get_logger(__name__)
 
 # Sensitive field patterns for log sanitization
 SENSITIVE_PATTERNS = [
+    (re.compile(r"(/plugin-resource-assets/[^/]+/)[^/]+"), r"\1[redacted]"),
     (
         re.compile(
             r'"(password|token|secret|api_key|authorization)"\s*:\s*"[^"]*"',
@@ -64,23 +70,17 @@ class LoggingMiddleware:
         status_code = 0
 
         with LogContext(trace_id=trace_id, user_id=user_id, chat_id=chat_id):
-            logger.info(
-                "request_started",
-                method=request.method,
-                path=request.url.path,
-                client_ip=request.client.host if request.client else None,
-            )
 
             async def send_wrapper(message: dict) -> None:
                 nonlocal status_code
                 if message["type"] == "http.response.start":
-                    status_code = message.get("status", 0)
+                    status_code = int(message.get("status", 0))
                     # Inject trace_id header
                     headers = list(message.get("headers", []))
                     headers.append((b"x-trace-id", trace_id.encode()))
                     # 能力变更号：桌面本机端据此发现云端能力改动并同步一次，
                     # 免掉定时轮询（core/capabilities/change_signal.py）。
-                    from core.capabilities.change_signal import current
+                    from features.desktop.capabilities.change_signal import current
 
                     headers.append((b"x-hugagent-capability-epoch", current().encode()))
                     message = {**message, "headers": headers}
@@ -93,7 +93,7 @@ class LoggingMiddleware:
                 logger.error(
                     "request_failed",
                     method=request.method,
-                    path=request.url.path,
+                    path=sanitize_log(request.url.path),
                     error=str(e),
                     latency=duration,
                     exc_info=True,
@@ -101,11 +101,12 @@ class LoggingMiddleware:
                 raise
             finally:
                 duration = time.time() - start_time
-                if status_code:
+                if status_code and not is_quiet_access_log(scope.get("endpoint")):
                     logger.info(
                         "request_completed",
                         method=request.method,
-                        path=request.url.path,
+                        path=sanitize_log(request.url.path),
+                        client_ip=request.client.host if request.client else None,
                         status_code=status_code,
                         latency=duration,
                     )
@@ -170,3 +171,6 @@ def setup_logging_middleware(app: FastAPI) -> None:
     max_size = settings.server.max_request_size
     app.add_middleware(LoggingMiddleware)
     app.add_middleware(RequestSizeLimitMiddleware, max_size=max_size)
+
+    from api.middleware.cors import SiteApiCorsMiddleware
+    app.add_middleware(SiteApiCorsMiddleware)

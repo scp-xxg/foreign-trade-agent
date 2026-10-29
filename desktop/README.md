@@ -4,31 +4,34 @@
 连接已部署的团队服务器，或在 Windows、macOS 和 Linux 上由客户端离线安装并托管本机 CE 单机服务。
 两种方式都通过内置本地反代访问后端。
 
-登录走**方案 B**——系统浏览器跳转登录 + `hugagent://` deep-link 唤起 App + 一次性
-handoff 票据换 token。前端源码零改动（复用 `src/frontend`）。
+登录使用**浏览器确认 + 客户端主动领取**：桌面端创建有期限的请求，浏览器登录后显示
+账号和核对码，用户确认后由桌面端凭独享密钥查询并领取会话。浏览器无需打开应用，
+也不会自动关闭；`hugagent://auth/focus` 仅用于登录完成后将窗口切到前台。
 
-> 完整设计见 `internal design docs`。本目录是方案 B 的落地实现。
+标题栏菜单、窗口控制、脚本和样式集中在 `shared/chrome/`，Rust 使用 `include_str!`
+直接嵌入这些资源。`workspace.css` 同时作为 UOS Electron 包资源使用，工作区布局只维护一份。
+平台差异保留在壳中：macOS 的原生交通灯占 28px 安全区，Windows/Linux Tauri 使用紧凑自绘栏，
+UOS 保留原生标题栏并默认隐藏窗口内菜单。
 
 ## 架构一图
 
-远程服务器模式保持原有瘦客户端架构：
+远程服务器和混合模式共用以下云端认证链路：
 
-```
-桌面App ──系统浏览器──► <server>/?desktop=1 ──SSO登录──► 前端换 handoff 票据
-                                                            │
-   hugagent://auth/callback?ticket=<handoff>  ◄──浏览器跳转──┘
-        │ OS 唤起 App
-        ▼
-   POST <server>/api/v1/auth/desktop/redeem {ticket}  → 真正 session token（存 OS 私有目录）
-        │
-        ▼
-   本地反代(127.0.0.1:随机端口)  每个 /api 请求注入 Cookie: jx_session=<token>
-        │  静态资源直接 serve 前端 dist；/api/* 转发后端；SSE 逐帧透传
-        ▼
-   Nginx → FastAPI 后端集群（零改动）
+```text
+桌面 App ──创建请求（独享密钥）──► 后端（5 分钟有效）
+    │ 系统浏览器打开 /?desktop_request=<request_id>
+    ▼
+浏览器登录 → 显示账号、核对码 → 用户点击“确认登录桌面端”
+    │ 同源确认
+    ▼
+后端记录授权结果 ◄── 桌面端凭独享密钥轮询
+    │ 领取会话，桌面端保存成功后发送 ack
+    ▼
+桌面本地反代注入会话 Cookie → 登录完成
 ```
 
-deep-link 上只走**单次、秒级过期**的 handoff 票据，长期 token 永不进 URL。
+独享密钥不进入 URL 或浏览器；确认后的授权结果仅允许发起设备领取，回执后清除。
+原有 handoff/redeem 接口保留给旧客户端，新客户端不再通过 ticket 回跳接收凭据。
 
 三平台本机服务模式在这条链路前增加一层客户端托管：
 
@@ -46,9 +49,9 @@ deep-link 上只走**单次、秒级过期**的 handoff 票据，长期 token �
 
 ## 依赖的后端能力（后端已内置）
 
-- `POST /v1/auth/desktop/handoff` — 浏览器侧用当前 cookie 会话换一次性 handoff 票据
-- `POST /v1/auth/desktop/redeem`  — App 侧用票据换回 session token
-- 前端 `?desktop=1` 桥接逻辑在 `stores/authStore.ts`
+- `POST /v1/auth/desktop/requests` 创建；同一路径下的详情、approve/deny、poll/ack/cancel 完成授权
+- 新版前端 `desktop_request` 确认逻辑在 `stores/desktopLogin.ts`
+- 旧版 `handoff/redeem` 接口和 `?desktop=1` 桥接保留以兼容旧客户端
 
 ## 前置环境（构建机）
 
@@ -86,9 +89,12 @@ Windows 机器上打，**Linux 包可在任意装好 Rust 的 Linux / WSL 环境
   `http://127.0.0.1:32101`
 - 双端模式的工具定义以云端动态 capability manifest 为唯一真源。本机不内置或
   维护工具 schema，只缓存云端当前 revision 的完整脱敏 schema；清单只在登录和
-  云端能力增删（响应头里的能力变更号）时刷新，令牌续期不触发任何对账
+  用户确认同步时刷新，令牌续期不触发对账。侧栏提示先按当前账号比较四类清单与本机
+  快照；首次就绪与正常云端 API 活动触发只读检查，每窗口每分钟最多一次，本机合并重复检查，
+  不进行空闲轮询。全站变更号不直接触发提示，未知状态不作为有更新；详细行为见
+  `document/zh-CN/deployment/windows-deployment.md`《桌面同步提示》
 - 混合模式不使用按工具名称保留本机的例外名单，也不提供旧的整桥关闭环境开关；
-  定时任务、批量执行、图表与建站等 MCP 统一按当前账号授权清单解析。定时任务插件
+  定时任务、图表与建站等 MCP 统一按当前账号授权清单解析。定时任务插件
   在授权清单提供相应工具后支持用户明确选择本机或云端执行，并保留独立的任务与回执归属。
   用户配置的
   独立本机 MCP 仍按正常来源选择规则使用。
@@ -99,10 +105,16 @@ Windows 机器上打，**Linux 包可在任意装好 Rust 的 Linux / WSL 环境
   兼容分支。已安装旧客户端继续由云端透明 MCP 端点承接，协议演进集中在云端
 - 技能同样以云端为真源：本机随同一次清单刷新、同一枚 token 拉取技能清单
   （`/v1/desktop/capability/skills/manifest`，含每个技能的内容哈希），哈希变化的
-  技能按需下载完整 zip 包落到 `<sandbox_skills>_cloud/<skill_id>/`，并镜像进共享
-  沙箱技能目录，沙箱里同样在 `/workspace/skills/<skill_id>`。云端目录以最高优先级
-  注册为技能来源，同 id 的本机内置技能被云端版本覆盖；云端停用的技能本机一并
-  停用，本机独有的技能保留。云端断线沿用上一份快照，切换账号整目录清空
+  技能按需下载并保存到本机能力存储；每次运行固定所用版本，技能列表直接提供该版本的真实
+  `SKILL.md` 路径。桌面执行不使用容器技能路径别名，也不在会话目录建立技能映射。
+  云端目录以最高优先级注册为技能来源，同 id 的本机内置技能被云端版本覆盖；本机独有的技能保留。
+  云端断线沿用上一份快照，切换账号整目录清空
+- 清单回答的是「这个账号装了什么」，不是「开着什么」：技能与连接器不论云端当前
+  启停一律下发，本机照样装齐——插件的子技能和智能体依赖的技能在云端常是关着的。
+  云端的启停只作本机首次落地的初值，之后开关归本机，再同步一次不会翻掉用户在
+  本机的选择。管理员在云端停用的能力不在下发范围内，本机也打不开
+- 能力中心读的就是本机这份安装登记（`device_capability_installations`），与运行时
+  解析同源：显示的即生效的。首轮同步完成前仍读云端，避免渲染一版残缺清单
 - 也可用环境变量 `HUGAGENT_SERVER_BASE` 覆盖（优先级高于 server.json，并强制切回远程模式）
 - `cookie_name` 必须与后端 `SESSION_COOKIE_NAME` 一致（默认 `jx_session`）
 - 内网自签 HTTPS 时把 `insecure_tls` 设为 `true`
@@ -219,13 +231,26 @@ npm --prefix desktop run lock:desktop
 `prepare-bundle.mjs` 会在耗时构建开始前校验三者一致。公开 CE 的 Desktop Release workflow 会在
 启动 Windows x86_64、Linux x86_64、macOS arm64、macOS x86_64 四个原生目标前校验 release tag
 必须精确等于 `desktop-v<上述版本号>`；版本或 tag 不一致时不会创建任何平台产物。工作流固定使用
-`uv 0.11.33`；macOS 正式发布建议配置 Apple 证书、签名身份与 notarization 所需 secrets。
+`uv 0.11.33`。macOS 支持固定自签证书和 Developer ID 两种构建方式。
 
-Apple 凭据不是生成测试安装包的硬前置。公开 CE 的 Release workflow 在未配置 Apple secrets 时会
-自动使用 ad-hoc 身份（`-`）签名 App 及内置 Python runtime 的 Mach-O 文件，并分别生成 Apple
-Silicon 与 Intel DMG；用户首次打开时需要在“系统设置 → 隐私与安全性”中选择“仍要打开”。配置
-Developer ID 与 notarization secrets 后，workflow 会自动改用正式签名，避免这一步人工放行。
-Tauri updater 的 `TAURI_SIGNING_PRIVATE_KEY` 是独立的更新包验签机制，仍为必需项。
+没有 Apple Developer 账号时，按 [macOS 签名与升级](../document/zh-CN/deployment/macos-signing.md)
+在 Mac 构建机一次性生成固定自签证书，之后通过持久化的 `signing.py --run npm run build`
+入口构建。该入口设置 `HUGAGENT_MACOS_SIGNING_MODE=self-signed`、固定证书指纹并解锁独立钥匙串，
+支持 `HUGAGENT_RELEASE_BUILD=1` 和 CI，无需 Apple 账号或公证凭据。
+自签包具有稳定代码身份，但未获 Apple 公证，首次下载仍可能有 Gatekeeper 提示。
+
+Developer ID 模式默认启用，需要完整的 `APPLE_SIGNING_IDENTITY` 证书名称和匹配的
+`APPLE_TEAM_ID`，发布构建还需公证凭据。CE workflow 用 `vars.MACOS_SIGNING_MODE`
+选择模式，必须导入对应证书与私钥；缺失时不降级成临时签名，也不自动生成新身份。
+签名变化会改变 macOS 运行时指纹，让构建缓存和客户端替换旧身份签名的运行时。
+
+仅本地测试可同时设置 `HUGAGENT_ALLOW_ADHOC=1`、`APPLE_SIGNING_IDENTITY=-`；
+CI 和发布构建禁止该例外。Tauri updater 的 `TAURI_SIGNING_PRIVATE_KEY` 独立保留。
+
+构建后执行 `npm run verify:macos -- --bundle-dir src-tauri/target/release/bundle/macos`，
+自签模式使用同一个 `signing.py --run` 入口。验证实际签名、应用标识、固定证书和稳定身份要求；
+Developer ID 模式还验证公证票据及 Gatekeeper 状态。CI 全部检查通过后才能发布草稿。
+首次从 ad-hoc 切换到固定证书，旧钥匙串条目仍可能要求一次授权。
 
 ## 关键文件
 
@@ -265,9 +290,17 @@ Tauri updater 的 `TAURI_SIGNING_PRIVATE_KEY` 是独立的更新包验签机制�
   `chatStream.ts` 全部对话能力，零重复实现）。未登录时退化为唤起主窗。
 - **A3 一键自动更新**（`update.rs`）：菜单「帮助 → 检查更新…」或托盘触发，见下方《自动更新》。
 - **A4 托盘增强**：托盘菜单新增「新建对话」「检查更新…」。
-- **平台化菜单与标题栏**（`menu.rs` + `proxy.rs`）：Windows/Linux 保留紧凑的一体化窗口菜单；
-  macOS 使用系统菜单栏和左侧原生交通灯，主界面背景延伸至窗口顶部，右侧不再预留标题空行；交通灯的安全间距只作用于侧栏内容，
-  折叠侧栏为 88px。侧栏顶部与内容标题栏空白支持拖动，独立壳页面保留 28px 安全区。
+- **平台化菜单与标题栏**（`window_chrome.rs`）：Windows/Linux 使用紧凑的一体化窗口菜单，顶部 34px；
+  macOS 保留系统菜单和原生交通灯，顶部拖动区为 28px。顶部栏与最左侧模块导航复用前端
+  `--module-rail-bg` / `--module-rail-gradient`，按窗口坐标连续绘制；内部侧栏和主内容保留现有配色。
+  工作区整体避让顶部，内部侧栏与内容区顶部圆角形成内层工作面。macOS 导航在展开和折叠时均为
+  64px，展开另加 280px 内部侧栏；44px 图标按钮保留点击空间，原生窗口按钮由顶部独立安全区避让。窄窗口、加载页和深色主题同步适配，独立壳页面保留原有安全区。
+  菜单、窗口拖动、双击最大化和右侧窗口控制继续通过原有导航哨兵执行。
+- **视图缩放**（菜单「视图 → 放大 / 缩小 / 实际大小」，或 `Ctrl` + `+` / `-` / `0`、`Ctrl`+滚轮）：
+  按浏览器档位调整页面与图标大小，选定档位写入 `prefs.json`，新开窗口与下次启动沿用。系统 DPI
+  缩放由 WebView 原生处理，壳层只叠加用户自己的档位；「实际大小」即完全跟随系统显示设置。
+  标题栏的缩放动作走 `POST /__desktop/zoom/:mode` 投递，**不能**改用其它菜单项那套导航哨兵——
+  哨兵那次「发起即取消」的导航会被 WebView2 连带把 ZoomFactor 重置回 1.0。
 - **设置服务器地址 UI**（菜单「文件 → 设置服务器地址…」）：填后端地址→写回 server.json→重启生效，
   不再必须手改 JSON。
 - **本机服务一键安装**（菜单「文件 → 本机服务…」）：Windows、macOS 和 Linux 后端不可达时也会自动
@@ -346,10 +379,32 @@ npm run build
 }
 ```
 
-多平台共用这一份清单。**不要手写/手拷 latest.json**——用 `deploy_kit/publish_desktop.sh` 逐平台
-发布（`--target windows-x86_64` / `--target linux-x86_64`），脚本会读目标环境现有清单做平台条目
-合并：同版本逐平台发布互不覆盖；版本不同则丢弃其它平台旧条目并告警（旧条目会让那个平台反复
-"更新"到旧包，所以发新版要把所有在用平台都发一遍）。
+发布统一使用仓库内的 `python3 desktop/scripts/publish-desktop.py`（Python 3.8+，
+Linux/WSL 或 macOS）。例如：
+```bash
+python3 desktop/scripts/publish-desktop.py --version 0.5.69 --target darwin-aarch64 \
+  --bundle /path/to/bundle/macos --ssh user@release-host --container app-backend \
+  --required-target darwin-aarch64 --required-target windows-x86_64
+```
+Windows 使用 `--target windows-x86_64` 和 NSIS 目录；支持原有 `--ssh-port`、
+`--release-dir`、`--notes` 参数。`--local-dir` 可直接发布到本机目录；
+`--dry-run` 在临时目录模拟，不修改发布端（远程模式不读取远端现有清单）。
+
+Linux 目标（`--target linux-*`）取目录里的 `.deb`，没有则取 `.AppImage`。
+若某个平台的更新签名绑定的是文件名，而发布文件名由版本与内容哈希生成，就先用
+`--plan` 问出这个名字和哈希、签完再发布——`--plan` 只读产物、不改发布端，
+发布文件名的生成规则因此只有这一处。
+
+新客户端通过 `latest.json?target={{target}}&arch={{arch}}` 按平台获取可用版本；
+未发布的平台返回 204。发布目录的 `release-index.json` 保存各平台版本和旧客户端共用版本，
+后端仍通过公开的 `latest.json` 接口提供 Tauri 标准响应。先部署支持该索引的后端，再发布新包。
+旧客户端不带平台参数，只有所有已发布及 `--required-target` 指定的平台都提供同版本包时，
+共用清单才晋级。`latest.json` 文件是共用版本的兼容镜像；不要手写或手拷清单。
+
+发布按文件锁串行处理，上传包通过 SHA-256 校验后才原子切换索引。文件名包含版本、
+平台和内容哈希，已发布的同版本同平台不能替换为不同内容；修正安装包必须提升版本号。
+单个平台先发布不会删除其他平台或把旧包标成新版本。旧版 Mac 若此前一直缺失平台条目，
+需要先补齐同版本 Mac 和 Windows 包，共用清单晋级后即可恢复检查更新。
 
 `latest.json` 与安装包分发接口**公开无鉴权**（Tauri updater 不带 cookie），且已在 license_gate 放行
 （过期客户端也能拉到修复版）。发布目录不存在/无清单时 `/latest.json` 返回 204，客户端视为「无更新」。
@@ -406,3 +461,182 @@ TAURI_CONFIG='{"bundle":{"resources":[]}}' cargo test --lib --offline
 NSIS 默认保留业务数据和顶层 `skills`、`plugins`、`agents`、`mcp.json`、`.capabilities`；仅用户明确选择删除时清理这些目录。卸载前拒绝重定向的应用根和运行目录，清理助手只枚举普通目录，对 junction/reparse point 仅删除链接本身。运行目录仍先原子移走，再由隐藏后台助手清理。
 
 可在 Windows 的独立 TEMP 夹具中运行 `scripts/windows-uninstall-fixture.ps1`，传入新建且名称以 `codex-cap-uninstall-` 开头的 TEMP 直属目录和 `src-tauri/uninstall-cleanup.ps1` 的绝对路径。夹具仅操作其指定目录，覆盖保留/显式删除、联接目标保护、长路径及恢复失败。该检查不运行产品安装器，也不能替代完整的新装、升级、静默更新和交互卸载验收。
+
+### OfficeCLI 随包交付与预览认证
+
+完整桌面依赖包包含 OfficeCLI 1.0.157 原生可执行文件（版本与当前沙箱镜像一致），
+由 `native-tools.json` 按五个支持的平台/架构锁定下载地址、大小与 SHA-256。
+构建机下载并校验后，将它放到私有 Python 的可执行目录；本机脚本执行服务的清洁 PATH
+已包含该目录，因此无需在用户电脑上联网安装或修改系统 PATH。随包保留上游许可证。
+构建与安装自检均运行 `officecli --version`，缺失或版本不符直接失败。
+
+依赖指纹覆盖 Python 锁文件、原生工具清单、运行时构建/归档/自检脚本和许可证。
+修改这些输入后，下次构建及客户端安装不会复用旧运行时；只改业务源码仍可复用未变更的依赖。
+完整包同时携带 Pandoc 3.11 与 LibreOffice 26.2.6。Pandoc 位于私有 Python 可执行目录，
+LibreOffice 的完整程序、字体和资源位于运行时的 native/libreoffice；后端优先按运行时清单
+查找它们。用户安装客户端时离线解压这些工具，无需另装 Pandoc 或 LibreOffice。
+截图仍需要 Chromium。
+
+发布构建机按当前原生平台提取官方 ZIP/TAR、DMG 或 MSI；Windows 使用 MSI 管理映像提取，
+Linux 使用 dpkg-deb（仅提取文件），macOS 使用 hdiutil/ditto。不向构建机或用户系统安装
+LibreOffice，不注册文件关联。五个平台资产均锁定大小与 SHA-256，并保留许可证及源码链接。
+macOS 对嵌套 LibreOffice.app 重新签名并验证封装。工具更新会改变依赖指纹。
+构建和安装自检实际执行 Markdown→DOCX→文本及 DOCX→PDF；缺失、版本不符或转换失败即阻止
+运行时激活。完整包体积与解压空间会增加。精简包不携带这些工具。
+跨架构发行仍须在对应原生构建机完成验证；Linux 构建机需具备 dpkg-deb 及 LibreOffice 所需系统库。
+
+本机文件预览与路径查询均识别桌面桥接身份，访问原文件时保留项目和目录权限检查。
+本机预览的 401 不会触发云端退出登录；云端会话过期保持原有登录流程。
+HTML 加载失败显示可读提示，正常 HTML 在不允许同源访问的脚本沙箱中预览。
+
+桌面托管的 OfficeCLI 通过 `OFFICECLI_SKIP_UPDATE=1` 关闭后台自更新，版本随客户端依赖包升级。
+
+### 桌面菜单与下载更新
+
+混合模式的“文件”菜单提供“新建对话”“打开文件夹”“退出”。选择文件夹后，会进入绑定该本机项目的新对话；取消选择不改变当前对话。
+
+下载进度窗口不置顶，可使用系统最小化按钮收起，并从任务栏或 Dock 恢复。最小化期间继续下载，进度刷新不会抢回焦点或自动恢复窗口；恢复后显示当前进度。下载完成后仍按原更新流程安装并重启。
+
+“检查更新”和“关于”显示当前桌面版本。启动时会在后台检查新版；有更新时，侧栏帮助图标变为下载按钮。点击后可查看当前版本、目标版本及更新说明，确认后显示下载进度卡片，完成后自动重启。取消或失败可以重试。Windows 更新采用静默安装，不展示安装器界面；开始替换程序时客户端和进度卡片会关闭，再自动打开新版。系统要求的权限提示仍由操作系统决定。
+
+这些交互随新版桌面包交付，旧客户端需要先升级一次才能使用。
+
+桌面新版发现采用持续发布通知。更新服务器每个工作进程共享一个版本清单观察任务，约每 2 秒检查一次文件元数据；清单变化时通知在线客户端，客户端再检查对应平台版本。侧栏复用本机状态事件连接，取消每 2 秒请求状态，相同状态不重复渲染。没有版本变化时只发送约 15 秒一次的连接心跳，另保留约 30 分钟一次的版本校验。
+
+连接中断会退避重连；旧服务器不支持通知时约每 5 分钟检查一次。新旧客户端均保留手动“检查更新”。快速通知需要同时升级发布服务器后端和桌面包；仅升级客户端会使用低频兼容检查。发现新版仍只提示，不会自动下载安装。
+
+更新进度窗通过客户端既有回环服务加载内嵌页面，避免 Windows 对 data: 页面的兼容性限制。Windows 发布前应在原生构建机完成正式构建后、在交互式桌面会话运行 powershell -ExecutionPolicy Bypass -File desktop/scripts/test-update-progress.ps1，验证真实 WebView2 窗口不置顶、可最小化、最小化期间更新进度，以及恢复后的进度显示；此测试不下载或安装更新。
+
+
+### Windows 私有 Bash
+
+Windows 完整安装包携带来自 Git for Windows 2.55.0.5 的私有 Bash、MSYS 运行库和
+GNU 文件命令。构建机下载固定资产并校验大小及 SHA-256，用户安装时离线解压到
+运行时的 `native/git-bash`，不需要另装 Git、WSL，也不修改系统 PATH。
+运行器直接调用私有 `usr/bin/bash.exe`；随包运行时损坏时明确失败，不回退到系统 Git。
+
+构建和安装激活前，使用不含系统 Git 的 PATH 实际运行 Bash，检查中文及带空格目录、
+`find/sort/head/cut` 管道、`grep` 搜索与常用文件命令；自检失败阻止该运行时激活。
+新增依赖会改变运行时指纹，升级时不会复用旧的缺少 Bash 的依赖包。
+非 Windows 平台沿用系统 Bash，精简云端包不携带此运行时。
+
+此修复需要重新构建并分发 Windows 完整客户端；只更新云端后端不能修复已安装的旧包。
+
+
+原生 Windows 构建机可运行独立验收（输出目录必须尚不存在，保留结果供核验）：
+
+```powershell
+python desktop/scripts/verify-windows-bash.py --archive <已下载的固定版本Git归档> --output <新的临时目录>
+```
+
+验收使用原有 SHA-256 校验，实际经过打包、搬移、解包后再执行自检；随后临时移走
+`grep.exe`，确认自检拒绝缺失依赖，再恢复文件。运行器与自检共享 GNU 命令优先于
+Windows System32 的 PATH 顺序。
+
+
+### 多窗口
+
+Windows、macOS、Linux 的“文件 → 新建窗口”打开一个独立桌面窗口。
+快捷键为 Windows/Linux 的 Ctrl+Shift+N、macOS 的 Cmd+Shift+N；UOS Electron 同样支持。
+各窗口共享登录、服务器配置和本机服务，菜单、窗口控制及文件夹选择作用于发起窗口。
+多个普通窗口可见时关闭一个不会退出客户端；最后一个可见窗口继续遵循关闭到托盘/退出偏好
+（macOS 关闭窗口后保留应用）。菜单“退出”仍退出整个应用。
+
+
+### 对话工作目录
+
+未绑定本地项目时，每个对话使用 `<数据目录>/workspace/.sessions/<会话哈希>/`。
+同一对话重复运行使用同一目录，不因空闲自动删除；不同对话使用不同目录。
+Bash 的当前目录与文件工具的相对路径基准一致，绝对路径直接指向真实文件，不进行别名改写。
+绑定本地项目时，环境上下文用 `project_root` 单独提供项目真实路径；`cwd` 仍为会话目录。
+项目命令需要在同一次 Bash 调用中显式 `cd` 到带引号的项目路径，文件工具使用项目绝对路径。
+桌面普通会话、自定义模式和子智能体均获得 `environment_context`（cwd、OS、shell、日期、时区与权限快照）。
+Windows 当前执行器为随包 Git Bash，因此声明 `shell=bash`，不声明 PowerShell；云端不注入此环境块。
+
+每次命令的执行脚本使用独立临时文件，命令结束仅清理自己的脚本，避免并发覆盖和删除用户同名文件。
+技能说明使用当前工作目录内的相对路径；技能自身脚本通过当前技能真实路径启动，不切换到技能目录写产物。
+包含空格、中文或 Windows 盘符的路径由命令参数引用处理，不依赖工作区映射。
+桌面与容器的路径、技能目录和 runner 工作区规则分别实现；容器继续使用自己的挂载与 My Space 约定。
+
+### macOS 更新归档校验
+
+手动生成 .app.tar.gz 时使用 python3 desktop/scripts/create-macos-update.py --app /path/Example.app --output /path/Example.app.tar.gz --version X.Y.Z。
+不要直接用 macOS 默认 tar 生成更新归档，它可能自动加入 ._* AppleDouble 元数据，导致 Tauri 更新解包失败。
+发布工具会拒绝 AppleDouble 条目、多个应用根目录、路径穿越和与发布版本不一致的 Info.plist。生成归档后再签名，签名后不得改变内容。
+
+
+## 浏览器确认登录（新版客户端）
+
+新版使用设备绑定的 5 分钟授权请求替代旧方案 B 的凭据回跳。客户端调用
+POST /api/v1/auth/desktop/requests，只把返回的 request_id 放入浏览器 URL 的
+desktop_request 参数；客户端随机生成的 256-bit device_secret 仅保留于进程内存。
+浏览器 GET 请求详情，显示账号与核对码，经同源 POST approve/deny 明确决策。
+客户端按 interval 查询 poll，接收后 ack；ack 清除可领取的会话凭据。ack 前同设备
+重试只返回同一个结果，避免网络响应丢失使已确认请求失效。取消/退出通过会话纪元阻止迟到结果。
+
+接口属于 CE/EE 共用路由，Redis CAS 保证多 worker 状态转换原子性，内存模式仅供单进程。
+hugagent://auth/focus 只聚焦窗口，不携带任何认证凭据。服务器原有 handoff/redeem
+接口保留给旧客户端；新客户端不再接受未绑定的旧式 ticket deep-link。
+
+验证（仓库根目录 / WSL）：
+
+- PYTHONPATH=src/backend .venv/bin/python -m pytest src/backend/tests/test_desktop_device_login.py -q
+  （内存和独立 Unix socket Redis；需要 redis-server）。
+- cd desktop/src-tauri && TAURI_CONFIG='{"bundle":{"resources":[]}}' cargo test --lib --offline
+- cd desktop-uos && npm test
+- cd src/frontend && npm run build && node scripts/test-desktop-login-browser.mjs
+  （需要 Playwright，支持 PLAYWRIGHT_MODULE、PLAYWRIGHT_CHROMIUM_EXECUTABLE 指定已有安装）。
+
+浏览器验收启动独立回环测试 API，使用真实构建网页、真实授权 API、Rust 网络客户端和 UOS
+登录控制器。只有上游 SSO 会话由测试夹具提供，不访问真实账号或业务数据库。
+此自动测试不代替原生 Edge、系统凭据库、Tauri 窗口切换和混合模式实际能力同步的发行前验收。
+
+## 应用数据库与 MCP 托管
+
+纯本机模式在启动时初始化独立的 <数据目录>/storage/applications.sqlite。
+应用数据库与平台数据库分开保存。静态简历不创建应用；有持久化表单或用户要求的 MCP
+才创建应用和数据表。本机 MCP 使用配置的本机后端地址，默认 http://127.0.0.1:32101；
+该回环地址只供本机客户端连接，关闭本机服务后不可用。
+
+双端模式的正式站点、表单数据库和 MCP 服务均在云端。本机任务通过当前账号授权的
+Sites 网关调用 manage_application；转发失败不回退本机。两个桌面壳的应用管理及 MCP
+路由忽略旧 local 标记，避免站点与数据分开保存。界面与对话回执显示固定的后端地址，
+不使用桌面窗口的随机端口。数据入口是“站点 → 应用数据库与 MCP 服务”。
+
+本机升级在平台表结构调和前，归档并校验旧 site_kv 和 site_submissions，再删除旧表。
+备份位于 <STORAGE_PATH>/migration-backups，可用 SITE_STORAGE_BACKUP_DIR 指定目录。
+备份失败会阻止启动，保留原数据；不要删除本机数据库来绕过失败。
+中文备份按 UTF-8 保存和读取，重复启动不会重复归档已删除的旧表。
+云端仍使用独立应用数据库的显式初始化和标准迁移。
+
+需同时更新桌面内置前端、本机后端和桌面代理。双端还需更新云端后端与 Sites MCP，
+启用云端应用数据库，并同步新版 Sites 能力。仅更新网页不会改变已安装的桌面壳。
+SQLite 初始化、归档、代理 HTTP 路由及源码测试不代替原生安装包的发行前验收。
+
+桌面升级备份包含 storage/applications.sqlite 及其 WAL/SHM。升级失败时恢复原文件集，删除新版本产生的伴随文件。
+
+
+### 本机对话中的浏览器
+
+本机对话的浏览器工具在本机执行。插件仍从当前云端账号同步，浏览器运行文件和 Canvas 文件随同一内容哈希下发；运行位置不改变插件的来源。
+本机 MCP 使用本机用户、对话编号和所选插件安装编号创建资源。对话不存在、归属不符、插件停用或文件校验失败时停止，不回退到云端浏览器。
+已有仅包含定义的插件快照需要重新同步。此修复需要更新云端能力包导出和桌面捆绑后端；只更新云端或网页不会替换旧客户端中的调用路径。
+
+
+### 工作台共享制品
+
+桌面与 CE 登录网页先构建协议及 SDK，再输出 workbench-build.json 和许可文件。完整包使用 CE 专用锁执行 npm ci。创建 server-ce.zip 前校验共享包制品、版本、许可及锁文件哈希，缺失或漂移即失败。详见 [工作台构建与离线制品](../document/zh-CN/development/workbench-build.md)。
+
+
+### 语音输入
+
+聊天输入框的麦克风录音后转写为可编辑文字，再由用户发送。服务端需在模型管理中配置 audio 类型并分配 audio_transcription 角色；默认未配置。远程/双端走云端音频服务，纯本机模式使用本机配置。macOS 的 Info.plist 和 microphone.entitlements.plist 提供系统用途声明与签名权限；用户仍需在系统中批准麦克风访问。旧客户端需要更新内置前端；本次代码检查不代表原生录音已验收。详见 [音频模型说明](../document/zh-CN/modules/model-providers.md#语音输入与音频模型)。
+
+### 插件账号连接与宜搭运行时
+
+完整桌面包携带 OpenYida 2026.7.12-1 与 desktop/plugin-clis/package-lock.json 锁定的依赖，
+复用 Playwright 随包 Node。构建时由 plugin-cli-runtime.py 使用 npm ci --ignore-scripts
+准备依赖；安装激活前在隔离 HOME/PATH 中运行真实 agent-capabilities 和模块导入检查。
+清单、脚本和依赖锁计入运行时指纹，已有客户端升级时替换旧运行时。
+本机 API 与 Bash 的 openyida 入口使用同一份私有包；Cookie 保存在当前本机用户的持久目录。
+混合模式插件详情可分别管理本机和云端连接，凭据不随能力同步。

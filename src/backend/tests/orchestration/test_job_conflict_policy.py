@@ -10,14 +10,15 @@
 import asyncio
 import json
 
+import core.db.engine as db_engine
+import core.jobs.files as files
+import core.jobs.runtime as runtime
 import pytest
+from core.db.engine import Base
+from core.db.models import Job
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
-
-import core.db.engine as db_engine
-from core.db.engine import Base
-from core.db.models import Job
 
 
 @pytest.fixture()
@@ -40,7 +41,8 @@ class _Toolkit:
     def __init__(self):
         self.fn = None
 
-    def register_tool_function(self, fn):
+    def append(self, tool):
+        fn = tool._func
         self.fn = fn
 
 
@@ -65,12 +67,13 @@ def _make_tool(monkeypatch, db_session, cancelled: list):
     async def fake_start(**kw):
         return "job_new"
 
-    from orchestration import job_runtime
+    import core.jobs.runtime as job_runtime
 
-    monkeypatch.setattr(job_runtime, "cancel_job", fake_cancel)
-    monkeypatch.setattr(job_runtime, "_sbx_bash", fake_sbx_bash)
-    monkeypatch.setattr(job_runtime, "start_job", fake_start)
-    monkeypatch.setattr(job_runtime, "spawn_background", lambda *a, **k: None)
+    monkeypatch.setattr(runtime, "cancel_job", fake_cancel)
+    import core.jobs.files as files
+
+    monkeypatch.setattr(files, "_sbx_bash", fake_sbx_bash)
+    monkeypatch.setattr(runtime, "start_job", fake_start)
 
     tk = _Toolkit()
     job_tool.register_run_job(
@@ -106,7 +109,9 @@ def _payload(resp):
     """把 ToolResponse 的文本块拼回 JSON —— 块可能是 dict 也可能是带 .text 的对象。"""
     text = ""
     for blk in getattr(resp, "content", []) or []:
-        text += blk.get("text", "") if isinstance(blk, dict) else str(getattr(blk, "text", "") or "")
+        text += (
+            blk.get("text", "") if isinstance(blk, dict) else str(getattr(blk, "text", "") or "")
+        )
     assert text, f"工具没有返回文本内容: {resp!r}"
     return json.loads(text)
 
@@ -133,7 +138,13 @@ def test_replace_cancels_old_then_starts(monkeypatch, db_session):
 
     out = _payload(
         asyncio.run(
-            fn(action="start", script_path="/w/a.py", name="新作业", wait=False, on_conflict="replace")
+            fn(
+                action="start",
+                script_path="/w/a.py",
+                name="新作业",
+                wait=False,
+                on_conflict="replace",
+            )
         )
     )
 
@@ -148,7 +159,13 @@ def test_parallel_allows_coexistence(monkeypatch, db_session):
 
     out = _payload(
         asyncio.run(
-            fn(action="start", script_path="/w/a.py", name="新作业", wait=False, on_conflict="parallel")
+            fn(
+                action="start",
+                script_path="/w/a.py",
+                name="新作业",
+                wait=False,
+                on_conflict="parallel",
+            )
         )
     )
 

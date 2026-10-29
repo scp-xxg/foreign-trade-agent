@@ -1,0 +1,266 @@
+"""Agent assembly phase: native tools. """
+
+from __future__ import annotations
+
+from core.harness.registry import NativeToolContext, install_tools
+
+from core.llm.factory.request import AgentRequest
+from core.llm.tools import (
+    register_bash,
+    register_edit,
+    register_glob,
+    register_grep,
+    register_pin_to_workspace,
+    register_read,
+    register_read_artifact,
+    register_read_image,
+    register_sandbox_get_artifact,
+    register_sandbox_put_artifact,
+    register_sandboxed_view_text_file,
+    register_write,
+)
+from core.config.store.execution_options import code_capability_enabled
+
+
+async def native_tools(
+    request: AgentRequest,
+    *,
+    _api_scope,
+    _eval_scope,
+    _interactive,
+    _is_channel_run,
+    _log,
+    _proj_scope,
+    _sbx_sess,
+    _shared_subagent_cfg,
+    _turbo_code_exec,
+    allowed_skill_dirs,
+    enabled_mcp_keys,
+    loaded_skill_ids,
+    loader,
+    skill_ids_to_register,
+    toolkit,
+    _progressive=None,
+    fully_loaded_skill_ids=None,
+):
+    if request.profile:
+        from core.harness.registry import agent_profile
+
+        agent_profile(request.profile).register_tools(toolkit, request, loader=loader)
+        return
+    if (
+        not request.disable_tools
+        and (not request.turbo_mode or _turbo_code_exec)
+        and _api_scope is None
+        and _eval_scope is None
+    ):
+        register_sandboxed_view_text_file(
+            toolkit,
+            allowed_skill_dirs,
+            loader,
+            loaded_skill_ids=loaded_skill_ids,
+            fully_loaded_skill_ids=fully_loaded_skill_ids,
+            user_id=request.current_user_id,
+        )
+
+        # ── Phase 3.5: Register sandbox tools (Bash + artifact in/out) ──
+        # Skill files reach the sandbox via the unified /workspace/skills bind
+        # mount (built-in synced at startup, DB skills materialized on demand —
+        # see agent_skills.config.get_sandbox_skills_dir), so Bash needs no
+        # per-call sync.
+        if request.allow_bash:
+            register_bash(
+                toolkit,
+                loader=loader,
+                source_run_id=request.run_id,
+                chat_id=request.chat_id,
+                sandbox_session_id=_sbx_sess,
+                user_id=request.current_user_id,
+                scope=_proj_scope,
+            )
+        if not request.read_only:
+            register_sandbox_put_artifact(
+                toolkit,
+                chat_id=request.chat_id,
+                sandbox_session_id=_sbx_sess,
+                user_id=request.current_user_id,
+            )
+        from core.config.local_mode import local_mode_enabled
+
+        if not local_mode_enabled():
+            register_sandbox_get_artifact(
+                toolkit,
+                chat_id=request.chat_id,
+                sandbox_session_id=_sbx_sess,
+                user_id=request.current_user_id,
+                scope=_proj_scope,
+            )
+        # Site publishing is now plugin-based: the sites plugin's site_publish
+        # MCP provides the publish_site tool; the built-in native tool is no
+        # longer registered here (see extensions/mcp_servers/site_publish_mcp +
+        # extensions/plugins/marketplace/sites).
+
+        contribution_context = NativeToolContext(
+            request, _interactive, _is_channel_run, _sbx_sess, _proj_scope,
+            skill_ids_to_register, enabled_mcp_keys, _log,
+        )
+        await install_tools("after_sandbox", toolkit, contribution_context)
+
+        # ── Phase 3.6: Register file-operation tools (Read/Edit/Write/Glob/
+        # Grep). Edit/Write trust the model and need no prior Read.
+        #
+        # Gating (docs §3.2): CODE_CAPABILITY_ENABLED=true → available by
+        # default in all modes. This block is already nested inside
+        # `if not disable_tools:`, so the plan-generation phase naturally gets
+        # no file capability.
+        # Project mode: hooks up the folder name + subtree scoping; the fs/
+        # file tools below and pin_to_workspace (Phase 3.8) share the same
+        # scope.
+        _proj_folder_name = (request.project_ctx or {}).get("project_folder_name") or None
+
+        # Decided once per build from the model this run will actually use: a
+        # pinned subagent model wins over the request's provider (mirrors the
+        # sub-agent override below and DynamicModelMiddleware).
+        from core.models.vision import resolve_vision_mode
+
+        _vision_mode = resolve_vision_mode(
+            (_shared_subagent_cfg.provider_id if _shared_subagent_cfg else None)
+            or getattr(request.user_agent, "model_provider_id", None)
+            or request.model_provider_id
+            or ""
+        )
+
+        if code_capability_enabled():
+            register_read(
+                toolkit,
+                chat_id=request.chat_id,
+                sandbox_session_id=_sbx_sess,
+                user_id=request.current_user_id,
+                project_folder_name=_proj_folder_name,
+                scope=_proj_scope,
+                vision_mode=_vision_mode,
+            )
+            if not request.read_only:
+                register_edit(
+                    toolkit,
+                    chat_id=request.chat_id,
+                    sandbox_session_id=_sbx_sess,
+                    user_id=request.current_user_id,
+                    project_folder_name=_proj_folder_name,
+                    scope=_proj_scope,
+                )
+                register_write(
+                    toolkit,
+                    chat_id=request.chat_id,
+                    sandbox_session_id=_sbx_sess,
+                    user_id=request.current_user_id,
+                    project_folder_name=_proj_folder_name,
+                    scope=_proj_scope,
+                )
+            register_glob(
+                toolkit,
+                chat_id=request.chat_id,
+                sandbox_session_id=_sbx_sess,
+                user_id=request.current_user_id,
+                project_folder_name=_proj_folder_name,
+                scope=_proj_scope,
+            )
+            register_grep(
+                toolkit,
+                chat_id=request.chat_id,
+                sandbox_session_id=_sbx_sess,
+                user_id=request.current_user_id,
+                project_folder_name=_proj_folder_name,
+                scope=_proj_scope,
+            )
+
+        # ── Phase 3.7: Register read_artifact for cross-turn file access ──
+        # Unconditional: any user may have uploaded files in prior turns of this chat,
+        # and the hook injects historical-file summaries referencing this tool.
+        register_read_artifact(toolkit, user_id=request.current_user_id)
+
+        # ── Phase 3.7a: read_image ──
+        # Same rationale as read_artifact — images can arrive in any run (upload,
+        # channel attachment, a chart the agent just rendered), and read_artifact
+        # cannot parse them. Native mode hands over pixels, bridge mode a
+        # transcription; in "none" mode the tool is not registered and Read says so.
+        register_read_image(
+            toolkit,
+            chat_id=request.chat_id,
+            sandbox_session_id=_sbx_sess,
+            user_id=request.current_user_id,
+            project_folder_name=_proj_folder_name,
+            scope=_proj_scope,
+            vision_mode=_vision_mode,
+        )
+
+        await install_tools("after_image", toolkit, contribution_context)
+
+        # ── Phase 3.8: Register pin_to_workspace ──
+        # Lets the agent gate which generated files reach the user-visible
+        # assistant message. See core/llm/runtime/workspace.py for the per-run state.
+        register_pin_to_workspace(toolkit, scope=_proj_scope, sandbox_session_id=_sbx_sess)
+
+        # ── Phase 3.85: run_job（工作流模式的作业编排面） ──
+        # **用户显式触发才注册**（workflow_mode）：斜杠命令 /workflow 或 + 菜单选「工作流
+        # 模式」。与计划模式同属用户触发的模式——不触发就完全不存在，普通问答的
+        # 工具面与提示词一点都不受影响。
+        # 触发之后它才是这段对话的原生能力（不走 catalog 开关、关不掉）：面对 N 个同构
+        # 工作项时，主循环逐项处理会让每一轮重发全部历史（成本随进度二次方增长，做不完
+        # 就自行收工）。run_job 把循环体交给沙箱脚本，模型调用由后端代持凭据派出——
+        # 脚本因此拿不到任何 key。isolated=True 的子作业不注册，杜绝 job 套 job。
+        if request.workflow_mode and not request.isolated and _sbx_sess:
+            from core.llm.ports import snapshot_parent_runtime
+            from core.llm.tools.job_tool import register_run_job
+
+            register_run_job(
+                toolkit,
+                user_id=request.current_user_id or "",
+                chat_id=request.chat_id,
+                sandbox_session_id=_sbx_sess,
+                allowed_tools=sorted(enabled_mcp_keys or []),
+                project_ctx=request.project_ctx,
+                model_name=request.model_name,
+                model_provider_id=request.model_provider_id,
+                parent_runtime=snapshot_parent_runtime(
+                    request,
+                    skill_ids=skill_ids_to_register,
+                    mcp_ids=enabled_mcp_keys,
+                    sandbox_session_id=_sbx_sess,
+                    progressive=_progressive,
+                ),
+            )
+
+        await install_tools("after_workflow", toolkit, contribution_context)
+
+    if not request.disable_tools and _eval_scope is not None:
+        from core.harness.registry.evaluation import register_evaluation_tools
+        from core.models.vision import resolve_vision_mode
+
+        register_evaluation_tools(
+            toolkit,
+            _eval_scope,
+            read_only=request.read_only,
+            allow_bash=request.allow_bash,
+            vision_mode=resolve_vision_mode(request.model_provider_id or ""),
+        )
+
+    if not request.disable_tools and _api_scope is not None:
+        from core.llm.api_runtime.agent_tools import register_agent_api_tools
+
+        register_sandboxed_view_text_file(
+            toolkit,
+            allowed_skill_dirs,
+            loader,
+            loaded_skill_ids=loaded_skill_ids,
+            fully_loaded_skill_ids=fully_loaded_skill_ids,
+            user_id=request.current_user_id,
+        )
+        register_agent_api_tools(
+            toolkit,
+            _api_scope,
+            read_only=request.read_only or not request.allow_bash,
+            skill_dirs={sid: loader.get_skill_dir(sid) for sid in skill_ids_to_register or []},
+        )
+
+    return None

@@ -10,9 +10,13 @@ import { buildTradeQuoteHtml, buildTradeQuoteWorkbook, quoteFilename } from '../
 // Generate fixtures from the real public engine. No model, service, database,
 // browser, or filesystem output is required for this regression check.
 const root = resolve(process.cwd(), '../..');
-const fixtures = JSON.parse(execFileSync(resolve(root, '.venv/bin/python'), ['-c', `
+const python = process.env.FOREIGN_TRADE_TEST_PYTHON || resolve(root, '.venv/bin/python');
+const fixtures = JSON.parse(execFileSync(python, ['-c', `
 import json
-from extensions.foreign_trade.engine import calculate_quote
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path.cwd() / 'extensions'))
+from foreign_trade.engine import calculate_quote
 base = [{"sku": "DESK-001", "quantity": 500}]
 revised = [{"sku": "DESK-001", "quantity": 1000, "custom_packaging": True}]
 print(json.dumps({

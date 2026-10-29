@@ -8,26 +8,35 @@ HugAgentOS's tool ecosystem is built on [MCP (Model Context Protocol)](https://m
 - **Failure isolation** — a crashed tool process is restarted by the launcher without touching the backend;
 - **An open ecosystem** — administrators can plug in any third-party MCP server (stdio / HTTP / SSE), and end users can self-serve private remote MCP servers.
 
+## Concurrent tool execution
+
+Multiple MCP tool calls in one model response can execute concurrently through
+AgentScope's concurrent batch executor. Regular, cloud gateway, and management
+MCP tools use the same policy, without an additional platform concurrency limit.
+Permission checks and write confirmations still apply to each call. Server-side
+serialization and rate limits remain effective. The model must emit multiple
+calls in one response to form a concurrent batch. Operations with dependencies
+must execute in separate rounds.
+
 ## Architecture
 
 ```
                        ┌──────────────────── mcp container (docker/Dockerfile.mcp) ──┐
-                       │  mcp_servers._launcher (one child process per server)│
+                       │  extensions.mcp_servers._launcher (one child process per server)│
 ┌─────────┐  HTTP  ┌───┴────┐   :9100  retrieve_dataset_content (KB retrieval)│
 │ backend │───────▶│streama-│   :9101  query_database (data warehouse, EE)    │
 │ (FastAPI│        │ble-http│   :9102  internet_search                        │
 │  agent) │        │        │   :9103  unified Industry Knowledge Center (EE)│
-└─────────┘        │        │   :9104  generate_chart_tool                    │
+└─────────┘        │        │   :9104  reserved (retired chart MCP)          │
      │             │        │   :9105  reserved (former report export MCP)   │
- MCPConnectionPool │        │   :9106  web_fetch                              │
- (core/llm/        │        │   :9107  batch_runner                           │
+ Native MCP Client │        │   :9106  web_fetch                              │
   mcp_pool.py)     └───┬────┘   :9108  automation_task (automation plugin)    │
                        │        9109–9111 reserved (former office MCPs)       │
                        │        :9112  skill_manager                          │
                        └──────────────────────────────────────────────────────┘
 ```
 
-The single source of truth for port assignment is `src/backend/mcp_servers/_ports.py`: both `core/config/mcp_config.py` (which builds the backend-side `http://mcp:NNNN/mcp/` URLs) and `mcp_servers/_launcher.py` (which binds those ports inside the container) read from it.
+The built-in registry, `src/backend/extensions/mcp_servers/registry.py`, declares installation placement, package names, and base ports. `_ports.py` applies desktop port offsets: both `core/config/mcp_config.py` (which builds the backend-side `http://mcp:NNNN/mcp/` URLs) and `extensions/mcp_servers/_launcher.py` (which binds those ports inside the container) read from it.
 
 > Historical note: office-document editing and export (word / excel / ppt /
 > pdf) have moved out of the `mcp` container into
@@ -45,9 +54,7 @@ The single source of truth for port assignment is `src/backend/mcp_servers/_port
 | `query_database_mcp` | 9101 | `query_database` | **Enterprise EE** |
 | `internet_search_mcp` | 9102 | `internet_search` | Community CE |
 | `ai_chain_information_mcp` | 9103 | 27 industry, enterprise, news, policy, report, patent, and technology tools | **Enterprise EE (Industry Knowledge Center plugin)** |
-| `generate_chart_tool_mcp` | 9104 | `generate_chart_tool` | Community CE |
 | `web_fetch_mcp` | 9106 | `web_fetch` | Community CE |
-| `batch_runner_mcp` | 9107 | `batch_plan` | Community CE |
 | `automation_task_mcp` | 9108 | `create_scheduled_task` / `list_scheduled_tasks` / `update_scheduled_task` etc. | Community CE (automation plugin) |
 | `skill_manager_mcp` | 9112 | `search_marketplace` / `install_from_marketplace` / `register_skill` / `list_my_skills` / `submit_to_marketplace` / `delete_skill` | Community CE |
 
@@ -66,7 +73,7 @@ The retrieval entry point for knowledge-base RAG; one server exposes three tools
 - **`list_datasets()`**: lists every knowledge base (public + private) available to the current user, including names, descriptions and document lists, so the model can explore before retrieving;
 - **`retrieve_local_kb(kb_id, query, top_k)`**: retrieval against the platform's self-hosted private knowledge bases.
 
-It is the only **per-request** server: for each chat request the backend injects the allowed KB IDs, current user ID and reranker flag as **HTTP headers** (`X-Allowed-Dataset-Ids` / `X-Allowed-Kb-Ids` / `X-Current-User-Id` / `X-Reranker-Enabled`; see `core/llm/agent_factory.py::_apply_runtime_kb_constraints`), and the server reads them from `ctx.request_context` to enforce multi-user isolation. See the [knowledge base module](knowledge-base.md).
+It is the only **per-request** server: for each chat request the backend injects the allowed KB IDs, current user ID and reranker flag as **HTTP headers** (`X-Allowed-Dataset-Ids` / `X-Allowed-Kb-Ids` / `X-Current-User-Id` / `X-Reranker-Enabled`; see `core/llm/factory/build.py::_apply_runtime_kb_constraints`), and the server reads them from `ctx.request_context` to enforce multi-user isolation. See the [knowledge base module](knowledge-base.md).
 
 ### query_database — data-warehouse query (Enterprise EE)
 
@@ -74,14 +81,31 @@ It is the only **per-request** server: for each chat request the backend injects
 
 ### internet_search — web search (CE)
 
-`internet_search(query, max_results, topic, search_depth, include_raw_content,
-cn_only)` selects Tavily, Baidu, or LangSearch through
-`INTERNET_SEARCH_ENGINE` and reads only the API key for the selected engine.
-All three providers return normalized `title / url / content` fields. Only
-Tavily natively supports `topic`, `search_depth`, and raw-page content.
-LangSearch maps its generated summary to `content`. The agent uses this tool
-only as a fallback when user-configured knowledge bases and other specialized
-tools return no results.
+`internet_search(query, queries, max_results, topic, search_depth, include_raw_content)`
+selects Tavily, Baidu, LangSearch, or DeepSeek through `INTERNET_SEARCH_ENGINE`, reading only the selected API key.
+Supply either one `query` or up to four distinct `queries`. Queries run concurrently; results are interleaved
+in input-query order and deduplicated by URL, with at most eight sources. The default is five;
+set `max_results=8` for research. Sources are not filtered by language. Tavily receives a country preference
+only when explicitly configured and `topic=general`; there is no implicit China preference.
+
+Public information and technical research can use search directly. Internal business questions prioritize
+the relevant internal authority. When snippets cannot support a key claim, use `web_fetch` to verify the
+original page. Tavily supports topic, depth and raw content; LangSearch maps summary to content.
+DeepSeek maps summary to content and `include_raw_content` to page content, limits each query to 128 characters
+(`query_too_long`), restricts `topic=news` to the last 30 days with `after:` (dropping undated pages), and drops
+rows with `rerank_score` below 0.5.
+
+The single source list is `result.results`, with title, URL, content, available publication date, retrieval
+time and matched query indices. Baidu's original date is preserved as `date_raw`; retrieval time never
+substitutes for an unknown publication date. `content_truncated` marks clipped content; `results_limited`
+marks known candidates omitted by the source cap. Unknown upstream truncation is null.
+Partial query failures retain successful, citable sources with `status=partial` and per-query status;
+all-query failure is an explicit error. A batch has a 45-second deadline including queueing and bounded
+backoff. The search HTTP transport defaults to 50 seconds; explicit timeout configuration takes precedence.
+
+`web_fetch` returns body text in `result`, requested and final URLs, title, retrieval time and truncation
+metadata. Content defaults to 50,000 characters (allowed range 1–100,000). Downloads are capped at 2 MB
+of decoded response bytes and are explicitly marked when truncated.
 
 ### Industry Knowledge Center plugin (Enterprise EE)
 
@@ -137,17 +161,9 @@ but capability inventory, arbitrary endpoint invocation, region trees, generic
 entity resolution, personal libraries, collections/subscriptions, report
 workbenches, and upstream write operations are no longer exposed to agents.
 
-### generate_chart_tool — data visualization (CE)
-
-`generate_chart_tool(data, query)`: takes JSON data plus a plotting instruction, renders line/bar/pie charts with matplotlib (the mcp container bundles WenQuanYi and FangZheng fonts for CJK rendering), saves the image as a platform artifact and returns a `file_id` / download URL. The tool description mandates fetching real data first ("never plot from thin air") and documents the standard hand-off to the sandbox (`sandbox_put_artifact` to copy the chart in before embedding it in Word/PPT).
-
 ### web_fetch — web page fetching (CE)
 
 `web_fetch(url, extractMode, maxChars)`: fetches a URL and extracts its main content in `text` / `markdown` / `html` mode. The canonical pairing is "`internet_search` for URLs, then `web_fetch` for full text"; several search-oriented marketplace skills also use it to hit specialised search-engine URLs.
-
-### batch_runner — batch execution planner (CE)
-
-`batch_plan(instruction, file_ids, text_items, chat_id)`: detects "do the same thing to each item in a set" intents (enumerated objects / uploaded Excel rows / multiple documents), produces a confirmable **execution plan** with a prompt template and placeholders, then immediately ends the turn — the frontend pops a confirmation dialog, the user reviews/edits the template, and the backend executes item by item with live streaming. See the [automation module](automation.md).
 
 ### automation_task — scheduled task management (CE)
 
@@ -162,20 +178,21 @@ Supports the capability center and skill-management plugins: `search_marketplace
 Every built-in server follows the same directory convention:
 
 ```
-mcp_servers/<name>_mcp/
+extensions/mcp_servers/<name>_mcp/
 ├── server.py        # FastMCP instance + @mcp.tool() thin shims (arg tolerance, stdout→stderr)
 ├── impl.py          # business logic (lazily imported from server.py to keep startup light)
 ├── _selftest.py     # offline self-check: module imports, tool signatures
 └── README.md        # run/debug notes
 ```
 
-The shared layer (root of `mcp_servers/`):
+The shared layer (root of `extensions/mcp_servers/`):
 
 | File | Responsibility |
 |---|---|
 | `_serve.py` | The common `main()` entry: `run(mcp, default_port)` picks stdio (local-debug default) or streamable-http (in-container) from `--transport`; HTTP mode binds `0.0.0.0` and disables DNS-rebinding protection (private Docker network) |
 | `_launcher.py` | The mcp container's CMD: spawns one streamable-http child per server, prefixes stdout/stderr with `[server]`, restarts crashes with exponential backoff, and exits non-zero if any child crashes more than 5 times within 60s (Docker then restarts the whole container) |
-| `_ports.py` | The single source of truth for server_id → port, plus the `package_name()` mapping |
+| `registry.py` | Local, cloud, or dual installation; process or desktop gateway exposure |
+| `_ports.py` | Deployment port mapping derived from the registry, including desktop offsets |
 | `_common.py` | Shared helpers |
 
 Two iron rules: **stdout is reserved for the MCP protocol** (business logs go to stderr; server.py wraps calls in `contextlib.redirect_stdout` as a backstop), and **be tolerant of malformed LLM-generated arguments** (e.g. auto-unpacking when a dict lands in a string parameter).
@@ -209,7 +226,7 @@ priority order:
      injects `"cite_id": "eN"` into each entry in place; the model copies the id as-is.
 2. **Standard list shape → one registry line**: list-style tools returning
    `{"items": [{"title": …, "content": …}]}` just need an `items_paths` + field-alias
-   entry in `orchestration/citation_anchor.py::TOOL_SPECS` — per-item numbering with no
+   entry in `core/llm/citations/hook.py::TOOL_SPECS` — per-item numbering with no
    tool code change.
 3. **Do nothing → automatic fallback**: a generic heuristic finds the unique dict-array
    field at the top level (or one level under `result`) and numbers items; when nothing is
@@ -223,21 +240,18 @@ before the result enters the model context and before persistence; the frontend 
 render `cite_id` as per-item chips that match the `[anchor text](cite:eN)` references in
 the answer body.
 
-## Backend client: connection pool & bare-name restoration
+## Backend client: native MCP lifetimes
 
-The backend connects through AgentScope 2.0's `MCPClient`, centred on two files:
+The backend uses MCP SDK 2.3 `Client(mode="auto")` and AgentScope `ToolBase`. `client.py` owns transport authorization; `lifetime.py` owns SDK scopes and complete paginated discovery. HTTP calls reuse the same client throughout a run. STDIO sessions use exclusive leases scoped to the executing user, chat and configuration; successful sessions remain idle for 60 seconds, while failed or cancelled calls destroy them. There is no stable-connection switch or startup connection pool.
 
-- **`core/llm/mcp_pool.py` — `MCPConnectionPool`** (process-level singleton): at startup `warmup_mcp_tools()` reads all enabled server configs from the DB and pre-connects. Pooling semantics under 2.0:
-  - **stdio servers marked `is_stable=true`** keep their connection across requests (saving the 1–7 s subprocess cold start);
-  - **HTTP servers are never pooled** — 2.0's stateful HTTP client is bound to its asyncio task, and reuse across requests triggers cancel-scope crashes, so each request gets a fresh `is_stateful=False` connection;
-  - per-request servers (KB retrieval with user headers) connect on demand and are closed via `close_transient()` when the request ends.
-- **`core/llm/mcp_manager.py` — `BareNameMCPClient`**: AgentScope 2.0 rewrites tool names to `mcp__<server>__<tool>`; this subclass restores the server-side bare name (`internet_search`, not `mcp__internet_search__internet_search`) so the display-name mapping (`core/config/display_names.py`), [citation extraction](chat.md) keyed by tool name, and frontend icon rendering all keep working as in 1.x.
+`callbacks.py` binds isolated text sampling and user elicitation to the active run. Resources, URI templates and prompts become permission-governed tools. Progress reaches the existing tool card. Structured results and resource links remain in tool metadata and model-facing output. SDK Tasks extensions are not available in 2.3.
 
-The 2.0 `Toolkit` is constructed once, in `core/llm/agent_factory.py`: `Toolkit(tools=[...], mcps=clients)`.
+MCP execution budgets exclude time waiting for user answers. Valid questions pause the current invocation; answering or cancelling a question resumes its remaining budget. Repeated or overlapping questions do not reset that budget. Other invocations keep independent timers. Existing human-interaction deadlines still apply, and cancelling a run clears pending questions. Invocation budgets bound SDK requests and HTTP reads; connection, write and discovery timeouts remain active.
+
 
 ## Unified tool-permission gateway
 
-`core/llm/tool_permissions.py` provides the run-scoped
+`core/llm/tool_permissions/` provides the run-scoped
 `ToolPermissionRegistry` and `ToolPermissionMiddleware`. The registry is a
 **governed-tool list**, not a mandatory declaration table:
 
@@ -256,7 +270,7 @@ The 2.0 `Toolkit` is constructed once, in `core/llm/agent_factory.py`: `Toolkit(
   tools become dispatchable.
 
 Native tools may opt in with
-`ToolCollector.register_tool_function(..., permission=spec)`. The platform's
+`ToolAssembly.append(function_tool(..., dispatch_spec=spec))`. The platform's
 local-file, Bash, and My Space rules live in `builtin_tool_permission()`.
 Native tools with neither an explicit spec nor a built-in entry pass through.
 
@@ -283,7 +297,7 @@ tools that should be governed need a registry rule.
 
 ## Registration: DB-driven config + catalog gating
 
-The source of truth for MCP server configuration is the `admin_mcp_servers` table (ORM: `core/db/models.py::AdminMcpServer`), read through `core/services/mcp_service.py::McpServerConfigService` with a 30-second TTL cache, in a dict format compatible with the legacy `MCP_SERVERS` (`transport / command / args / env / url / headers / is_stable`). `core/config/mcp_config.py` remains as the URL builder for the built-in servers (first-deployment seeds).
+The source of truth for MCP server configuration is the `admin_mcp_servers` table (ORM: `core/db/models/`), read through `core/capabilities/mcp/service.py::McpServerConfigService` with a 30-second TTL cache, using native client configuration (`transport / command / args / env / url / headers`). `core/config/mcp_config.py` remains as the URL builder for the built-in servers (first-deployment seeds).
 
 Whether a server is **visible to the model** additionally passes through [catalog](catalog.md) gating: each entry in the `mcp` section of `core/config/catalog.json` corresponds to a server_id, and a server whose `is_enabled(id, "mcp_server")` is false will not be registered with the agent even if connected.
 
@@ -295,7 +309,7 @@ The `/config` system console's **MCP Tools → MCP Server Management** view maps
 - **Probe-on-create**: `_probe_connectivity` performs a real connection; failures are rejected before persisting;
 - **Toggle & ordering**: `POST /{id}/toggle` switches a server instantly (refreshing the catalog and the connection pool);
 - **Secret protection**: HTTP header values are encrypted at rest and returned as `***`; secret-looking `env_vars` values are masked as well;
-- **Test & reload**: `POST /{id}/test` re-probes a single server; `POST /reload-pool` hot-rebuilds the connection pool.
+- **Test & reload**: `POST /{id}/test` re-probes a single server; `automatic cache invalidation` refreshes discovery on the next run.
 - **Move to MCP Marketplace**: creates a credential-free marketplace snapshot
   from an existing remote HTTP/SSE MCP and disables the original global
   instance. The service then leaves the MCP server list and can be reviewed,
@@ -315,7 +329,7 @@ Regular users can add remote MCP servers visible **only to themselves** (`api/ro
 - `POST /v1/me/mcp-servers`: add a private remote MCP over public HTTP or HTTPS using HTTP/SSE transports; the user entry point deliberately forbids stdio (no arbitrary command execution on the server), and DNS/IP validation blocks localhost, private, link-local, and reserved addresses; probe-on-create means unreachable endpoints are never persisted. HTTP is plaintext, so HTTPS remains recommended for production;
 - `DELETE /v1/me/mcp-servers/{id}`: remove one's own private MCP.
 
-Implementation reuses the same `admin_mcp_servers` table: `owner_user_id` = current user for owner isolation, auto-generated `umcp_<hex>` server IDs to avoid clashes, and `is_stable=False` to keep them out of the warmup pool. HTTP header values are encrypted with Fernet at rest and decrypted only at runtime. The feature is gated by the per-user `can_add_mcp` permission flag (open by default in the single-tenant Community Edition; granted per user by organisation admins in the Enterprise Edition — see [editions](../editions/overview.md)).
+Implementation reuses the same `admin_mcp_servers` table: `owner_user_id` = current user for owner isolation, auto-generated `umcp_<hex>` server IDs to avoid clashes. HTTP header values are encrypted with Fernet at rest and decrypted only at runtime. The feature is gated by the per-user `can_add_mcp` permission flag (open by default in the single-tenant Community Edition; granted per user by organisation admins in the Enterprise Edition — see [editions](../editions/overview.md)).
 
 ## MCP marketplace
 
@@ -324,9 +338,11 @@ System marketplace governance lives at **`/config → MCP Tools`**. Matching Ski
 The capability center's MCP marketplace uses the same listing-visibility model as the skill, sub-agent, and plugin marketplaces, including public listings and grants to selected users, teams, or roles. A marketplace listing stores only a **credential-free, reviewed version snapshot**. An administrator-published listing may retain administrator-managed credentials on its source `admin_mcp_servers` row; during installation the backend copies them into the user's private instance under encryption, without putting credential values in marketplace tables or frontend responses:
 
 - Users can inspect tool names, input schemas, and risk level, then install a listing as a private MCP. If the marketplace auth policy is administrator-managed and all token fields are configured, the UI asks for no token. With installer-managed credentials, each user supplies a token or completes OAuth during installation.
+- When users connect a private MCP in the capability center, they choose no auth, header / token, or OAuth. With OAuth they approve in a new tab (the client registers automatically through CIMD or DCR, or they can enter their own OAuth App and scopes under Advanced), and the tokens are encrypted on that private instance.
 - Users can submit an already connected private MCP, track pending/approved/rejected state, and withdraw it before review. Instances installed from the MCP marketplace don't expose the submission action, and the backend rejects duplicate listing attempts.
-- When creating a remote HTTP/SSE MCP in Config, administrators can check “Require Token/Auth” and select Token or OAuth. A token may be entered centrally or left blank: a centrally supplied token makes user installation credential-free, while a blank token requires every user to enter one; OAuth is completed by each user. If the first connection is unauthorized because no administrator credential was supplied, the listing can still be created and uses `per_install` tool discovery after user authentication. Remote MCPs are not globally active until installed from the marketplace. StdIO MCPs remain locally managed and must use the plugin marketplace for cross-environment distribution.
-- Administrators can edit a listing's name, summary, user introduction, category, tags, icon, and authentication policy. The policy explicitly selects no authentication, installer-provided credentials, or administrator-managed credentials. Administrator tokens are maintained only under Edit; the marketplace no longer exposes an “Update Global Credentials” action. Presentation changes and administrator-token updates propagate to existing installations. The reviewed endpoint, tool schemas, risk report, and version number remain version snapshots.
+- When creating a remote HTTP/SSE MCP in Config, administrators can check “Require Token/Auth” and select Token or OAuth. A token may be entered centrally or left blank: a centrally supplied token makes user installation credential-free, while a blank token requires every user to enter one; OAuth is completed by each user. For OAuth, administrators can first select “Check authorization server” to see PKCE, DCR, and CIMD support, then pick a client registration mode (see “OAuth client registration” below). If the first connection is unauthorized because no administrator credential was supplied, the listing can still be created and uses `per_install` tool discovery after user authentication. Remote MCPs are not globally active until installed from the marketplace. StdIO MCPs remain locally managed and must use the plugin marketplace for cross-environment distribution.
+- Submitting an OAuth-connected private MCP records only the OAuth sign-in method and its scopes, never tokens, client information, or a client secret. If the submitter registered automatically, installers will too; if the submitter brought their own OAuth App, installers must as well until an administrator configures a shared one. The review dialog shows the authentication method.
+- Administrators can edit a listing's name, summary, user introduction, category, tags, icon, and authentication policy, and can switch a non-curated listing between Token and OAuth (existing installations keep their old credentials until each user reinstalls). The policy explicitly selects no authentication, installer-provided credentials, or administrator-managed credentials. Administrator tokens are maintained only under Edit; the marketplace no longer exposes an “Update Global Credentials” action. Presentation changes and administrator-token updates propagate to existing installations. The reviewed endpoint, tool schemas, risk report, and version number remain version snapshots.
 - Admin controls cover listing/delisting, user/team/role visibility, manual revalidation, soft deletion, and a security suspension kill switch. When manual revalidation confirms real tool drift, the previous snapshot is retained and a new patch version is published before installation resumes. If the original MCP connection row has been removed, revalidation falls back to the credential-free endpoint stored in the reviewed version and resumes installation when the snapshot still matches. Suspension immediately disables every installation derived from that listing, and lifting it restores those installations.
 - Tool names and descriptions associated with deletion, execution, or mutation produce medium/high risk reports. High-risk installations require explicit confirmation.
 - By default, the backend reconnects to each remote MCP every six hours and compares its tool-snapshot hash. Drift moves the listing to `changed` and pauses new installations until review; the periodic task detects drift but never accepts a new snapshot automatically. Configure the period with `MCP_MARKET_REVALIDATE_INTERVAL`.
@@ -337,7 +353,7 @@ A fresh deployment seeds five **platform-curated templates**. They appear in the
 |---|---|---|
 | Amap MCP | Amap Web Service API Key | The encrypted key is injected into the `key` URL query parameter only at runtime; the marketplace URL never contains it. |
 | Metaso Search MCP | Metaso API Key | Runtime configuration automatically builds `Authorization: Bearer …`. |
-| GitHub MCP | Fine-grained PAT or OAuth App sign-in | GitHub's official remote MCP does not support DCR; OAuth requires a registered Client ID/Secret. |
+| GitHub MCP | Fine-grained PAT or OAuth App sign-in | GitHub's official remote MCP supports neither DCR nor CIMD. An administrator can configure one shared OAuth App in the marketplace editor so users only grant consent; otherwise each user enters their own Client ID/Secret. |
 | GitLab MCP | Browser OAuth (recommended) or an access token with `mcp` scope | GitLab's official MCP is Beta; browser sign-in supports DCR, PKCE, and refresh tokens. Regular PATs may not connect. |
 | Alibaba Cloud Observability MCP | A configured personal SSE endpoint | Configure AK/SK first in ModelScope Hosted, Function Compute, or another protected environment. The platform does not collect the cloud AK/SK directly. |
 
@@ -349,7 +365,19 @@ Each marketplace version declares one or more methods in `auth_config`: `none`, 
 
 When an administrator chooses centrally managed credentials during creation or marketplace editing, the backend verifies that the source server holds every required field. List and detail responses expose only `credentials_managed_by_admin=true`; installation reuses and re-encrypts those values server-side, never returning token contents. Selecting installer-provided credentials prevents marketplace installation from reusing the source token even when that token remains available for revalidation. Community submissions and platform-curated templates continue to require independent installer authentication and never reuse publisher credentials.
 
-OAuth remote MCPs use protected-resource and authorization-server metadata discovery, Authorization Code + PKCE, state validation, RFC 8707 resource indicators, and DCR when available. Services without DCR collect a registered Client ID/Secret. Public HTTP and HTTPS are accepted for the MCP endpoint, authorization metadata, and callback base; HTTP exposes authorization codes and tokens in plaintext and is intended only for controlled test environments. Access tokens, refresh tokens, client metadata, and expiry are stored only as an encrypted bundle on the concrete installation and are refreshed at runtime; they never enter marketplace snapshots.
+OAuth remote MCPs use protected-resource and authorization-server metadata discovery, Authorization Code + PKCE, state validation, RFC 8707 resource indicators, and the client registration mode described below. Public HTTP and HTTPS are accepted for the MCP endpoint, authorization metadata, and callback base; HTTP exposes authorization codes and tokens in plaintext and is intended only for controlled test environments. Access tokens, refresh tokens, client metadata, and expiry are stored only as an encrypted bundle on the concrete installation and are refreshed at runtime; they never enter marketplace snapshots.
+
+#### OAuth client registration
+
+Each OAuth listing obtains its OAuth client in one of these ways; in every case users only sign in and approve in a new tab:
+
+| Mode | When | Behavior |
+|---|---|---|
+| Automatic (default) | The authorization server supports CIMD or DCR | Uses a client ID metadata document (CIMD) when the server advertises `client_id_metadata_document_supported` and this deployment has an HTTPS `MCP_OAUTH_PUBLIC_BASE_URL`; the `client_id` is `{base}/v1/mcp-market/oauth/client-metadata.json`. Otherwise uses dynamic client registration (DCR). |
+| Dynamic registration only | The server advertises CIMD but cannot reach this deployment | Skips CIMD and always uses DCR. |
+| Shared admin OAuth App | Neither is supported (GitHub, most enterprise IdPs) | An administrator registers one OAuth App with the callback URL shown in the form (`/api/v1/mcp-market/oauth/callback`) and enters its Client ID/Secret when creating or editing the listing. The credentials are encrypted in `mcp_market_oauth_clients` and used only by the backend to start authorization; each user still gets their own tokens. Curated templates support this too, and re-seeding keeps it. |
+
+CIMD needs the authorization server to reach this deployment's HTTPS URL from its own network, so it is enabled only when `MCP_OAUTH_PUBLIC_BASE_URL` is HTTPS and is never derived from the request `Host`. The callback URL is fixed per deployment and no longer carries a `flow_id` query; the callback finds its login flow through the SDK-generated `state`. Administrator-published endpoints, including intranet addresses, keep the private-network allowance granted at install time for every install, authorization, and token-refresh request. Self-service endpoints reach private networks only with `MCP_SELF_SERVICE_ALLOW_PRIVATE_NETWORK`. When it is on, the same switch also applies to those MCPs' marketplace submission, review re-check, marketplace installs, and periodic revalidation, so an intranet MCP that can be connected can also be listed. Link-local and cloud-metadata addresses stay blocked.
 
 Same-origin deployments automatically use `/api/v1/mcp-market/oauth/callback` on the browser origin. Cross-origin frontend/backend deployments must set `MCP_OAUTH_PUBLIC_BASE_URL` to the browser-reachable API base so callback URLs are never reflected from an untrusted Host header.
 
@@ -357,7 +385,7 @@ User APIs live under `/v1/mcp-market` and cover browsing, details, private insta
 
 ### Data boundaries
 
-The marketplace uses four dedicated tables: `mcp_market_items` for listing metadata, `mcp_market_versions` for immutable tool snapshots, risk reports, and credential-free auth contracts, `mcp_market_submissions` for review snapshots, and `mcp_market_installations` to link versions to concrete instances. Headers, tokens, OAuth bundles, query keys, and personal endpoints never enter marketplace records. Community listings and curated templates authenticate each installer independently. Administrator-published token listings may read encrypted managed credentials from their source `admin_mcp_servers` row and re-encrypt them into the concrete installation, without ever exposing them to the frontend.
+The marketplace uses four dedicated tables (plus `mcp_market_oauth_clients`, which holds only encrypted shared admin OAuth App credentials): `mcp_market_items` for listing metadata, `mcp_market_versions` for immutable tool snapshots, risk reports, and credential-free auth contracts, `mcp_market_submissions` for review snapshots, and `mcp_market_installations` to link versions to concrete instances. Headers, tokens, OAuth bundles, query keys, and personal endpoints never enter marketplace records. Community listings and curated templates authenticate each installer independently. Administrator-published token listings may read encrypted managed credentials from their source `admin_mcp_servers` row and re-encrypt them into the concrete installation, without ever exposing them to the frontend.
 
 The user marketplace, authentication, and runtime refresh live in `core/` and CE routes. `/config` routes and `components/admin` remain EE-registered and are physically removed by the CE derivation manifest. The main tree uses the `mcpmkt01`–`mcpmkt04retire` migration chain; CE uses independent `ce_0003` and `ce_0004` migrations for the same core tables and retirement cleanup without importing `edition_ee`.
 
@@ -367,14 +395,14 @@ Every server can run standalone outside the container (stdio transport by defaul
 
 ```bash
 # Run a single server over stdio (pairs with MCP Inspector etc.)
-PYTHONPATH=src/backend python -m mcp_servers.internet_search_mcp.server
+PYTHONPATH=src/backend python -m extensions.mcp_servers.internet_search_mcp.server
 
 # Run over streamable-http (mimicking the in-container form)
-PYTHONPATH=src/backend python -m mcp_servers.internet_search_mcp.server \
+PYTHONPATH=src/backend python -m extensions.mcp_servers.internet_search_mcp.server \
   --transport streamable-http --port 9102
 
 # Offline self-check (imports, tool signatures)
-PYTHONPATH=src/backend python -m mcp_servers.internet_search_mcp._selftest
+PYTHONPATH=src/backend python -m extensions.mcp_servers.internet_search_mcp._selftest
 
 # In-container liveness probe (lowest port started by the launcher)
 curl -fsS http://localhost:9100/mcp/
@@ -390,23 +418,26 @@ docker-compose up -d --build mcp
 
 | Path | Description |
 |---|---|
-| `src/backend/mcp_servers/<name>_mcp/` | Individual MCP servers (server.py / impl / _selftest) |
-| `src/backend/mcp_servers/_launcher.py` | mcp container entry: multi-process spawn + crash restart |
-| `src/backend/mcp_servers/_serve.py` | Unified stdio / streamable-http entry point |
-| `src/backend/mcp_servers/_ports.py` | Single source of truth for server_id → port |
-| `src/backend/core/llm/mcp_pool.py` | MCP connection pool (stdio pooled / HTTP per-request) |
-| `src/backend/core/llm/mcp_manager.py` | MCPClient construction + bare tool-name restoration |
-| `src/backend/core/llm/tool_permissions.py` | Governed-tool registry, decisions, approval routing, and execution tickets |
-| `src/backend/core/services/mcp_service.py` | DB-driven server config service (30 s cache) |
-| `src/backend/core/services/mcp_marketplace_service.py` | Marketplace publishing, review, installation, visibility, and security controls |
-| `src/backend/core/services/mcp_oauth_service.py` | OAuth 2.1 login, SDK metadata discovery, encrypted token storage, and refresh |
-| `src/backend/core/services/mcp_marketplace_monitor.py` | Periodic remote tool-snapshot revalidation and drift monitoring |
+| `src/backend/extensions/mcp_servers/<name>_mcp/` | Individual MCP servers (server.py / impl / _selftest) |
+| `src/backend/extensions/mcp_servers/_launcher.py` | mcp container entry: multi-process spawn + crash restart |
+| `src/backend/extensions/mcp_servers/_serve.py` | Unified stdio / streamable-http entry point |
+| `src/backend/extensions/mcp_servers/registry.py` | Installation placement, exposure, packages, and base ports |
+| `src/backend/extensions/mcp_servers/_ports.py` | Deployment port mapping |
+| `src/backend/core/llm/mcp/lifetime.py` | Native MCP client ownership and discovery |
+| `src/backend/core/llm/mcp/manager.py` | MCPClient construction + bare tool-name restoration |
+| `src/backend/core/llm/tool_permissions/` | Governed-tool registry, decisions, approval routing, and execution tickets |
+| `src/backend/core/capabilities/mcp/service.py` | DB-driven server config service (30 s cache) |
+| `src/backend/features/marketplace/` | Marketplace publishing, review, installation, visibility, and security controls |
+| `src/backend/core/capabilities/mcp/oauth.py` | OAuth 2.1 login, SDK metadata discovery, encrypted token storage, and refresh |
+| `src/backend/core/capabilities/mcp/oauth_client.py` | Fixed callback URL, CIMD client metadata document, and authorization-server inspection |
+| `src/backend/features/marketplace/mcp_oauth_clients.py` | Client registration modes and shared admin OAuth Apps |
+| `src/backend/features/marketplace/` | Periodic remote tool-snapshot revalidation and drift monitoring |
 | `src/backend/core/config/mcp_config.py` | Built-in server URL builder (http://mcp:NNNN/mcp/) |
 | `src/backend/core/config/catalog.json` | Capability catalog: MCP enable/disable seeds |
 | `src/backend/api/routes/v1/admin_mcp_servers.py` | Admin custom-MCP API |
 | `src/backend/api/routes/v1/me_capabilities.py` | User self-service private MCP / skill API |
-| `src/backend/api/routes/v1/mcp_marketplace.py` | User-facing MCP marketplace API |
-| `src/backend/api/routes/v1/admin_mcp_marketplace.py` | Admin MCP marketplace and review API |
+| `src/backend/features/marketplace/api/mcp_marketplace.py` | User-facing MCP marketplace API |
+| `src/backend/features/marketplace/api/admin_mcp_marketplace.py` | Admin MCP marketplace and review API |
 | `docker/Dockerfile.mcp` | mcp container image (MCP runtime, plotting dependencies, and CJK fonts) |
 
 Related docs: [Capability catalog](catalog.md) · [Agent skills](agent-skills.md) · [Knowledge base](knowledge-base.md) · [Editions & licensing](../editions/overview.md)

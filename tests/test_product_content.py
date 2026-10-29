@@ -12,9 +12,9 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session
 from sqlalchemy.pool import StaticPool
 
-from core.db.models import Artifact, ForeignTradeContentPack
-from core.services import foreign_trade_content as content
-from core.services import foreign_trade_content_generation as generation
+from core.db.models import Artifact, ForeignTradeContentPack, UserFolder, UserShadow
+from core.foreign_trade import content as content
+from core.foreign_trade import content_generation as generation
 from api.routes.v1 import foreign_trade_content as routes
 
 
@@ -29,13 +29,15 @@ class MemoryStorage:
 
 @pytest.fixture
 def context(monkeypatch):
-    import core.storage
+    import core.files.storage
     engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
     ForeignTradeContentPack.__table__.create(bind=engine)
     Artifact.__table__.create(bind=engine)
+    UserFolder.__table__.create(bind=engine)
+    UserShadow.__table__.create(bind=engine)
     storage = MemoryStorage()
     monkeypatch.setattr(content, "get_storage", lambda: storage)
-    monkeypatch.setattr(core.storage, "get_storage", lambda: storage)
+    monkeypatch.setattr(core.files.storage, "get_storage", lambda: storage)
     with Session(engine) as db:
         yield content.ContentPackService(db), storage, engine
     engine.dispose()
@@ -291,6 +293,29 @@ def test_api_upload_confirm_generate_download_contract(api, monkeypatch):
     app.dependency_overrides[routes.get_current_user] = lambda: SimpleNamespace(user_id="bob")
     assert client.get(root + "/download/listing").status_code == 404
     assert client.get(record["documents"][0]["url"]).status_code == 404
+
+
+def test_api_explicit_template_retains_owner_confirmation_and_revision_guards(api, monkeypatch):
+    client, app = api
+    model = AsyncMock(side_effect=AssertionError("Offline template must not call a model"))
+    monkeypatch.setattr(generation, "_translate", model)
+    record = client.post("/api/v1/foreign-trade/content-packs", json={"title": "Offline template"}).json()["data"]
+    path = f"/api/v1/foreign-trade/content-packs/{record['pack_id']}"
+    assert client.post(path + "/generate", json={"revision": 1, "confirmed": True, "generation_mode": "template"}).status_code == 422
+    record = client.patch(path, json={"revision": 1, "product_name": "Board",
+        "facts": [{"label": "USB", "value": "2 USB 3.0 ports", "source_url": "https://example.com/spec"}]}).json()["data"]
+    assert client.post(path + "/generate", json={"revision": 2, "confirmed": False, "generation_mode": "template"}).status_code == 422
+    assert client.post(path + "/generate", json={"revision": 2, "confirmed": True, "generation_mode": "unknown"}).status_code == 422
+    app.dependency_overrides[routes.get_current_user] = lambda: SimpleNamespace(user_id="bob")
+    assert client.post(path + "/generate", json={"revision": 2, "confirmed": True, "generation_mode": "template"}).status_code == 404
+    app.dependency_overrides[routes.get_current_user] = lambda: SimpleNamespace(user_id="alice")
+    response = client.post(path + "/generate", json={"revision": 2, "confirmed": True, "generation_mode": "template"})
+    assert response.status_code == 200
+    output = response.json()["data"]["outputs"]
+    assert output["method"] == "template" and output["generation_mode"] == "template"
+    assert output["warnings"][0] == generation.LOCAL_TEMPLATE_NOTICE
+    assert client.post(path + "/generate", json={"revision": 2, "confirmed": True, "generation_mode": "template"}).status_code == 409
+    model.assert_not_awaited()
 
 
 def test_api_fact_bounds_and_null_rejection(api):

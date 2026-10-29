@@ -1,19 +1,14 @@
+from core.capabilities.skills import loader_factory as loader_factory_module
 from types import SimpleNamespace
 
 import pytest
-from api.routes.v1.chats import _resolve_explicit_capability_invocation
-from api.schemas import ChatRequest
-from core.config import catalog_resolver
-from core.db.models import (
-    AdminMcpServer,
-    AdminSkill,
-    CatalogOverride,
-    InstalledPlugin,
-    UserShadow,
-)
-from core.services import plugin_service
+from core.agent_runtime.skills import _build_skill_injection
+from core.chat.schemas import ChatRequest
+from core.capabilities.catalog import resolver as catalog_resolver
+from core.db.models import AdminMcpServer, AdminSkill, CatalogOverride, InstalledPlugin, UserShadow
+from core.capabilities.plugins import management as plugin_service
+from core.chat.operations.invocation import resolve_explicit_capability_invocation as _resolve_explicit_capability_invocation
 from fastapi import HTTPException
-from orchestration.workflow import _build_skill_injection
 
 
 def _runtime_catalog(*_args, **_kwargs):
@@ -29,9 +24,7 @@ def _runtime_catalog(*_args, **_kwargs):
     }
 
 
-def test_explicit_resolution_ignores_personal_switch_but_keeps_hard_boundaries(
-    db_session, monkeypatch
-):
+def test_explicit_resolution_uses_installation_not_enabled_switch(db_session, monkeypatch):
     monkeypatch.setattr(catalog_resolver, "get_runtime_catalog", _runtime_catalog)
     db_session.add(UserShadow(user_id="user-a", username="User A"))
     db_session.add_all(
@@ -44,8 +37,26 @@ def test_explicit_resolution_ignores_personal_switch_but_keeps_hard_boundaries(
                 display_name="Private",
                 description="Private",
                 owner_user_id="user-a",
-                is_enabled=True,
+                is_enabled=False,
                 dep_status="ready",
+            ),
+            AdminSkill(
+                skill_id="admin-disabled-skill",
+                skill_content="# Installed",
+                display_name="Installed",
+                description="Installed",
+                owner_user_id=None,
+                is_enabled=False,
+                dep_status="ready",
+            ),
+            AdminSkill(
+                skill_id="dependency-blocked-skill",
+                skill_content="# Blocked",
+                display_name="Blocked",
+                description="Blocked",
+                owner_user_id="user-a",
+                is_enabled=False,
+                dep_status="installing",
             ),
             AdminSkill(
                 skill_id="foreign-skill",
@@ -57,10 +68,16 @@ def test_explicit_resolution_ignores_personal_switch_but_keeps_hard_boundaries(
                 dep_status="ready",
             ),
             AdminMcpServer(
+                server_id="admin-disabled-mcp",
+                display_name="Installed public MCP",
+                owner_user_id=None,
+                is_enabled=False,
+            ),
+            AdminMcpServer(
                 server_id="private-mcp",
                 display_name="Private MCP",
                 owner_user_id="user-a",
-                is_enabled=True,
+                is_enabled=False,
             ),
         ]
     )
@@ -75,15 +92,76 @@ def test_explicit_resolution_ignores_personal_switch_but_keeps_hard_boundaries(
                 "private-skill",
                 "admin-disabled-skill",
                 "foreign-skill",
+                "dependency-blocked-skill",
+                "missing-skill",
             ],
-            mcp_ids=["public-mcp", "private-mcp", "admin-disabled-mcp"],
+            mcp_ids=["public-mcp", "private-mcp", "admin-disabled-mcp", "missing-mcp"],
         )
     )
 
-    assert allowed_skills == ["public-skill", "private-skill"]
-    assert allowed_mcps == ["public-mcp", "private-mcp"]
-    assert unavailable_skills == ["admin-disabled-skill", "foreign-skill"]
-    assert unavailable_mcps == ["admin-disabled-mcp"]
+    assert allowed_skills == ["public-skill", "private-skill", "admin-disabled-skill"]
+    assert allowed_mcps == ["public-mcp", "private-mcp", "admin-disabled-mcp"]
+    assert unavailable_skills == ["foreign-skill", "dependency-blocked-skill", "missing-skill"]
+    assert unavailable_mcps == ["missing-mcp"]
+
+
+def test_direct_selected_installed_skill_ignores_global_off(db_session, monkeypatch):
+    monkeypatch.setattr(catalog_resolver, "get_runtime_catalog", _runtime_catalog)
+    db_session.add(
+        AdminSkill(
+            skill_id="admin-disabled-skill",
+            skill_content="# Installed",
+            display_name="Installed",
+            description="Installed",
+            owner_user_id=None,
+            is_enabled=False,
+            dep_status="ready",
+        )
+    )
+    db_session.commit()
+
+    request = ChatRequest(
+        chat_id="chat-1", message="create report", skill_id="admin-disabled-skill"
+    )
+    resolved = _resolve_explicit_capability_invocation(db_session, request, "user-a")
+
+    assert resolved.skill_id == "admin-disabled-skill"
+
+
+def test_public_skill_selection_prefers_current_users_private_install(db_session, monkeypatch):
+    from core.capabilities.skills.installation import compute_install_id as compute_install_id
+
+    monkeypatch.setattr(catalog_resolver, "get_runtime_catalog", _runtime_catalog)
+    private_id = compute_install_id("admin-disabled-skill", "user-a")
+    db_session.add_all(
+        [
+            AdminSkill(
+                skill_id="admin-disabled-skill",
+                skill_content="# Global",
+                display_name="Global",
+                description="Global",
+                is_enabled=False,
+                dep_status="ready",
+            ),
+            AdminSkill(
+                skill_id=private_id,
+                skill_content="# Private",
+                display_name="Private",
+                description="Private",
+                owner_user_id="user-a",
+                is_enabled=False,
+                dep_status="ready",
+            ),
+        ]
+    )
+    db_session.commit()
+
+    request = ChatRequest(
+        chat_id="chat-1", message="create report", skill_id="admin-disabled-skill"
+    )
+    resolved = _resolve_explicit_capability_invocation(db_session, request, "user-a")
+
+    assert resolved.skill_id == private_id
 
 
 def test_plugin_id_is_authoritative_and_unavailable_components_are_skipped(db_session, monkeypatch):
@@ -111,10 +189,10 @@ def test_plugin_id_is_authoritative_and_unavailable_components_are_skipped(db_se
     resolved = _resolve_explicit_capability_invocation(db_session, request, "user-a")
 
     assert resolved.plugin_name == "办公插件"
-    assert resolved._resolved_skill_ids == ["public-skill"]
-    assert resolved._resolved_mcp_ids == ["public-mcp"]
-    assert resolved._resolved_plugin_skill_ids == ["public-skill"]
-    assert resolved._resolved_plugin_mcp_ids == ["public-mcp"]
+    assert resolved._resolved_skill_ids == ["public-skill", "admin-disabled-skill"]
+    assert resolved._resolved_mcp_ids == ["public-mcp", "admin-disabled-mcp"]
+    assert resolved._resolved_plugin_skill_ids == ["public-skill", "admin-disabled-skill"]
+    assert resolved._resolved_plugin_mcp_ids == ["public-mcp", "admin-disabled-mcp"]
 
 
 def test_explicit_plugin_injection_guides_optional_usage():
@@ -132,13 +210,13 @@ def test_explicit_plugin_injection_guides_optional_usage():
 
 
 def test_explicit_skill_injection_guides_skill_loading(monkeypatch):
-    import core.agent_skills.loader as skill_loader
+    import core.capabilities.skills.loader as skill_loader
 
     fake_loader = SimpleNamespace(
         load_all_metadata=lambda: {"security-overview": SimpleNamespace(name="安全概览")},
         get_skill_dir=lambda _skill_id: "/tmp/security-overview",
     )
-    monkeypatch.setattr(skill_loader, "get_skill_loader", lambda: fake_loader)
+    monkeypatch.setattr(loader_factory_module, 'get_skill_loader', lambda: fake_loader)
     hint = _build_skill_injection(
         {
             "skill_id": "security-overview",
@@ -254,4 +332,33 @@ def test_installed_plugin_distinguishes_personal_enabled_from_hard_callability(
 
     assert by_id["callable-plugin@global"]["enabled"] is False
     assert by_id["callable-plugin@global"]["callable"] is True
-    assert by_id["blocked-plugin@global"]["callable"] is False
+    assert by_id["blocked-plugin@global"]["callable"] is True
+
+
+def test_explicit_disabled_connector_is_loaded_but_not_ambient(monkeypatch):
+    import core.capabilities.mcp.service as mcp_service
+    from core.llm.factory.tools import mcp_config as factory_mcp_config
+
+    class FakeMcpService:
+        def get_all_servers(self, enabled_only=True):
+            if enabled_only:
+                return {"enabled": {"transport": "streamable_http"}}
+            return {
+                "enabled": {"transport": "streamable_http"},
+                "installed-off": {"transport": "streamable_http"},
+            }
+
+    monkeypatch.setattr(
+        mcp_service.McpServerConfigService,
+        "get_instance",
+        classmethod(lambda _cls: FakeMcpService()),
+    )
+    assert factory_mcp_config.effective_mcp_server_keys(
+        None, None, enabled_mcp_ids=["installed-off"]
+    ) == ["installed-off"]
+    assert set(factory_mcp_config._filter_mcp_servers_by_keys(["installed-off"])) == {
+        "installed-off"
+    }
+    assert factory_mcp_config.effective_mcp_server_keys(
+        None, None, enabled_mcp_ids=["enabled"]
+    ) == ["enabled"]

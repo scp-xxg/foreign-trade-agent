@@ -3,6 +3,9 @@
 import asyncio
 from types import SimpleNamespace
 
+import core.auth.backend as auth_backend
+import core.db.engine as db_engine
+import core.chat.service as chat_services_ChatService_module
 import httpx
 import pytest
 from api.routes.v1 import chats
@@ -21,6 +24,10 @@ _QUESTION = {
 
 @pytest.fixture
 def api_app(monkeypatch):
+    from core.infra.ephemeral import LocalEphemeralState
+    from core.llm.runtime import interaction_store
+    state = LocalEphemeralState()
+    monkeypatch.setattr(interaction_store, "get_ephemeral_state", lambda: state)
     class FakeChatService:
         def __init__(self, _db):
             pass
@@ -30,14 +37,24 @@ def api_app(monkeypatch):
                 return object()
             return None
 
-    monkeypatch.setattr(chats, "ChatService", FakeChatService)
+    monkeypatch.setattr(chat_services_ChatService_module, "ChatService", FakeChatService)
     app = FastAPI()
     app.include_router(chats.router)
-    app.dependency_overrides[chats.get_current_user] = lambda: SimpleNamespace(
+    app.dependency_overrides[auth_backend.get_current_user] = lambda: SimpleNamespace(
         user_id="owner",
     )
-    app.dependency_overrides[chats.get_db] = lambda: object()
+    app.dependency_overrides[db_engine.get_db] = lambda: object()
     return app
+
+
+async def pending_request(waiting):
+    async with asyncio.timeout(5):
+        while not user_questions.get_all_pending("owned-chat"):
+            if waiting.done():
+                await waiting
+                raise AssertionError("Question finished before becoming pending")
+            await asyncio.sleep(0.01)
+    return user_questions.get_all_pending("owned-chat")[0]
 
 
 @pytest.mark.asyncio
@@ -47,11 +64,10 @@ async def test_pending_recovery_answer_validation_and_first_claimant(api_app):
             chat_id="owned-chat",
             questions=[_QUESTION],
             interactive=True,
-            timeout=2,
+            timeout=10,
         ),
     )
-    await asyncio.sleep(0)
-    pending = user_questions.get_all_pending("owned-chat")[0]
+    pending = await pending_request(waiting)
     request_id = pending["request_id"]
 
     transport = httpx.ASGITransport(app=api_app)
@@ -106,11 +122,10 @@ async def test_cancel_endpoint_resolves_wait_authoritatively(api_app):
             chat_id="owned-chat",
             questions=[_QUESTION],
             interactive=True,
-            timeout=2,
+            timeout=10,
         ),
     )
-    await asyncio.sleep(0)
-    request_id = user_questions.get_all_pending("owned-chat")[0]["request_id"]
+    request_id = (await pending_request(waiting))["request_id"]
 
     transport = httpx.ASGITransport(app=api_app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
@@ -121,6 +136,7 @@ async def test_cancel_endpoint_resolves_wait_authoritatively(api_app):
         assert response.json()["data"] == {"ok": True, "outcome": "cancelled"}
 
     assert (await waiting) == {"status": "cancelled", "answers": []}
+
 
 @pytest.mark.asyncio
 async def test_four_question_round_is_answerable(api_app):
@@ -137,28 +153,23 @@ async def test_four_question_round_is_answerable(api_app):
             chat_id="owned-chat",
             questions=questions,
             interactive=True,
-            timeout=2,
+            timeout=10,
         ),
     )
-    await asyncio.sleep(0)
-    request_id = user_questions.get_all_pending("owned-chat")[0]["request_id"]
+    request_id = (await pending_request(waiting))["request_id"]
 
     transport = httpx.ASGITransport(app=api_app)
     async with httpx.AsyncClient(transport=transport, base_url="http://test") as client:
         answered = await client.post(
             f"/v1/chats/owned-chat/user-questions/{request_id}/answer",
             json={
-                "answers": [
-                    {"id": item["id"], "selected": ["option_1"]} for item in questions
-                ],
+                "answers": [{"id": item["id"], "selected": ["option_1"]} for item in questions],
             },
         )
         assert answered.status_code == 200
 
     result = await asyncio.wait_for(waiting, timeout=1)
-    assert [answer["id"] for answer in result["answers"]] == [
-        item["id"] for item in questions
-    ]
+    assert [answer["id"] for answer in result["answers"]] == [item["id"] for item in questions]
 
 
 @pytest.mark.asyncio

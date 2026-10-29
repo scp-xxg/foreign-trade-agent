@@ -3,13 +3,17 @@
 Extracted from the oversized ``core/llm/tool.py``. Heavy deps imported lazily
 inside the function; ``core.llm.tool`` re-exports ``register_pin_to_workspace``.
 """
+from core.llm.factory.tools.definitions import function_tool
 
 import logging
-from typing import Any, Optional
+from typing import Any, Dict, Optional, TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from core.projects.edition import ProjectScope
 
 from agentscope.message import TextBlock
 from agentscope.tool import Toolkit
-from agentscope.tool._response import ToolChunk as ToolResponse
+from agentscope.tool._response import ToolChunk
 
 logger = logging.getLogger(__name__)
 
@@ -18,6 +22,7 @@ def register_pin_to_workspace(
     toolkit: Toolkit,
     *,
     scope: Optional["ProjectScope"] = None,  # type: ignore[name-defined]
+    sandbox_session_id: Optional[str] = None,
 ) -> None:
     """Register the ``pin_to_workspace`` tool.
 
@@ -35,9 +40,11 @@ def register_pin_to_workspace(
     output leaked into the personal MySpace root. Now the scope travels with the call chain, no
     timing window.
     """
-    from core.services.project_scope import ProjectScope  # noqa: F401 - re-import for closure
+    from core.projects.edition import ProjectScope  # noqa: F401 - re-import for closure
 
-    async def pin_to_workspace(file_ids: list[str]) -> ToolResponse:
+    async def pin_to_workspace(
+        file_ids: list[str] = [], file_paths: list[str] = []
+    ) -> ToolChunk:
         """把文件交付到对话区——**唯一**让用户看到文件的方式。
 
         凡用户要求生成/导出文件（文档、图片、PPT、Excel、PDF、CSV、压缩包、音视频、
@@ -48,23 +55,27 @@ def register_pin_to_workspace(
         不要分多次；单个也传列表。中间稿（编辑链里的临时文件、调试草图）不要 pin。
         重复调用会累加、已 pin 的自动去重，个别 ID 失败不影响其余文件交付。
 
-        **只传 ID，不要传路径或文件名**（含 ``/`` 或 ``.docx`` 就是错的）。ID 来源：
-        沙盒文件先 ``sandbox_get_artifact`` 登记；``generate_chart_tool`` 与
-        word/ppt/excel/pdf-cli 直接返回；我的空间文件用 ``list_myspace_files``。
+        **本机模式**：直接用 ``file_paths=["项目内相对路径或绝对路径"]`` 交付已生成的文件，无需先调用 sandbox_get_artifact。
+        项目和当前会话工作目录文件均展示原文件引用，不复制文件内容。
+        已绑定项目时相对路径以项目目录为准，交付会话文件请传绝对路径。
+        其他模式用 ``file_ids``，不要把路径放进 ID 列表。ID 来源：
+        沙盒文件先 ``sandbox_get_artifact`` 登记；word/ppt/excel/pdf-cli 直接返回；空间文件同样通过 ``sandbox_get_artifact`` 登记。
 
         Args:
             file_ids (`List[str]`):
                 artifact 文件 ID 列表，取自前面工具返回的 ``file_id``，或用户上传
                 文件的 ``ua_*`` ID。只 pin 一个也要传列表（``["fid_xxx"]``）。
 
+            file_paths (`List[str]`): 本机项目或当前会话工作目录内的文件路径列表。仅本机模式可用，与 file_ids 可同时传入。
+
         Returns:
             JSON: ``{ok, pinned: [{file_id, name, already_pinned}], failed: [{file_id, error}], pinned_count}``。
-            ``ok=false`` 仅在入参完全无效时；个别 ID 失败只出现在 ``failed`` 里。
+            ``ok=false`` 表示本次没有成功交付文件；部分失败见 ``failed``。
         """
         import json as _json
 
-        from core.artifacts.store import get_artifact
-        from core.llm import workspace as _workspace
+        from core.files.artifacts.store import get_artifact
+        from core.llm.runtime import workspace as _workspace
 
         # Mark the gate active even if every id below fails — the agent's
         # *intent* to use the workspace is what flips the default. Otherwise
@@ -79,33 +90,84 @@ def register_pin_to_workspace(
         elif isinstance(file_ids, list):
             raw_ids = file_ids
         else:
-            return ToolResponse(content=[TextBlock(
-                type="text",
-                text=_json.dumps(
-                    {"ok": False, "error": "file_ids 必须是字符串列表，例如 [\"fid_a\",\"fid_b\"]"},
-                    ensure_ascii=False,
-                ),
-            )])
+            return ToolChunk(
+                content=[
+                    TextBlock(
+                        type="text",
+                        text=_json.dumps(
+                            {
+                                "ok": False,
+                                "error": 'file_ids 必须是字符串列表，例如 ["fid_a","fid_b"]',
+                            },
+                            ensure_ascii=False,
+                        ),
+                    )
+                ]
+            )
 
-        if not raw_ids:
-            return ToolResponse(content=[TextBlock(
-                type="text",
-                text=_json.dumps(
-                    {"ok": False, "error": "file_ids 不能为空列表"},
-                    ensure_ascii=False,
-                ),
-            )])
+        if not raw_ids and not file_paths:
+            return ToolChunk(
+                content=[
+                    TextBlock(
+                        type="text",
+                        text=_json.dumps(
+                            {"ok": False, "error": "file_ids 不能为空列表"},
+                            ensure_ascii=False,
+                        ),
+                    )
+                ]
+            )
 
         pinned_results: list[Dict[str, Any]] = []
         failed_results: list[Dict[str, Any]] = []
         to_persist: list[Dict[str, Any]] = []
 
+        if file_paths:
+            from core.infra.logging import user_id_var
+            from fastapi import HTTPException
+
+            from core.files.artifacts.local_reference import reference_local_file
+
+            if not isinstance(file_paths, list):
+                file_paths = [file_paths]
+            prepared_paths: set[str] = set()
+            for path in file_paths:
+                if not isinstance(path, str) or not path.strip():
+                    failed_results.append({"path": str(path), "error": "文件路径必须是非空字符串"})
+                    continue
+                try:
+                    from core.files.artifacts.local_reference import project_file_path
+                    from core.infra.logging import chat_id_var
+
+                    physical = project_file_path(
+                        path, scope, user_id_var.get(), sandbox_session_id or chat_id_var.get()
+                    )
+                    if physical in prepared_paths:
+                        continue
+                    import asyncio
+
+                    item = await asyncio.to_thread(
+                        reference_local_file,
+                        physical,
+                        scope=scope,
+                        user_id=user_id_var.get() or "",
+                        session_id=sandbox_session_id or chat_id_var.get(),
+                    )
+                    raw_ids = [*raw_ids, item["file_id"]]
+                    prepared_paths.add(physical)
+                except (HTTPException, OSError, ValueError) as exc:
+                    failed_results.append({"path": path, "error": str(getattr(exc, "detail", exc))})
+
+        processed_ids = set()
         for raw in raw_ids:
             fid = str(raw or "").strip() if isinstance(raw, str) else ""
             if not fid:
                 failed_results.append({"file_id": str(raw), "error": "file_id 为空或非字符串"})
                 continue
 
+            if fid in processed_ids:
+                continue
+            processed_ids.add(fid)
             try:
                 item = get_artifact(fid)
             except Exception as exc:
@@ -116,66 +178,113 @@ def register_pin_to_workspace(
                 failed_results.append({"file_id": fid, "error": f"artifact {fid} 不存在或无权访问"})
                 continue
 
-            added = _workspace.pin(
-                file_id=fid,
-                name=item.get("name"),
-                mime_type=item.get("mime_type"),
-                size=item.get("size"),
-                url=f"/files/{fid}",
+            if (item.get("metadata") or {}).get("source") == "local_project_reference":
+                from core.infra.logging import user_id_var
+
+                if item["metadata"].get("user_id") != user_id_var.get():
+                    failed_results.append({"file_id": fid, "error": "无权访问本机项目文件"})
+                    continue
+
+            pinned_results.append(
+                {
+                    "file_id": fid,
+                    "name": item.get("name"),
+                    "already_pinned": fid in _workspace.get_pinned_file_ids(),
+                }
             )
-            pinned_results.append({
-                "file_id": fid,
-                "name": item.get("name"),
-                "already_pinned": not added,
-            })
-            to_persist.append({
-                "file_id": fid,
-                "name": item.get("name"),
-                "mime_type": item.get("mime_type"),
-                "size": item.get("size"),
-                "storage_key": item.get("storage_key"),
-                "url": f"/files/{fid}",
-                "tool_name": "pin_to_workspace",
-            })
+            to_persist.append(
+                {
+                    "file_id": fid,
+                    "name": item.get("name"),
+                    "mime_type": item.get("mime_type"),
+                    "size": item.get("size"),
+                    "storage_key": item.get("storage_key"),
+                    "url": f"/files/{fid}",
+                    "tool_name": "pin_to_workspace",
+                }
+            )
 
         # Persist pinned files to the DB ``artifacts`` table NOW — not only
         # at run finalization. Otherwise in-run MySpace ("我的空间") tools (Move /
-        # stage_myspace_file / list_myspace_files) which resolve against the
+        # file operations) which resolve against the
         # DB can't see a file the agent just pinned (it only exists in the
         # file-index store + in-memory workspace until the run ends).
         # The deferred _persist_artifacts at run end dedups by artifact_id,
-        # so this never double-inserts. Best-effort: failure must not break
-        # the pin.
+        # so this never double-inserts. A rejected write must not be reported
+        # as pinned or retried silently at run finalization.
         try:
             from core.infra.logging import chat_id_var, user_id_var
 
             _uid = user_id_var.get() or ""
             _cid = chat_id_var.get() or ""
             if _uid and to_persist:
-                from core.db.engine import SessionLocal
-                from core.services.artifact_service import persist_artifacts
+                from core.db.threads import run_in_session
+                from core.files.artifacts.service import persist_artifacts
 
-                _db = SessionLocal()
-                try:
-                    persist_artifacts(_db, _uid, _cid or None, to_persist, scope=scope)
-                finally:
-                    _db.close()
+                await run_in_session(
+                    persist_artifacts, _uid, _cid or None, to_persist, scope=scope, strict=True
+                )
         except Exception as exc:  # noqa: BLE001
-            logger.warning("pin_to_workspace: eager DB persist failed: %s", exc)
+            from fastapi import HTTPException
+
+            logger.warning("pin_to_workspace: eager DB persist failed (%s)", type(exc).__name__)
+            message = exc.detail if isinstance(exc, HTTPException) else "文件保存失败，请稍后重试"
+            failed_results.extend(
+                {"file_id": item["file_id"], "error": message} for item in to_persist
+            )
+            pinned_results = []
+        else:
+            for item in to_persist:
+                _workspace.pin(
+                    file_id=item["file_id"],
+                    name=item.get("name"),
+                    mime_type=item.get("mime_type"),
+                    size=item.get("size"),
+                    url=item.get("url"),
+                )
 
         result: Dict[str, Any] = {
-            "ok": True,
+            "ok": bool(pinned_results),
             "pinned": pinned_results,
             "pinned_count": len(_workspace.get_pinned_file_ids()),
         }
         if failed_results:
             result["failed"] = failed_results
-        return ToolResponse(content=[TextBlock(
-            type="text",
-            text=_json.dumps(result, ensure_ascii=False),
-        )])
+        return ToolChunk(
+            content=[
+                TextBlock(
+                    type="text",
+                    text=_json.dumps(result, ensure_ascii=False),
+                )
+            ]
+        )
 
-    toolkit.register_tool_function(pin_to_workspace, namesake_strategy="override")
+    from core.sandbox.permissions.dispatch_models import READ, ToolPermissionSpec
+    from core.sandbox.permissions.tool_specs import local_path_tool
+
+    def resolve_pin_paths(args, runtime):
+        from core.files.artifacts.local_reference import project_file_path
+
+        paths = args.get("file_paths") or []
+        if isinstance(paths, str):
+            paths = [paths]
+        intents = []
+        for path in paths:
+            if isinstance(path, str) and path.strip():
+                physical = project_file_path(
+                    path,
+                    scope,
+                    runtime.user_id,
+                    sandbox_session_id or runtime.sandbox_session_id or runtime.chat_id,
+                )
+                intents.extend(
+                    local_path_tool("path", READ, tool_name="pin_to_workspace").resolver(
+                        {"path": physical}, runtime
+                    )
+                )
+        return intents
+
+    toolkit.append(function_tool(pin_to_workspace, dispatch_spec=ToolPermissionSpec("local-project-pin-paths", resolve_pin_paths)))
     logger.info("[factory] Registered pin_to_workspace tool")
 
 

@@ -1,7 +1,7 @@
-# Modified by foreign-trade-agent contributors, 2026-10-21; see CHANGES_FOREIGN_TRADE.md.
 """Regression tests for quick-install script-runner process management."""
 
 from __future__ import annotations
+from tests.sandbox.runner_client import run_spawn
 
 import asyncio
 import inspect
@@ -9,7 +9,7 @@ import signal
 import sys
 from pathlib import Path
 
-from services.script_runner_service import server
+from core.sandbox.runner import server
 
 
 def test_local_profile_skips_uid_wide_nproc_limit(monkeypatch):
@@ -61,31 +61,6 @@ def test_desktop_local_install_never_provisions_system_tools():
     )
 
 
-def test_windows_workspace_rewrite_treats_backslashes_literally():
-    workspace = r"C:\Users\Aaron\AppData\Local\com.hugagent.desktop\local-server\data\workspace"
-
-    rewritten = server._rewrite_workspace_refs(
-        'open("/workspace/myspace/report.txt")', workspace
-    )
-
-    assert rewritten == (
-        'open("C:\\Users\\Aaron\\AppData\\Local\\com.hugagent.desktop\\local-server'
-        '\\data\\workspace/myspace/report.txt")'
-    )
-    assert server._rewrite_workspace_refs(
-        rf"{workspace}/myspace/report.txt", workspace
-    ) == rf"{workspace}/myspace/report.txt"
-
-
-def test_windows_git_bash_receives_msys_workspace_path():
-    workspace = r"C:\Users\Aaron\AppData\Local\com.hugagent.desktop\local-server\data\workspace"
-
-    assert server._execution_workspace_root("bash", workspace, "nt") == (
-        "/c/Users/Aaron/AppData/Local/com.hugagent.desktop/local-server/data/workspace"
-    )
-    assert server._execution_workspace_root("python", workspace, "nt") == workspace
-
-
 def test_timeout_kills_the_whole_process_group(monkeypatch, tmp_path):
     """A timed-out bash tree must not leave document-tool descendants alive."""
     monkeypatch.setenv("DEPLOY_PROFILE", "local")
@@ -121,16 +96,16 @@ def test_timeout_kills_the_whole_process_group(monkeypatch, tmp_path):
         proc.returncode = -signal.SIGKILL
 
     monkeypatch.setattr(server.asyncio, "create_subprocess_exec", fake_create_subprocess_exec)
-    monkeypatch.setattr(server.asyncio, "wait_for", fake_wait_for)
     monkeypatch.setattr(server.os, "killpg", fake_killpg)
 
-    result = asyncio.run(server._execute_subprocess(["bash", "job.sh"], "{}", 1, str(tmp_path)))
+    result = asyncio.run(run_spawn(["bash", "job.sh"], "{}", 1, str(tmp_path)))
 
     assert spawn_kwargs["start_new_session"] is True
     assert spawn_kwargs["preexec_fn"] is None
     assert killed == [(proc.pid, signal.SIGKILL)]
     assert proc.returncode == -signal.SIGKILL
-    assert result == {"stdout": "", "stderr": "执行超时（1秒）", "exit_code": -1}
+    assert result["exit_code"] == 124
+    assert "deadline" in result["error"]
 
 
 def test_success_uses_file_buffers_and_cleans_background_group(monkeypatch, tmp_path):
@@ -157,6 +132,8 @@ def test_success_uses_file_buffers_and_cleans_background_group(monkeypatch, tmp_
         assert kwargs["stderr"] is not asyncio.subprocess.PIPE
         kwargs["stdout"].write(b"completed\n")
         kwargs["stderr"].write(b"warning\n")
+        kwargs["stdout"].flush()
+        kwargs["stderr"].flush()
         proc.returncode = 0
         return proc
 
@@ -164,11 +141,11 @@ def test_success_uses_file_buffers_and_cleans_background_group(monkeypatch, tmp_
     monkeypatch.setattr(server.os, "killpg", lambda pid, sig: killed.append((pid, sig)))
 
     result = asyncio.run(
-        server._execute_subprocess(["bash", "job.sh"], '{"ok": true}', 1, str(tmp_path))
+        run_spawn(["bash", "job.sh"], '{"ok": true}', 1, str(tmp_path))
     )
 
     assert killed == [(proc.pid, signal.SIGKILL)]
-    assert result == {"stdout": "completed\n", "stderr": "warning\n", "exit_code": 0}
+    assert (result["stdout"], result["stderr"], result["exit_code"]) == ("completed\n", "warning\n", 0)
 
 
 def test_ce_installer_and_script_runner_ship_office_skill_runtime():
@@ -178,9 +155,9 @@ def test_ce_installer_and_script_runner_ship_office_skill_runtime():
         # In the generated public CE tree the overlay becomes the root installer.
         installer_path = repo_root / "install.sh"
     installer = installer_path.read_text(encoding="utf-8")
-    dockerfile = (repo_root / "docker" / "Dockerfile.script-runner").read_text(encoding="utf-8")
+    dockerfile = (repo_root / "docker" / "sandbox" / "Dockerfile.script-runner").read_text(encoding="utf-8")
 
-    assert "pip_install -r docker/requirements-script-runner.txt" in installer
+    assert "pip_install -r docker/sandbox/requirements-script-runner.txt" in installer
     assert '--prefix "${SKILL_NODE_DIR}" playwright' in installer
     assert "apt-get download fonts-wqy-zenhei" in installer
     assert "install_libreoffice" in installer
@@ -200,14 +177,31 @@ def test_ce_installer_and_script_runner_ship_office_skill_runtime():
         assert f"/usr/local/bin/{retired}" not in dockerfile
 
 
-def test_bash_python_alias_runs_in_the_runner_virtualenv(monkeypatch, tmp_path):
-    """The documented $PY_BIN must work in the clean per-command environment."""
-    monkeypatch.setenv("DEPLOY_PROFILE", "local")
-    assert server.SAFE_ENV["PY_BIN"] == sys.executable
-    result = asyncio.run(server._execute_subprocess(
-        [server._BASH_EXECUTABLE, "-c", '\"$PY_BIN\" -c \"import sys; print(sys.executable); print(12345 * 6789)\"'],
-        stdin_data="", timeout=10, cwd=str(tmp_path),
-    ))
-    assert result["exit_code"] == 0, result["stderr"]
-    assert result["stdout"].splitlines() == [sys.executable, "83810205"]
-    assert result["stderr"] == ""
+def test_managed_officecli_flushes_every_edit_and_skips_update_locally(tmp_path):
+    import os
+    import subprocess
+
+    code = """
+from fastapi.testclient import TestClient
+from core.sandbox.runner.server import app
+with TestClient(app) as client:
+    response = client.post('/processes/start', json={
+        'script_content': "import os; print(os.getenv('OFFICECLI_SKIP_UPDATE', 'unset'), os.getenv('OFFICECLI_RESIDENT_FLUSH'))",
+        'script_name': 'check_env.py', 'language': 'python', 'session_id': 'officecli-env',
+    })
+    assert response.status_code == 200, response.text
+    result = response.json()
+    assert result['exit_code'] == 0, result
+    print(result['stdout'].strip())
+"""
+    for profile, expected in (("local", "1 each"), ("docker", "unset each")):
+        result = subprocess.check_output(
+            [sys.executable, "-c", code],
+            env={
+                **os.environ,
+                "DEPLOY_PROFILE": profile,
+                "SCRIPT_RUNNER_WORKSPACE": str(tmp_path / profile),
+            },
+            text=True,
+        )
+        assert result.strip().splitlines()[-1] == expected

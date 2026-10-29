@@ -4,12 +4,13 @@ Split out of the former monolithic ``core/db/repository.py``. The package
 ``__init__`` re-exports every repository class, so ``from core.db.repository
 import XxxRepository`` keeps working unchanged.
 """
+from core.infra.time import utc_now
 
-import logging
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 from core.db.models import Artifact, ChatSession
+from core.db.paging import DEFAULT_PAGE_SIZE, apply_page
 from sqlalchemy import desc, func, or_
 from sqlalchemy.orm import Session
 
@@ -58,7 +59,7 @@ class ArtifactRepository:
         )
         if not artifact:
             return False
-        artifact.deleted_at = datetime.utcnow()
+        artifact.deleted_at = utc_now()
         self.db.commit()
         return True
 
@@ -90,7 +91,7 @@ class ArtifactRepository:
         keyword: Optional[str] = None,
         source_kind: Optional[str] = None,
         page: int = 1,
-        page_size: int = 20,
+        page_size: Optional[int] = DEFAULT_PAGE_SIZE,
         personal_only: bool = True,
         folder_id: Optional[str] = None,
     ) -> tuple[List[Dict[str, Any]], int]:
@@ -101,6 +102,7 @@ class ArtifactRepository:
             keyword: fuzzy match on filename or title.
             source_kind: "user_upload" | "ai_generated"; filters on
                 ``extra_data.source`` using a dialect-aware JSON accessor.
+            page_size: None or a non-positive value returns every matching row.
             personal_only: when True (default), apply the edition's personal-file filter.
             folder_id: only takes effect when personal_only=True.
                 "__root__" → root directory only (user_folder_id IS NULL);
@@ -117,10 +119,9 @@ class ArtifactRepository:
         )
 
         if personal_only:
-            # Import lazily: ``core.services`` re-exports repositories, so importing
-            # this edition seam while the repository package is initializing would
-            # create a package-level cycle.
-            from core.services.artifact_edition import personal_artifact_predicates
+            # Import lazily: this edition seam must not load while the repository
+            # package is still initializing.
+            from core.db.artifact_scope import personal_artifact_predicates
 
             query = query.filter(*personal_artifact_predicates(Artifact))
             if folder_id == ROOT_FOLDER_SENTINEL:
@@ -159,12 +160,9 @@ class ArtifactRepository:
             )
 
         total = query.count()
-        rows = (
-            query.order_by(desc(Artifact.created_at))
-            .offset((page - 1) * page_size)
-            .limit(page_size)
-            .all()
-        )
+        rows = apply_page(
+            query.order_by(desc(Artifact.created_at)), page=page, page_size=page_size
+        ).all()
 
         items = []
         for artifact, chat_title in rows:
@@ -176,22 +174,6 @@ class ArtifactRepository:
             )
         return items, total
 
-    def soft_delete(self, artifact_id: str, user_id: str) -> bool:
-        """Soft delete a personal MySpace artifact (set deleted_at)."""
-        artifact = (
-            self.db.query(Artifact)
-            .filter(
-                Artifact.artifact_id == artifact_id,
-                Artifact.user_id == user_id,
-                Artifact.deleted_at.is_(None),
-            )
-            .first()
-        )
-        if not artifact:
-            return False
-        artifact.deleted_at = datetime.utcnow()
-        self.db.commit()
-        return True
 
     def create(self, artifact_data: Dict[str, Any]) -> Artifact:
         """Create a new artifact."""

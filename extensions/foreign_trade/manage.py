@@ -81,9 +81,19 @@ def build() -> dict:
     required = [
         plugin / "plugin.json", plugin / "mcp.json",
         plugin / "skills/inquiry-quote/SKILL.md",
+        plugin / "skills/buyer-inquiry-followup/SKILL.md",
+        plugin / "skills/product-content/SKILL.md",
+        plugin / "skills/cross-role-collaboration/SKILL.md",
+        plugin / "HOST_REQUIREMENTS.md",
+        HERE.parents[1] / "docs/CHAT_PLUGIN.md",
+        HERE.parents[1] / "docs/CHAT_PLUGIN_ACCEPTANCE.md",
+        HERE.parents[1] / "docs/SCENARIO_THREE.md",
+        HERE.parents[1] / "docs/ACCEPTANCE_20261028.md",
+        HERE.parents[1] / "docs/DEMO_WALKTHROUGH.md",
+        HERE.parents[1] / "docs/TEAM_SETUP.md",
         HERE / "engine.py", HERE / "catalog.json", SERVER,
     ]
-    missing = [str(path.relative_to(HERE)) for path in required if not path.is_file()]
+    missing = [str(path) for path in required if not path.is_file()]
     if missing:
         raise RuntimeError("Missing package files: " + ", ".join(missing))
     out = HERE / "dist/foreign-trade-demo.zip"
@@ -96,6 +106,15 @@ def build() -> dict:
             archive.write(HERE / name, "runtime/" + name)
         if (HERE / "README.md").is_file():
             archive.write(HERE / "README.md", "README.md")
+        archive.write(HERE.parents[1] / "docs/CHAT_PLUGIN.md", "CHAT_PLUGIN.md")
+        archive.write(HERE.parents[1] / "docs/CHAT_PLUGIN_ACCEPTANCE.md", "CHAT_PLUGIN_ACCEPTANCE.md")
+        archive.write(HERE.parents[1] / "docs/SCENARIO_THREE.md", "SCENARIO_THREE.md")
+        archive.write(HERE.parents[1] / "docs/ACCEPTANCE_20261028.md", "ACCEPTANCE_20261028.md")
+        archive.write(HERE.parents[1] / "docs/DEMO_WALKTHROUGH.md", "DEMO_WALKTHROUGH.md")
+        archive.write(HERE.parents[1] / "docs/TEAM_SETUP.md", "TEAM_SETUP.md")
+        for path in sorted((HERE / "demo_product").iterdir()):
+            if path.is_file() and path.suffix in {".csv", ".txt", ".json", ".png", ".jpg"}:
+                archive.write(path, "demo_product/" + path.name)
     return {"status": "built", "path": str(out), "bytes": out.stat().st_size}
 
 

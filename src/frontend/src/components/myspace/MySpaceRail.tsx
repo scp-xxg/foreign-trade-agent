@@ -1,17 +1,20 @@
-import { useState } from 'react';
-import { Badge } from 'antd';
 import {
-  BellOutlined,
-  BookOutlined,
-  CloudOutlined,
-  SearchOutlined,
-  ShareAltOutlined,
-  StarOutlined,
+BellOutlined,
+BookOutlined,
+RobotOutlined,
+CloudOutlined,
+SearchOutlined,
+ShareAltOutlined,
+StarOutlined,
 } from '@ant-design/icons';
-import type { KbTabKey, MySpaceTab } from '../../types';
-import { useMySpaceStore } from '../../stores/mySpaceStore';
-import { useCatalogStore, useEditionStore } from '../../stores';
+import { Badge } from 'antd';
+import { useState } from 'react';
 import { t } from '../../i18n';
+import { useKbTab } from '../../routing/subPages';
+import { usePersonalAgentName } from '../../personalAgentEdition';
+import { useEditionStore } from '../../stores';
+import { useMySpaceStore } from '../../stores/mySpaceStore';
+import type { MySpaceTab } from '../../types';
 
 const NAV_ITEMS: Array<{ key: MySpaceTab; label: string; icon: React.ReactNode }> = [
   { key: 'favorites', label: t('会话收藏'), icon: <StarOutlined /> },
@@ -19,12 +22,7 @@ const NAV_ITEMS: Array<{ key: MySpaceTab; label: string; icon: React.ReactNode }
   { key: 'notifications', label: t('消息通知'), icon: <BellOutlined /> },
 ];
 
-/**
- * 「我的空间」的二级边栏：贴在主侧边栏右侧的一条独立导航列。
- * 挂在 App 外壳而不是面板内部——面板落在 .jx-panel 里带内边距且居中，栏塞进去会与主侧边栏之间露缝。
- * 云文档与知识库沿用侧边栏「能力中心」的分组交互：点整行即展开/收起，收起态点它顺带进入该页。
- * 窄屏隐藏，改由面板顶部拍平成一排的 Tab 承担同一套导航（同一份 store 状态，两种画法）。
- */
+/** 我的空间的模块导航；桌面与窄屏抽屉共用同一份路由。 */
 export function MySpaceRail() {
   const tab = useMySpaceStore((s) => s.tab);
   const setTab = useMySpaceStore((s) => s.setTab);
@@ -32,11 +30,10 @@ export function MySpaceRail() {
   const setAssetScope = useMySpaceStore((s) => s.setAssetScope);
   const notifUnreadCount = useMySpaceStore((s) => s.notifUnreadCount);
   const openSearch = useMySpaceStore((s) => s.openSearch);
-  const railCollapsed = useMySpaceStore((s) => s.railCollapsed);
-  const kbTab = useCatalogStore((s) => s.kbTab);
-  const setKbTab = useCatalogStore((s) => s.setKbTab);
+  const kbTab = useKbTab();
   const multiTenancy = useEditionStore((s) => (s.loaded ? !!s.features.multi_tenancy : true));
   const isCE = useEditionStore((s) => s.edition === 'ce');
+  const agentName = usePersonalAgentName();
 
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
 
@@ -59,12 +56,10 @@ export function MySpaceRail() {
 
   return (
     <aside
-      className={`jx-msRail${railCollapsed ? ' is-collapsed' : ''}`}
+      className="jx-spaceNavigation"
       aria-label={t('我的空间')}
-      aria-hidden={railCollapsed}
     >
       <div className="jx-msRail-inner">
-      <div className="jx-msRail-title">{t('我的空间')}</div>
 
       <div className="jx-msRail-nav">
         <button type="button" className="jx-msRail-item" onClick={openSearch}>
@@ -103,7 +98,7 @@ export function MySpaceRail() {
               key={s.key}
               type="button"
               className={`jx-msRail-subItem${tab === 'kb' && kbTab === s.key ? ' active' : ''}`}
-              onClick={() => { setKbTab(s.key as KbTabKey); setTab('kb'); }}
+              onClick={() => setTab('kb', s.key)}
             >
               <span>{s.label}</span>
             </button>
@@ -124,6 +119,17 @@ export function MySpaceRail() {
             )}
           </button>
         ))}
+
+        {agentName && (
+          <button
+            type="button"
+            className={`jx-msRail-item${tab === 'agent' ? ' active' : ''}`}
+            onClick={() => setTab('agent')}
+          >
+            <span className="jx-msRail-icon"><RobotOutlined /></span>
+            <span title={agentName}>{agentName}</span>
+          </button>
+        )}
       </div>
       </div>
     </aside>

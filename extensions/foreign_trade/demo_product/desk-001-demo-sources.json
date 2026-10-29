@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "record_type": "synthetic_demo_catalog",
+  "sku": "DESK-001",
+  "source": "demo:office-storage-demo-v1:DESK-001",
+  "is_simulated": true,
+  "image_note": "Program-drawn fictional schematic; not a product photograph or actual design evidence.",
+  "image_credit": "Foreign Trade Demo contributors; original program-drawn fictional schematic, released under CC0-1.0.",
+  "files": {
+    "desk-001-demo-specs.csv": "19b1f1f349f632028883d40efb2da38a00a2e42549c19e7fc943ccf3d4a49f40",
+    "desk-001-demo-schematic.png": "1185f4e6de7ab9809790bdb4edfd9a567b7805a20276e84e12dfc15cec1145d8"
+  }
+}

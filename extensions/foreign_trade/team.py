@@ -121,18 +121,20 @@ def setup(args, env: dict[str, str]) -> None:
     if "--max-old-space-size=" not in build_env.get("NODE_OPTIONS", ""):
         build_env["NODE_OPTIONS"] = (build_env.get("NODE_OPTIONS", "") + " --max-old-space-size=6144").strip()
     run(["npm", "--prefix", FRONTEND, "run", "build"], env=build_env, dry_run=args.dry_run)
-    print("依赖和前端准备完成。下一步：.venv/bin/python extensions/foreign_trade/team.py init")
+    print("依赖和前端准备完成。首次部署执行 team.py init；已有账号执行 team.py install --username YOUR_USERNAME 更新外贸业务助手。")
 
 
-def initialize(home: Path, username: str | None) -> str:
+def initialize(home: Path, username: str | None, *, legacy_chat_completions: bool = False, repair_legacy_filenames: bool = False, expected_filename_repairs: int | None = None) -> str:
     # No password flags or environment input: enter the password only in a TTY.
-    from cli import apply_local_env, _ensure_schema_and_seed, bootstrap_admin, mark_web_onboarding_complete
+    from foreign_trade.upgrade import prepare_database
+    prepare_database(home, allow_create=True, legacy_chat_completions=legacy_chat_completions, repair_legacy_filenames=repair_legacy_filenames, expected_filename_repairs=expected_filename_repairs)
+    os.environ.update(runtime_env(home))
+    from cli import apply_local_env, bootstrap_admin, mark_web_onboarding_complete
     apply_local_env(3001)
-    _ensure_schema_and_seed()
     from core.db.engine import SessionLocal
     from core.db.models import UserShadow
-    from core.content.content_blocks import seed_page_config_if_missing, enforce_ce_branding
-    from core.services import prompt_version_service
+    from core.files.content.branding import seed_page_config_if_missing, enforce_ce_branding
+    from core.llm import prompt_versions as prompt_version_service
 
     username = username or input("本机登录用户名 [admin]: ").strip() or "admin"
     with SessionLocal() as db:
@@ -159,9 +161,16 @@ def initialize(home: Path, username: str | None) -> str:
     return username
 
 
-def install(home: Path, username: str, env: dict[str, str], dry_run: bool) -> None:
-    run([PYTHON, HERE / "install.py", "--app-home", home, "--username", username,
-         "--apply-homepage-copy", "--apply-assistant-prompt"], env=env, dry_run=dry_run)
+def install(home: Path, username: str, env: dict[str, str], dry_run: bool, *, legacy_chat_completions: bool = False, repair_legacy_filenames: bool = False, expected_filename_repairs: int | None = None) -> None:
+    command = [PYTHON, HERE / "install.py", "--app-home", home, "--username", username,
+         "--apply-homepage-copy", "--apply-assistant-prompt"]
+    if legacy_chat_completions:
+        command.append("--legacy-chat-completions")
+    if repair_legacy_filenames:
+        command.append("--repair-legacy-filenames")
+    if expected_filename_repairs is not None:
+        command.extend(["--expected-filename-repairs", str(expected_filename_repairs)])
+    run(command, env=env, dry_run=dry_run)
 
 
 def port_open(port: int) -> bool:
@@ -192,8 +201,9 @@ def start(args, home: Path, env: dict[str, str]) -> None:
                 raise RuntimeError("端口 9120 已被其他实例占用；不会接管它。")
     run([PYTHON, HERE / "manage.py", "start"], env=env, dry_run=args.dry_run)
     print("打开 http://127.0.0.1:3001，用自己的账号登录。首次在 设置→模型服务 添加支持工具调用的模型并指派 main_agent。")
+    print("对话中可选择“外贸业务助手（演示）”处理询盘和商品资料；三处工作台保留，用于查看、编辑与人工验收同一业务记录。")
     print("保持此终端运行，Ctrl-C 停止网页后端；MCP 单独停止：.venv/bin/python extensions/foreign_trade/manage.py stop")
-    command = [str(VENV / "bin/hugagent"), "serve", "--host", "127.0.0.1", "--port", "3001", "--no-browser"]
+    command = [str(VENV / "bin/hugagent-server"), "serve", "--host", "127.0.0.1", "--port", "3001", "--no-browser"]
     if args.dry_run:
         run(command, env=env, dry_run=True)
     else:
@@ -203,8 +213,27 @@ def start(args, home: Path, env: dict[str, str]) -> None:
 
 
 def check(args, env: dict[str, str]) -> None:
-    run([PYTHON, "-m", "unittest", "discover", "-s", ROOT / "tests", "-p", "test_foreign_trade*.py"], env=env, dry_run=args.dry_run)
-    run(["npm", "--prefix", FRONTEND, "run", "test:foreign-trade-quote"], env=env, dry_run=args.dry_run)
+    # Deliberately enumerate unittest suites: the similarly named collaboration
+    # module uses pytest fixtures and must not be imported or silently skipped.
+    for filename in (
+        "test_foreign_trade_engine.py",
+        "test_foreign_trade_env_isolation.py",
+        "test_foreign_trade_quote_identity.py",
+        "test_foreign_trade_quote_presentation.py",
+        "test_foreign_trade_team.py",
+    ):
+        run([PYTHON, "-m", "unittest", "discover", "-s", ROOT / "tests", "-p", filename],
+            env=env, dry_run=args.dry_run)
+    frontend_env = dict(env, FOREIGN_TRADE_TEST_PYTHON=str(PYTHON))
+    for script in (
+        "test:foreign-trade-quote",
+        "test:foreign-trade-content-card",
+        "test:foreign-trade-collaboration",
+        "test:foreign-trade-content-mode",
+    ):
+        run(["npm", "--prefix", FRONTEND, "run", script],
+            env=frontend_env, dry_run=args.dry_run)
+    print("快速离线自检完成：unittest 与前端报价、资料、协同和生成模式检查；未运行完整 pytest、真实模型对话或完整工作台验收。")
     if args.running:
         run([PYTHON, HERE / "smoke_test.py"], env=env, dry_run=args.dry_run)
         if not args.dry_run:
@@ -217,18 +246,29 @@ def check(args, env: dict[str, str]) -> None:
 
 
 def main(argv: list[str] | None = None) -> int:
+    global VENV, PYTHON
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("action", choices=("setup", "init", "install", "start", "check"))
+    parser.add_argument("action", choices=("setup", "init", "install", "upgrade", "start", "check"))
     parser.add_argument("--app-home", type=Path, default=DEFAULT_HOME, help="独立数据目录，默认 ~/.foreign-trade-agent；不继承 HUGAGENT_HOME")
+    parser.add_argument("--venv", type=Path, help="显式选择虚拟环境，默认项目 .venv")
+    parser.add_argument("--legacy-chat-completions", action="store_true", help="显式确认既有无版本本地库来自旧Chat Completions运行时")
+    parser.add_argument("--repair-legacy-filenames", action="store_true", help="以元数据重命名保留旧同名文件，保留修复审计与回滚快照")
+    parser.add_argument("--expected-filename-repairs", type=int, help="修复数量与核对值不一致时停止")
+    parser.add_argument("--restore", type=Path, help="仅 upgrade：从本数据目录内的备份恢复，先保留恢复前快照")
     parser.add_argument("--username", help="本机已有账号；首次 init 可交互输入")
     parser.add_argument("--dry-run", action="store_true", help="仅展示步骤，不安装依赖、不创建账号或数据、不启动服务")
     parser.add_argument("--running", action="store_true", help="check 时额外验证已启动的网页与 MCP（不调用付费模型）")
     args = parser.parse_args(argv)
+    if args.venv is not None:
+        VENV = args.venv.expanduser().resolve()
+        PYTHON = VENV / "bin/python"
     home = args.app_home.expanduser().resolve()
     env = runtime_env(home)
     print("公开源码：" + str(ROOT))
     print("本机数据：" + str(home))
     try:
+        if args.restore and args.action != "upgrade":
+            raise RuntimeError("--restore 仅用于 upgrade；恢复前须停止该数据目录的后端。")
         if args.action != "setup" and not args.dry_run:
             if not PYTHON.is_file():
                 raise RuntimeError("尚未建立 .venv；请先运行 setup。")
@@ -236,6 +276,17 @@ def main(argv: list[str] | None = None) -> int:
                 os.execve(str(PYTHON), [str(PYTHON), str(Path(__file__).resolve()), *(argv if argv is not None else sys.argv[1:])], env)
         if args.action == "setup":
             setup(args, env)
+        elif args.action == "upgrade":
+            command = [PYTHON, HERE / "upgrade.py", "--app-home", home]
+            if args.restore:
+                command.extend(["--restore", args.restore])
+            if args.legacy_chat_completions:
+                command.append("--legacy-chat-completions")
+            if args.repair_legacy_filenames:
+                command.append("--repair-legacy-filenames")
+            if args.expected_filename_repairs is not None:
+                command.extend(["--expected-filename-repairs", str(args.expected_filename_repairs)])
+            run(command, env=env, dry_run=args.dry_run)
         elif args.action in ("init", "install"):
             if args.action == "init":
                 if args.dry_run:
@@ -243,12 +294,12 @@ def main(argv: list[str] | None = None) -> int:
                     username = args.username or "YOUR_LOCAL_USERNAME"
                 else:
                     os.environ.update(env)
-                    username = initialize(home, args.username)
+                    username = initialize(home, args.username, legacy_chat_completions=args.legacy_chat_completions, repair_legacy_filenames=args.repair_legacy_filenames, expected_filename_repairs=args.expected_filename_repairs)
             else:
                 username = args.username
                 if not username:
                     raise RuntimeError("install 需要 --username 指定已创建的本机账号。")
-            install(home, username, env, args.dry_run)
+            install(home, username, env, args.dry_run, legacy_chat_completions=args.legacy_chat_completions, repair_legacy_filenames=args.repair_legacy_filenames, expected_filename_repairs=None if args.action == "init" else args.expected_filename_repairs)
             print("下一步：.venv/bin/python extensions/foreign_trade/team.py start（自定义数据目录时继续带 --app-home）。")
         elif args.action == "start":
             start(args, home, env)

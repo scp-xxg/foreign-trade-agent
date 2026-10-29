@@ -1,10 +1,4 @@
-"""Unified sandbox driver interface and data contracts.
-
-Field names/types are aligned one-to-one with
-``services/script_runner_service/server.py:ExecuteRequest/ExecuteResponse``,
-so that ScriptRunnerProvider is a pure pass-through and OpenSandboxProvider
-only performs semantic alignment.
-"""
+"""Managed sandbox process and file contracts."""
 
 from __future__ import annotations
 
@@ -16,59 +10,24 @@ from core.sandbox.oslayer import SandboxLaunch
 
 
 @dataclass
-class SandboxFile:
-    """Artifact file collected after a sandbox execution."""
+class ProcessRequest:
+    """A script launched as a managed process in a conversation workspace.
 
-    name: str
-    size: int
-    content_b64: str
-    mime_type: str
-
-
-@dataclass
-class ExecuteRequest:
-    """Unified execute request.
-
-    Note: ``_args`` (list) inside ``params`` is interpreted as command-line
-    arguments appended after the interpreter invocation; the remaining keys
-    are serialized as JSON and written to stdin.
-
-    ``user_id``: optional. Providers use it to expose the caller's files under
-    ``STORAGE_PATH/myspace_cache/{user_id}/`` into the sandbox at
-    ``/workspace/myspace/{user_id}/``, so that files staged via
-    ``stage_files`` are visible in subsequent execute calls.
-
-    ``session_id``: the conversation-level sandbox identity. Every provider
-    uses it as the sole isolation boundary: main agents, child agents and
-    batch work in the same session workspace; different sessions do not.
-    Container providers additionally reuse their language/kernel state.
-
-    ``expected_output_files``: optional. The caller declares in advance the
-    list of output file names it expects to retrieve from the sandbox (file
-    names relative to /workspace, no directories). Providers use it for
-    precise retrieval — this matters especially because the opensandbox
-    SDK's ``files.search`` is unavailable in some versions, and artifact
-    collection relying on list-and-diff would return empty. With explicit
-    expected file names declared, the provider takes the precise
-    ``get_file_info`` + ``read_bytes`` retrieval path, bypassing the list
-    failure. Missing files do not raise (treated as stale or not produced
-    by the script); the resulting ExecuteResult.files only contains files
-    that were successfully retrieved. The script_runner provider is also
-    compatible with this field (still uses the original work_dir scan; the
-    extra field has no side effects).
+    params._args supplies CLI arguments; remaining params are JSON stdin.
+    Omitted timeout means no command execution deadline.
+    Files remain in the workspace and are fetched through the file API.
     """
 
     script_content: str
     script_name: str
     language: str = "python"
     params: dict = field(default_factory=dict)
-    timeout: int = 60
+    timeout: Optional[int] = None
     resource_files: Optional[dict[str, str]] = None
     input_files: Optional[dict[str, str]] = None
     input_files_b64: Optional[dict[str, str]] = None
     user_id: Optional[str] = None
     session_id: Optional[str] = None
-    expected_output_files: Optional[list[str]] = None
     capability_run_id: Optional[str] = None
     capability_scope: str = ""
     # OS-level confinement for this one execution, resolved by the permission
@@ -77,31 +36,18 @@ class ExecuteRequest:
     # the user's permission preset asked for none. Providers apply it verbatim
     # at the point they spawn the process; they never build or interpret one.
     sandbox_launch: Optional[SandboxLaunch] = None
+    # Explicit host cwd; session_id still owns scratch files and process handles.
+    cwd: Optional[str] = None
+    # Interactive workers consume readiness output before the process exits.
+    yield_on_output: bool = False
 
 
 @dataclass
-class ExecuteResult:
+class ProcessResult:
     stdout: str
     stderr: str
     exit_code: int
     execution_time_ms: int
-    files: list[SandboxFile] = field(default_factory=list)
-
-
-@dataclass
-class StageFile:
-    """Input file staged into myspace."""
-
-    name: str
-    content_b64: str
-
-
-@dataclass
-class StagedFile:
-    """Location of a staged file, referenced by scripts via absolute path."""
-
-    name: str
-    path: str
 
 
 class SandboxAdminNotSupported(Exception):
@@ -150,7 +96,7 @@ class SandboxInfo:
     state: str = "active"  # active | idle | stale
     idle_seconds: Optional[float] = None  # now - last_active (monotonic clock delta)
     owner_tag: Optional[str] = None
-    backend_managed: bool = True  # whether in the current process registry
+    backend_managed: bool = True  # belongs to this backend service (across workers)
     # Ownership classification for detached instances (backend_managed=False),
     # derived from owner_tag:
     # self-orphan (our own orphan) | external (another client) | untagged (no owner tag).
@@ -164,21 +110,31 @@ class SandboxProvider(Protocol):
 
     name: str
 
-    # 沙箱里的 ``/workspace/myspace/{uid}`` 是否就是后端的 myspace_cache 目录本身
-    # （bind mount），而不是一份需要来回搬运的副本。True 时沙箱里的写入立刻落在后端磁盘
-    # 上，对账可以直接读本地目录、不必再走沙箱取文件；也意味着"沙箱副本和镜像缓存一致"
-    # 不再等于"已登记进我的空间"，判定必须以 artifact 记录为准。
-    myspace_mirror_live: bool = False
-
     # 这个 provider 是不是直接在用户宿主机上起进程。True 表示除了 OS 沙箱之外
-    # 没有别的隔离边界，命令必须带着 ``ExecuteRequest.sandbox_launch`` 执行；
+    # 没有别的隔离边界，命令必须带着 ``ProcessRequest.sandbox_launch`` 执行；
     # False 表示隔离由容器提供，OS 沙箱在那里既无处施加也无意义——调用方据此
     # 决定要不要构造 launch，避免出现"构造了但没人施加"的静默失效。
     runs_on_host: bool = False
 
-    async def execute(self, req: ExecuteRequest) -> ExecuteResult: ...
+    async def run_to_completion(self, req: ProcessRequest) -> ProcessResult:
+        """Run once and await the final result; internal callers never manage handles."""
+        ...
 
-    async def stage_files(self, user_id: str, files: list[StageFile]) -> list[StagedFile]: ...
+    async def start_process(self, req: ProcessRequest, yield_time_ms: int = 60000) -> dict:
+        """Start a managed command; None timeout means no execution deadline."""
+        ...
+
+    async def write_stdin(
+        self,
+        session_id: str,
+        *,
+        sandbox_session_id: str,
+        user_id: Optional[str] = None,
+        chars: str = "",
+        yield_time_ms: int = 60000,
+    ) -> dict:
+        """Wait for incremental output, or send Ctrl+C to this owner's command."""
+        ...
 
     async def put_file(
         self,
@@ -271,7 +227,7 @@ class SandboxProvider(Protocol):
         """Mark a live session as active without executing anything in it.
 
         Long-running workflows call this on a timer (see
-        ``core/sandbox/keepalive.py``) so the idle reaper does not destroy
+        ``core/sandbox/sessions/keepalive.py``) so the idle reaper does not destroy
         their session during long model-streaming phases with no sandbox
         calls. Returns False when the session does not exist (yet); providers
         with no session lifecycle implement it as a no-op returning False.
@@ -291,17 +247,12 @@ class SandboxProvider(Protocol):
         management view."""
         ...
 
-    async def admin_list_sandboxes(self, include_server: bool = False) -> list["SandboxInfo"]:
+    async def admin_list_sandboxes(self) -> list["SandboxInfo"]:
         """Enumerate running sandbox instances.
 
-        By default returns only instances in the current process registry
-        (``backend_managed=True``). With ``include_server=True``, providers
-        that support server-side enumeration **additionally** list detached
-        instances that are still alive on the server but untracked by this
-        process (``backend_managed=False``, with ``ownership`` labeling the
-        attribution), used by the security admin console to discover leaks;
-        providers that do not support it ignore the parameter and still
-        return only registry instances.
+        OpenSandbox reads the controller inventory across workers and derives
+        tracking from shared bindings and live worker leases. Providers without
+        controller enumeration return their supported registry inventory.
         """
         ...
 

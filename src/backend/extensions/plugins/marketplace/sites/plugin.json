@@ -1,0 +1,37 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "sites",
+  "version": "1.8.2",
+  "description": "通过对话构建和发布网站，管理应用数据，并创建、编辑和发布数据库查询 MCP。",
+  "author": {
+    "name": "HugAgentOS"
+  },
+  "extensions": {
+    "org.hugagent": {
+      "mcp": {
+        "site_publish": {
+          "display_name": "对话建站发布",
+          "description": "发布网站，管理应用数据库，并托管需要鉴权的查询 MCP 服务。",
+          "tools": [
+            {
+              "name": "list_sites",
+              "description": "查询当前账号已发布、且有权修改的站点，返回 site_id、标题、访问地址、版本号、源码目录 source_dir、发布目录 publish_dir、是否属于当前项目。修改任何已发布站点前都必须先调本工具取 site_id——无论从编辑按钮、项目会话还是全新对话进入；不带 site_id 发布会新建站点，用户原网址不会更新。单一候选直接用；多候选且用户未指名先询问，不许默认选最近发布的；查询失败或为空不等于没有站点，不得据此自动新建。"
+            },
+            {
+              "name": "publish_site",
+              "description": "发布指定站点目录。新建与编辑均显式传 src_dir，静态站为实际页面根目录，构建型为本次构建产物并另传 source_dir。编辑前先用 list_sites 查询站点编号与目录；从项目、新会话或编辑按钮进入都必须显式带原 site_id，不依赖后端自动定位。仅用户明确新建时省略 site_id；多目标不明确先询问。发布后核对编号、URL、版本及首页实际改动。源码保留在本机，云端托管构建产物。限制 ≤300 文件、≤30MB。"
+            },
+            {
+              "name": "manage_application",
+              "description": "管理应用数据库、记录和 MCP 项目。按用户需求及实际数据确定应用标题、表、字段和查询范围。kind=mcp 自动创建项目；source 返回草稿和已发布定义；publish_project 从项目 mcp.json 更新原服务并校验版本。操作及参数见工具 schema。"
+            },
+            {
+              "name": "publish_mcp",
+              "description": "发布已有应用的查询 MCP，验证连接并加入当前用户的个人 MCP。重复发布更新原服务；仅 installed 和 connection_verified 都为 true 时表示接入成功。工具定义取自实际数据与授权范围，凭据仅在服务端加密保存。"
+            }
+          ]
+        }
+      }
+    }
+  }
+}

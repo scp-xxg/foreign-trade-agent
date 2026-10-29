@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import Dict
 
-from core.config.edition_display_names import (
+from core.config.edition import (
     edition_mcp_server_descriptions,
     edition_mcp_server_display_names,
     edition_tool_display_names,
@@ -22,11 +22,9 @@ MCP_SERVER_DISPLAY_NAMES: Dict[str, str] = {
     "db_query": "数据库直连查询",
     "retrieve_dataset_content": "知识库检索",
     "internet_search": "互联网搜索",
-    "generate_chart_tool": "数据可视化",
     # (Word/Excel/PPT capability migrated to the officecli-* skills, PDF to pdf-editing;
     #  none of them goes by an MCP tool name any more)
     "web_fetch": "网站信息抓取",
-    "batch_runner": "批量执行",
     **edition_mcp_server_display_names(),
 }
 
@@ -35,12 +33,10 @@ MCP_SERVER_DESCRIPTIONS: Dict[str, str] = {
     "query_database": "查询数据仓库中的行业指标与统计数值，支持自然语言提问直接获取精确数据。",
     "db_query": "通过 DBHub 网关只读直连 MySQL/PostgreSQL/SQL Server/MariaDB/SQLite 等数据库，自动探查表结构并执行 SQL 取数。",
     "retrieve_dataset_content": "从公有/私有知识库中语义检索政策文件、产业报告及用户上传文档，支持混合检索与重排序。",
-    "internet_search": "通过互联网实时搜索公开网页、新闻及财经资讯，作为数据库与知识库之外的信息兜底。",
-    "generate_chart_tool": "根据给定数据调用 Python 生成柱状图、折线图、饼图等可视化图表，结果以图片形式直接展示。",
+    "internet_search": "检索公开网页、官方文档、新闻及财经资讯，支持多查询并发、来源去重和原文核验。",
     # (Word/Excel/PPT capability migrated to the officecli-* skills, PDF to pdf-editing;
     #  none of them goes by an MCP tool name any more)
     "web_fetch": "抓取指定网页 URL 的内容，提取正文文本或 Markdown，支持搜索引擎结果页解析。",
-    "batch_runner": "对一组对象（Excel 行/多份文档/文本枚举）批量执行同一个任务；先生成可确认的计划，用户审阅模板后再逐条执行。",
     **edition_mcp_server_descriptions(),
 }
 
@@ -54,7 +50,7 @@ TOOL_DISPLAY_NAMES: Dict[str, str] = {
     "execute_sql": "执行 SQL 查询",
     "search_objects": "探查库表结构",
     "retrieve_dataset_content": "公有知识库检索",
-    "retrieve_local_kb": "私有知识库检索",
+    "retrieve_local_kb": "本地知识库检索",
     "list_datasets": "查看知识库列表",
     # LLM Wiki / 概念图谱（仅 Wiki-capable 知识库后端下暴露）
     "wiki_overview": "知识地图总览",
@@ -67,14 +63,11 @@ TOOL_DISPLAY_NAMES: Dict[str, str] = {
     # 商业版插件的工具展示名走版本接缝 ``edition_tool_display_names()``（见文件
     # 末尾的合并），不直接写在这张 CE 共享表里——CE 派生的品牌门禁禁止这些
     # 工具名出现在共享文件中。
-    "generate_chart_tool": "数据可视化",
     # (Word/Excel/PPT capability migrated to the officecli-* skills under
-    #  src/backend/skill_bundles/default/; they run the pre-installed `officecli`
+    #  src/backend/extensions/skills/default/; they run the pre-installed `officecli`
     #  binary through Bash, so word_mcp / excel_mcp / ppt_mcp no longer exist.)
-    # (PDF capability migrated to the pdf-editing skill, see src/backend/skill_bundles/default/pdf-editing/)
+    # (PDF capability migrated to the pdf-editing skill, see src/backend/extensions/skills/default/pdf-editing/)
     # The MCP layer no longer exposes pdf_mcp; the skill's scripts/pdf-cli is the single entry point.
-    # Batch execution
-    "batch_plan": "批量执行计划",
     # Built-in tools
     "ask_user_question": "询问用户",
     "get_skills": "查询可用技能",
@@ -91,8 +84,7 @@ TOOL_DISPLAY_NAMES: Dict[str, str] = {
     # Workspace file visibility
     "pin_to_workspace": "固定到工作区",
     # Code-execution Lab tools
-    "bash": "执行 Shell 命令",
-    "Bash": "执行 Shell 命令",  # Title-cased alias for models that follow the Read/Edit/Write naming family
+    "Bash": "执行 Shell 命令",
     "Read": "读取文件",
     "Edit": "编辑文件",
     "Write": "写入文件",
@@ -106,9 +98,5 @@ TOOL_DISPLAY_NAMES: Dict[str, str] = {
     # Deprecated (kept for fallback display)
     "use_skill": "加载技能（已废弃）",
     # My Space access tools (code-execution mode)
-    "list_myspace_files": "浏览我的空间",
-    "stage_myspace_file": "导入文件到工作区",
-    "list_favorite_chats": "浏览收藏会话",
-    "get_chat_messages": "读取会话记录",
     **edition_tool_display_names(),
 }

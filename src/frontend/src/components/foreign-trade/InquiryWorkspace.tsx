@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Alert, Button, Checkbox, Empty, Input, InputNumber, Select, Tag } from 'antd';
 import { CheckCircleOutlined, CopyOutlined, GlobalOutlined, PlusOutlined, ReloadOutlined, SearchOutlined } from '@ant-design/icons';
 import { t } from '../../i18n';
+import { useRouteSubs } from '../../routing/usePanel';
 import { TradeQuoteCard } from '../chat/TradeQuoteCard';
 import { extractTradeQuotes } from '../../utils/foreignTradeQuote';
 import { ApiResponseError } from '../../utils/apiError';
@@ -68,6 +69,7 @@ function errorText(error: unknown): string {
 }
 
 export function InquiryWorkspace() {
+  const [routeId] = useRouteSubs();
   const [records, setRecords] = useState<InquiryRecord[]>([]);
   const [record, setRecord] = useState<InquiryRecord | null>(null);
   const [form, setForm] = useState<InquiryInput>(blankInquiry);
@@ -92,14 +94,15 @@ export function InquiryWorkspace() {
     return next;
   };
   useEffect(() => {
-    let active = true;
-    listInquiries().then((items) => {
+    let active = true; setBusy('loading'); setRecord(null); setForm(blankInquiry()); setInterpretation(null);
+    Promise.all([listInquiries(), routeId ? getInquiry(routeId) : Promise.resolve(null)]).then(([items, selected]) => {
       if (!active) return;
       setRecords(items);
-      if (items[0]) { setRecord(items[0]); setForm(inputFrom(items[0])); }
+      const initial = selected || items[0];
+      if (initial) { setRecord(initial); setForm(inputFrom(initial)); }
     }).catch((err) => { if (active) setError(errorText(err)); }).finally(() => { if (active) setBusy(''); });
     return () => { active = false; };
-  }, []);
+  }, [routeId]);
   async function run(name: string, task: () => Promise<void>) {
     if (locked) return;
     setBusy(name); setError(''); setNotice('');

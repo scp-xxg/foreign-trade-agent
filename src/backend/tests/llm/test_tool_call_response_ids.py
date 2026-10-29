@@ -3,11 +3,12 @@ from datetime import datetime
 from types import SimpleNamespace
 
 import pytest
-from agentscope.agent import Agent
+from agentscope.state import AgentState
 from agentscope.message import Msg, TextBlock, ThinkingBlock, ToolCallBlock, ToolResultBlock
 from agentscope.model import ChatResponse, OpenAIChatModel
 
-from core.llm.chat_models import _namespace_response_tool_calls, make_chat_model
+from core.models.providers.openai_compat import _namespace_response_tool_calls
+from core.models.chat_models import make_chat_model
 
 
 def response(name="calculate_quote", raw_id="call_reused", *, final=True, arguments="{}"):
@@ -26,7 +27,7 @@ def test_reused_upstream_id_does_not_hide_new_tool_behind_old_result():
         first_call, ToolResultBlock(id=first_call.id, name=first_call.name, output="skill loaded"),
         second_call,
     ])
-    pending = Agent._get_executable_tool_calls(SimpleNamespace(_get_last_msg=lambda: msg))
+    pending = AgentState(context=[msg], reply_id=msg.id).get_unfinished_tool_calls("assistant")
     assert [call.name for call in pending] == ["calculate_quote"]
 
 
@@ -56,21 +57,21 @@ def model():
     return make_chat_model(
         model="test-model", temperature=0.6, max_tokens=32, timeout=5,
         base_url="http://example.invalid/v1", api_key="dummy",
-        context_size=4096, stream=True,
+        api_protocol="chat_completions", context_size=4096, stream=True,
     )
 
 
 @pytest.mark.asyncio
 async def test_stream_parser_uses_one_scope_per_response(monkeypatch):
-    async def fake_parse(self, start, raw, audio):
+    async def fake_parse(self, start, raw):
         yield response(final=False)
         yield response(final=True)
 
     monkeypatch.setattr(OpenAIChatModel, "_parse_stream_response", fake_parse)
     m = model()
     try:
-        first = [r async for r in m._parse_stream_response(datetime.now(), None, "wav")]
-        second = [r async for r in m._parse_stream_response(datetime.now(), None, "wav")]
+        first = [r async for r in m._parse_stream_response(datetime.now(), None)]
+        second = [r async for r in m._parse_stream_response(datetime.now(), None)]
         assert first[0].content[0].id == first[1].content[0].id
         assert second[0].content[0].id == second[1].content[0].id
         assert first[0].content[0].id != second[0].content[0].id

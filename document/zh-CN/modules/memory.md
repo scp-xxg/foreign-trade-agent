@@ -22,25 +22,33 @@ HugAgentOS 内置一套**分层持久记忆系统**：L2 向量层使用 [mem0](
 用户发送消息
   │
   ▼
-api/routes/v1/chats.py
+api/routes/v1/chats/__init__.py
   · 从 users_shadow.metadata 读 memory_enabled / memory_write_enabled
   · 项目对话则改读 projects.metadata（团队项目 scope = "team:<team_id>"）
   │
   ▼
 orchestration/workflow.py
-  ├─► launch_memory_retrieval()            ← 后台 task，立即返回（不阻塞）
-  │     └─ core/memory/service.retrieve_memories()
-  │          ├─ mem0.Memory.search() → Milvus 向量检索
-  │          └─ core/memory/graph.py → Neo4j 实体关系检索（可选）
+  ├─► open_session_memory()                ← 会话级：本会话已有冻结块则直接取出，
+  │     │                                     **完全不发起检索**
+  │     └─ 仅首轮：launch_memory_retrieval() 后台 task，立即返回（不阻塞）
+  │          └─ core/memory/service.retrieve_memories()
+  │               ├─ mem0.Memory.search() → Milvus 向量检索
+  │               └─ core/memory/graph.py → Neo4j 实体关系检索（可选）
   │
-  ├─► build_frozen_memory_block()          ← 组装"会话冻结块"
+  ├─► resolve_session_memory()             ← 后续轮次原样复用已存快照；
+  │     │                                     首轮才调 build_frozen_memory_block()
   │     · L1 Profile：读 DB，<20ms，必等
   │     · L2 Procedure：await 检索 task，预算 600ms（MEMORY_RETRIEVAL_BUDGET_MS）
   │       超时则 shield 后台 task、跳过本轮注入；task 继续完成且状态可观测
+  │     · 检索确实落地后把冻结块写入 ChatSession.metadata；超时或降级则不写，
+  │       留给下一轮重试，避免把一次失败冻结成整个会话的空记忆
   │
-  ├─► inject_frozen_memory()               ← 冻结块以 user-role 消息插到
-  │                                           session_messages 开头
-  │     （用 user 而非 system：Qwen 等模型要求 system 仅在 index 0）
+  ├─► inject_session_blocks()              ← 会话常量块（身份 + 冻结记忆）以 user-role
+  │                                           消息插到 session_messages 开头
+  │     （用 user 而非 system：Qwen 等模型要求 system 仅在 index 0；更重要的是把这些
+  │       按用户变化的字节挡在 system 之外，系统提示词、工具定义、技能清单才能对所有
+  │       用户/会话保持逐字节相同的共享前缀。两个块整个会话不变，所以摆在历史最前面
+  │       也不会在轮次之间挪动前缀缓存边界）
   │
   ▼  …… Agent 流式执行，SSE 输出 ……
   │
@@ -56,7 +64,7 @@ save_memories_background()
        · sanitize 脱敏闸门 → 写 L1/L2/L3/Session → audit 旁路
 ```
 
-检索与注入的整合层在 `src/backend/orchestration/memory_integration.py`；mem0 的 LLM / Embedder / Milvus / Reranker 配置在 `src/backend/core/memory/service.py`，Neo4j 图谱读写在 `src/backend/core/memory/graph.py`。模型配置优先取 DB 中 `memory` / `embedding` 角色，缺省回落到环境变量。
+检索与注入的整合层在 `src/backend/core/agent_runtime/integrations/memory.py`；mem0 的 LLM / Embedder / Milvus / Reranker 配置在 `src/backend/core/memory/service.py`，Neo4j 图谱读写在 `src/backend/core/memory/graph.py`。模型配置优先取 DB 中 `memory` / `embedding` 角色，缺省回落到环境变量。
 
 ## 写入流水线与抽取器
 
@@ -128,7 +136,7 @@ save_memories_background()
 | `memory_enabled` | 永久记忆**读取**：会话启动时是否注入冻结块 | `false` |
 | `memory_write_enabled` | **写入**：对话结束后是否抽取并保存记忆 | `false` |
 
-项目对话有独立作用域：个人项目 / 默认空间用真实 `user_id`，团队项目用 `scope_user_id = "team:<team_id>"`——同团队成员写入同一个 mem0 桶实现共享，真实作者保留在 `metadata.author_user_id`（见 `orchestration/memory_integration.py::save_memories_background` 与 `api/routes/v1/memories.py::list_memories`）。项目级开关存于 `projects.metadata`（`memory_enabled` / `memory_write_enabled`，项目内缺省 `true`），详见 [项目空间与我的空间](./projects-myspace.md)。
+项目对话有独立作用域：个人项目 / 默认空间用真实 `user_id`，团队项目用 `scope_user_id = "team:<team_id>"`——同团队成员写入同一个 mem0 桶实现共享，真实作者保留在 `metadata.author_user_id`（见 `core/agent_runtime/integrations/memory.py::save_memories_background` 与 `api/routes/v1/memories.py::list_memories`）。项目级开关存于 `projects.metadata`（`memory_enabled` / `memory_write_enabled`，项目内缺省 `true`），详见 [项目空间与我的空间](./projects-myspace.md)。
 
 ## 前端记忆中心
 
@@ -212,7 +220,7 @@ RERANKER_API_KEY=...
 | `src/backend/core/memory/graph.py` | L3 Neo4j 图谱关系的写入、强化、查询与删除 |
 | `src/backend/core/memory/profile.py` | L1 档案：get / patch / compact / delete |
 | `src/backend/core/memory/profile_store.py` | L1 revision CAS 与 effect receipt 存储 |
-| `src/backend/core/memory/outbox.py` | 持久接纳、租约、重试/隔离、抽取检查点与原子结算 |
+| `src/backend/core/memory/outbox/__init__.py` | 持久接纳、租约、重试/隔离、抽取检查点与原子结算 |
 | `src/backend/core/memory/effect_lane.py` | PostgreSQL advisory lock / SQLite 本地锁驱动的 L2 顺序写 lane |
 | `src/backend/core/memory/executor.py` | 等待真实线程 effect 完成后再传播取消，避免提前释放租约 |
 | `src/backend/core/memory/pipeline.py` | Outbox 接纳入口、信号量、Milvus 熔断器 |
@@ -221,11 +229,18 @@ RERANKER_API_KEY=...
 | `src/backend/core/memory/sanitizer.py` | 脱敏闸门（硬编码规则 + DB 动态规则） |
 | `src/backend/core/memory/audit.py` | 审计旁路（商业版 EE） |
 | `src/backend/core/memory/context.py` | `MemoryContext` 与 workspace / 层级解析 |
-| `src/backend/orchestration/memory_integration.py` | 检索启动、冻结块组装与注入、保存转调 |
-| `src/backend/orchestration/workflow.py` | 主编排：记忆 hook 接线点 |
+| `src/backend/core/agent_runtime/integrations/memory.py` | 检索启动、冻结块组装与注入、保存转调 |
+| `src/backend/core/agent_runtime/runner.py` | 主编排：记忆 hook 接线点 |
 | `src/backend/api/routes/v1/memories.py` | `/v1/memories` 管理 API |
 | `src/backend/core/db/models/memory.py` | `ProfileMemory`、`MemoryOutbox`、`MemorySanitizerRule` ORM |
 | `src/backend/edition_ee/db/models/memory.py` | `MemoryAudit` ORM（仅 EE） |
 | `src/frontend/src/components/settings/SettingsModal.tsx` | 记忆设置 + 分层记忆弹窗 |
 | `src/frontend/src/components/memory/FactsList.tsx` | L2 做法列表组件（可编辑/删除） |
 | `docker-compose.yml`（`mem0` profile） | Milvus / etcd / MinIO / Neo4j |
+
+
+### L2 到期与修改权限
+
+L2 把到期日期存入记忆 metadata。检索、列表和近重复匹配在 UTC 到期当天隐藏该条目，后台清理再删除实体。旧条目继续使用 `ttl_days` 与更新时间计算到期日期。普通编辑保留原 ID、工作空间、到期日期和写入回执；强化延长到期日期。
+
+单条修改和删除使用服务器读取的记忆作用域校验身份。团队项目只允许当前有编辑权限的成员修改记忆。持久队列重放前重新核对权限；旧写入回执不因内容到期而消失，避免崩溃重放重复新增。

@@ -1,8 +1,7 @@
 <!-- Modified by foreign-trade-agent contributors, 2026-10-21; see CHANGES_FOREIGN_TRADE.md. -->
 ## 代码沙箱环境
 
-隔离的云端沙箱（与用户环境隔离），Ubuntu + bash，起始目录 `/workspace/`。同一会话内文件持久，
-下一条命令还能读到上一条写的文件。
+隔离的云端沙箱（与用户环境隔离），Ubuntu + Bash，起始目录 `/workspace/`。
 
 ### 跑 Python：一律用 `"$PY_BIN"`
 
@@ -33,5 +32,4 @@
 
 - **CPU 限 1 核**——注意 `nproc` 会报宿主的核数，别据此开多进程并行，不会更快。
 - 内存约 2GB：数据大就分块处理或采样，别整表读进内存。
-- 单条 bash 命令超时：默认 60s、最大 120s。**长任务不要挂在一条命令上**，用后台进程或批量作业。
 - 不可用：GPU(torch/CUDA)、交互输入 `input()`、GUI(Tk/Qt)。

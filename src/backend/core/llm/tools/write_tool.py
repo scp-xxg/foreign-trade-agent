@@ -1,48 +1,25 @@
-"""Write tool — create / fully overwrite sandbox files, ported from Claude Code's FileWriteTool.
-
-Invariants:
-- **Existing files must be Read first**: path missing from state -> reject (prevents blind overwrite)
-- **No external change**: state compared via sha256 (same as Edit)
-
-myspace auto-persistence (B + in-place + immediate sync):
-- When the path is under ``/myspace/...`` or ``/workspace/myspace/{user_id}/...``:
-  * Same-named artifact exists -> overwrite its storage content (**same file_id**, Canvas iframe needs no URL change)
-  * None exists -> create a new artifact
-  * Also write the bytes into the backend's ``myspace_cache/{user_id}/`` so the next fresh sandbox seed sees them
-- When the path is under ``/workspace/scratch/`` or other ``/workspace/`` subdirectories:
-  * No sync by default — this is the "intermediate output" area
-  * The model can explicitly pass ``register_as_artifact=True`` to register an output at any path as a downloadable
-"""
+"""Create or overwrite files in the active sandbox."""
 
 from __future__ import annotations
+from core.llm.factory.tools.definitions import function_tool
 
 import difflib
-import hashlib
 import logging
 from typing import Optional
 
-from agentscope.tool import Toolkit
-from core.services.project_scope import ProjectScope
+from agentscope.tool import Toolkit, ToolResponse
+from core.projects.edition import ProjectScope
 
-from . import myspace_vfs as _ms
 from ._common import (
     pin_artifact_to_workspace,
     resolve_sandbox_session,
     resp_json,
     sandbox_exec_bash,
     shell_quote,
-    myspace_mutation_refusal,
-    upsert_myspace_artifact,
+    register_file_artifact,
 )
-from ._paths import (
-    basename,
-    is_myspace_physical,
-    parent_dir,
-    to_physical_path,
-    validate_project_scope_path,
-    validate_workspace_path,
-)
-from ._state import ReadEntry, ReadStateTracker
+from core.sandbox.workspace.resolution import basename, is_myspace_physical, space_metadata, WORKSPACE_ROOT, parent_dir, to_physical_path, validate_project_scope_path, validate_workspace_path
+from ._mutation_queue import file_mutation_lock
 
 logger = logging.getLogger(__name__)
 
@@ -70,8 +47,6 @@ def register_write(
     chat_id: Optional[str] = None,
     sandbox_session_id: Optional[str] = None,
     user_id: Optional[str] = None,
-    state: ReadStateTracker,
-    interactive: bool = True,
     project_folder_name: Optional[str] = None,
     scope: Optional[ProjectScope] = None,
 ) -> None:
@@ -83,10 +58,7 @@ def register_write(
         content: str,
         register_as_artifact: bool = False,
     ) -> "ToolResponse":  # type: ignore[name-defined]
-        from core.llm.tool_permissions import (
-            PermissionEnforcementError,
-            require_local_path_permission,
-        )
+        from core.sandbox.permissions.dispatch_models import PermissionEnforcementError, require_local_path_permission
         from core.sandbox import SandboxConnectError as _SCE
         from core.sandbox import SandboxError as _SE
         from core.sandbox import get_sandbox_provider as _get_provider
@@ -113,224 +85,139 @@ def register_write(
                 {
                     "error": (
                         f"Write 只能写 UTF-8 纯文本，不能直接生成 .{_ext} 二进制文档"
-                        "（产物会是无法打开的假文档）。请用 bash 调命令行工具生成"
+                        "（产物会是无法打开的假文档）。请用 Bash 调命令行工具生成"
                         "（docx 用 python-docx，xlsx 用 openpyxl，pdf 用 reportlab "
-                        "等），生成后写到同一路径即可自动同步。"
+                        "等），生成后写到目标目录即可。"
                     ),
                 }
             )
 
         # ── Logical path (/myspace/...) -> physical path (/workspace/myspace/<uid>/...) ──
-        from .project_source_access import current_scope_error, write_team_text, is_team_source_path
+        from .project_source_access import current_scope_error
+
         scope_error = current_scope_error(scope, user_id, write=True)
         if scope_error:
             return resp_json(scope_error)
-        physical = to_physical_path(file_path, user_id, session_id=_sess)
+        physical = to_physical_path(file_path, user_id, session_id=_sess, scope=scope)
         is_persistent = is_myspace_physical(physical, user_id)
 
-        if is_team_source_path(scope, user_id, file_path):
-            from fastapi import HTTPException
-            import asyncio
-            try:
-                return resp_json(await asyncio.to_thread(
-                    write_team_text, scope, user_id or "", file_path, physical, state,
-                    content=content,
-                ))
-            except HTTPException as exc:
-                return resp_json({"error": exc.detail, "status": exc.status_code})
 
-        # 只读作用域（团队项目）必须在写字节之前就拒绝，否则文件已经落在用户的镜像
-        # 目录里，而登记那一步才被拦下 —— 对模型是"成功"，对用户是哪儿都看不见。
-        if is_persistent:
-            _refusal = myspace_mutation_refusal(scope, file_path, "写入文件")
-            if _refusal is not None:
-                return resp_json(_refusal)
 
         from core.config.local_mode import local_mode_enabled as _local_on
 
         _is_local = _local_on()
 
-        # ── Existing-file detection + invariant ─────────────────────────
-        provider = _get_provider()
-        existing: Optional[bytes] = None
-        try:
-            if _is_local:
-                require_local_path_permission(physical, "read")
-                with open(physical, "rb") as _f:
-                    existing = _f.read()
-            else:
-                existing = await provider.get_file(_sess, physical, user_id=user_id)
-        except FileNotFoundError:
-            existing = None
-        except PermissionEnforcementError as exc:
-            return resp_json({"error": str(exc), "blocked": True})
-        except _SE:
-            existing = None
-        except _SCE as exc:
-            return resp_json({"error": f"沙盒连接失败: {exc}"})
-        except OSError as exc:
-            return resp_json({"error": f"读取现有文件失败: {exc}"})
-
-        # Absent from the sandbox != file does not exist: a myspace file may not yet be
-        # materialized into the sandbox (sandbox rebuild / provider without bind mount).
-        # In that case the artifact must be the authority, otherwise "overwriting an
-        # existing file" gets misjudged as "create" and bypasses the read-before-write
-        # protection below.
-        if existing is None and is_persistent and user_id:
+        async with file_mutation_lock(physical):
+            # ── Existing-file detection ─────────────────────────────────────
+            provider = _get_provider()
+            existing: Optional[bytes] = None
             try:
-                existing = await _ms.materialize_into_sandbox(
-                    provider,
-                    _sess,
-                    user_id,
-                    file_path,
-                    scope=scope,
-                )
-            except Exception as mexc:  # noqa: BLE001
-                logger.warning("[write] myspace 物化失败 %s: %s", file_path, mexc)
+                if _is_local:
+                    require_local_path_permission(physical, "read")
+                    with open(physical, "rb") as _f:
+                        existing = _f.read()
+                else:
+                    existing = await provider.get_file(_sess, physical, user_id=user_id)
+            except FileNotFoundError:
+                existing = None
+            except PermissionEnforcementError as exc:
+                return resp_json({"error": str(exc), "blocked": True})
+            except _SE:
+                existing = None
+            except _SCE as exc:
+                return resp_json({"error": f"沙盒连接失败: {exc}"})
+            except OSError as exc:
+                return resp_json({"error": f"读取现有文件失败: {exc}"})
 
-        is_update = existing is not None
-        original_text: Optional[str] = None
+            is_update = existing is not None
+            original_text: Optional[str] = None
 
-        if is_update:
-            entry = state.get(physical)
-            if entry is None:
-                # Also accept that the model Read'd via the logical path
-                entry = state.get(file_path)
-            if entry is None:
-                return resp_json(
-                    {
-                        "error": (
-                            f"{file_path} 已存在，必须先 Read 该文件再 Write "
-                            "（防止覆盖你未读过的内容）。"
-                        ),
-                    }
+            # No read-before-overwrite precondition (aligned with pi-mono); the existing
+            # content is only read to report a diff.
+            if is_update:
+                try:
+                    original_text = existing.decode("utf-8")
+                except UnicodeDecodeError:
+                    original_text = None
+
+            # ── Create parent directory (inside the sandbox) ─────────────────
+            pd = parent_dir(physical)
+            # The host-local script runner implements parent creation inside its
+            # native put_file endpoint.  Asking it to run POSIX ``mkdir -p`` first
+            # breaks standard Windows installations before the actual write starts.
+            if pd and pd != WORKSPACE_ROOT and provider.name != "script_runner":
+                mk_exit, _, mk_err = await sandbox_exec_bash(
+                    f"mkdir -p {shell_quote(pd)}",
+                    chat_id=_sess,
+                    user_id=user_id,
+                    timeout=10,
                 )
-            if entry.parsed_doc:
-                return resp_json(
-                    {
-                        "error": (
-                            f"{file_path} 是二进制文档（docx/pdf/xlsx/pptx），Read "
-                            "返回的是它的**解析文本**，用 Write 覆盖会损坏文档。"
-                            "请用 bash 调命令行工具（python-docx 等）重新生成。"
-                        ),
-                    }
-                )
-            if entry.offset is not None:
-                return resp_json(
-                    {
-                        "error": (
-                            f"上次 Read({file_path}) 只读了部分内容；Write 之前"
-                            "需要先完整 Read（不传 offset/limit）。"
-                        ),
-                    }
-                )
-            cur_sha = hashlib.sha256(existing).hexdigest()
-            if cur_sha != entry.sha256:
-                state.forget(physical)
-                state.forget(file_path)
-                return resp_json(
-                    {
-                        "error": (
-                            f"{file_path} 在 Read 之后被外部修改了，" "请先重新 Read 再 Write。"
-                        ),
-                    }
-                )
+                if mk_exit != 0:
+                    return resp_json(
+                        {
+                            "error": f"创建父目录 {pd} 失败: {mk_err}",
+                        }
+                    )
+
+            # ── Write into the sandbox ─────────────────────────────────────
+            new_bytes = content.encode("utf-8")
+            # Local-mode write-back snapshot (ticket #08): back up the real file
+            # before overwriting it, so the user can roll back. No-op on cloud/web.
             try:
-                original_text = existing.decode("utf-8")
-            except UnicodeDecodeError:
-                original_text = None
+                from core.harness.registry.local_files import maybe_snapshot_local
 
-        # ── Create parent directory (inside the sandbox) ─────────────────
-        pd = parent_dir(physical)
-        # The host-local script runner implements parent creation inside its
-        # native put_file endpoint.  Asking it to run POSIX ``mkdir -p`` first
-        # breaks standard Windows installations before the actual write starts.
-        if pd and pd != "/workspace" and provider.name != "script_runner":
-            mk_exit, _, mk_err = await sandbox_exec_bash(
-                f"mkdir -p {shell_quote(pd)}",
-                chat_id=_sess,
-                user_id=user_id,
-                timeout=10,
-            )
-            if mk_exit != 0:
-                return resp_json(
-                    {
-                        "error": f"创建父目录 {pd} 失败: {mk_err}",
-                    }
-                )
+                maybe_snapshot_local(physical)
+            except Exception as fallback_error:
+                from core.infra.failures import record_best_effort_failure
+                record_best_effort_failure('core.llm.tools.write_tool:Write', fallback_error)
+            try:
+                if _is_local:
+                    # Local desktop mode: the backend runs on the host, so write the
+                    # real file directly. This reaches the user's actual folders
+                    # (incl. real paths outside the sandbox workspace root), which the
+                    # sidecar put_file refuses.
+                    import os as _os
 
-        # ── Write into the sandbox ─────────────────────────────────────
-        new_bytes = content.encode("utf-8")
-        # Local-mode write-back snapshot (ticket #08): back up the real file
-        # before overwriting it, so the user can roll back. No-op on cloud/web.
-        try:
-            from core.services.local_snapshot_service import maybe_snapshot_local
+                    require_local_path_permission(physical, "write")
 
-            maybe_snapshot_local(physical)
-        except Exception:
-            pass
-        try:
-            if _is_local:
-                # Local desktop mode: the backend runs on the host, so write the
-                # real file directly. This reaches the user's actual folders
-                # (incl. real paths outside the sandbox workspace root), which the
-                # sidecar put_file refuses.
-                import os as _os
+                    parent = _os.path.dirname(physical)
+                    if parent:
+                        _os.makedirs(parent, exist_ok=True)
+                    with open(physical, "wb") as _f:
+                        _f.write(new_bytes)
+                else:
+                    await provider.put_file(_sess, physical, new_bytes, user_id=user_id)
+            except PermissionEnforcementError as exc:
+                return resp_json({"error": str(exc), "blocked": True})
+            except (_SE, _SCE) as exc:
+                return resp_json({"error": f"写入失败: {exc}"})
+            except OSError as exc:
+                return resp_json({"error": f"写入失败: {exc}"})
 
-                require_local_path_permission(physical, "write")
-
-                parent = _os.path.dirname(physical)
-                if parent:
-                    _os.makedirs(parent, exist_ok=True)
-                with open(physical, "wb") as _f:
-                    _f.write(new_bytes)
-            else:
-                await provider.put_file(_sess, physical, new_bytes, user_id=user_id)
-        except PermissionEnforcementError as exc:
-            return resp_json({"error": str(exc), "blocked": True})
-        except (_SE, _SCE) as exc:
-            return resp_json({"error": f"写入失败: {exc}"})
-        except OSError as exc:
-            return resp_json({"error": f"写入失败: {exc}"})
-
-        # ── Update state (keyed by logical path so the model can Read/Edit with the same path next time) ──
-        new_sha = hashlib.sha256(new_bytes).hexdigest()
-        state.record(
-            file_path,
-            ReadEntry(
-                content=new_bytes,
-                sha256=new_sha,
-                offset=None,
-                limit=None,
-            ),
-        )
-        # Also record the physical path so a later Read/Edit that mixes logical/physical paths still hits
-        if physical != file_path:
-            state.record(
-                physical,
-                ReadEntry(
-                    content=new_bytes,
-                    sha256=new_sha,
-                    offset=None,
-                    limit=None,
-                ),
-            )
-
-        # ── Reverse sync: myspace paths auto-persist; other paths follow register_as_artifact ──
         artifact_ref: Optional[dict] = None
-        if is_persistent and user_id:
-            # Folder-aware reverse sync: create the UserFolder chain per
-            # /myspace/<folder>/<filename> and set user_folder_id, so the "My Space"
-            # directory structure flows back faithfully.
-            artifact_ref = _ms.sync_upsert(
-                user_id=user_id,
-                chat_id=chat_id,
-                logical_path=file_path,
-                content=new_bytes,
-                scope=scope,
-            )
-        elif register_as_artifact and user_id:
-            artifact_ref = upsert_myspace_artifact(
+        needs_registration = bool(register_as_artifact and user_id and not is_persistent)
+        if needs_registration and _is_local:
+            from core.files.artifacts.local_reference import reference_local_file
+            from fastapi import HTTPException
+
+            try:
+                artifact_ref = reference_local_file(
+                    physical, scope=scope, user_id=user_id, session_id=_sess
+                )
+                artifact_ref = {
+                    k: artifact_ref[k] for k in ("file_id", "name", "mime_type", "size")
+                }
+                artifact_ref["url"] = f"/files/{artifact_ref['file_id']}"
+            except (HTTPException, OSError, ValueError) as exc:
+                return resp_json(
+                    {
+                        "error": str(getattr(exc, "detail", exc)),
+                        "file_path": file_path,
+                        "note": "文件已写入，但未交付。请将最终文件保存在当前会话或项目目录内后再 pin。",
+                    }
+                )
+        elif needs_registration:
+            artifact_ref = register_file_artifact(
                 user_id=user_id,
                 chat_id=chat_id,
                 filename=basename(physical),
@@ -349,7 +236,7 @@ def register_write(
             "file_path": file_path,  # hand back the path the model originally passed in
             "physical_path": physical,
             "size": len(new_bytes),
-            "persistent": is_persistent,
+            **space_metadata(physical, user_id),
         }
         if is_update and original_text is not None:
             payload["diff"] = _make_unified_diff(file_path, original_text, content)
@@ -367,21 +254,20 @@ def register_write(
     Write.__doc__ = (
         "创建文件或全量覆盖已存在文件。\n\n"
         "写 ``/myspace/<文件夹>/<文件名>`` 时目录层级会映射到我的空间目录树"
-        "（缺失文件夹自动建），写入立即同步、同名文件保持同一 file_id。\n\n"
-        "**前置**：覆盖现存文件前必须先 ``Read`` 完整读过（不传 offset/limit），否则被拒；"
-        "小修改优先用 ``Edit``（只发 diff，比全量重写省 token）。\n\n"
+        "（缺失文件夹自动建）。\n\n"
+        "只用于新文件或整体重写；小修改优先用 ``Edit``（只发改动片段，比全量重写省 token）。\n\n"
         "Args:\n"
         "    file_path (`str`): 文件路径。默认沙盒 ``/workspace/scratch/<name>``；\n"
         "        仅在用户要求存入其「我的空间」时用 ``/myspace/...``。\n"
         "    content (`str`): 完整文件内容（UTF-8 文本）。\n"
         "    register_as_artifact (`bool`): 默认 false。写在沙盒里又想让用户\n"
-        "        能下载该文件时传 true。写到 ``/myspace/`` 下不需要（自动同步）。\n\n"
+        "        能下载该文件时传 true。写入 ``/myspace/`` 后，用户可在网页目录中查看。\n\n"
         "Returns:\n"
         "    JSON: ``{ok: true, type: 'create'|'update', file_path, physical_path,\n"
         "             size, persistent, diff?, artifact?, file_id?, note?}``\n"
         "    成功；``{error: '...'}`` 失败。\n"
-        "    ``persistent=true`` 表示文件已进入「我的空间」并跨会话保留。\n"
+        "    ``persistent=true`` 表示文件保存于个人或团队空间；``space_type`` 为 personal/team/temporary。\n"
     )
 
-    toolkit.register_tool_function(Write, namesake_strategy="override")
+    toolkit.append(function_tool(Write))
     logger.info("[factory] Registered Write tool (chat_id=%s)", chat_id)

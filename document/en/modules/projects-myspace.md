@@ -35,7 +35,7 @@ Key ORM models (`src/backend/core/db/models/`):
 
 ## Projects
 
-Routes: `src/backend/api/routes/v1/projects.py` (CE router table); business logic in `core/services/project_service.py` and `project_file_service.py`.
+Routes: `src/backend/api/routes/v1/projects.py` (CE router table); business logic in `core/projects/` and `project_file_service.py`.
 
 | Method | Path | Description |
 |---|---|---|
@@ -50,16 +50,37 @@ Routes: `src/backend/api/routes/v1/projects.py` (CE router table); business logi
 | PATCH | `/v1/projects/{id}/instructions` | Update project instructions |
 | GET | `/v1/projects/{id}/chats` | Conversations inside the project (team projects show shared chats) |
 
+### Project conversations and scheduled tasks
+
+The project panel omits the homepage logo, greeting, subtitle, suggested questions, refresh action, and plugin shortcuts. The project composer and conversation history remain visible.
+
+New project conversations reuse the ordinary chat homepage icon, title, description, recommendation banner, suggested questions, and mobile layout. Both use the same page configuration and visibility settings. The composer continues to show the selected project name.
+
+The project overview, opened from a project card or **Open in project panel**, lists project history below the shared composer. Team projects can filter all, owned, or shared conversations. Selecting a record opens the shared conversation UI and highlights only the conversation, not its parent project. Scheduled runs remain available through the task rail.
+
+Selecting a project binds the shared conversation interface. Projects use the main composer, attachment pipeline, modes, and chat history. Switching projects preserves unsent conversation drafts without rebinding existing conversations from other projects.
+
+The conversation takes the main width. A 360–440 px resource rail shows project memory, scheduled tasks, instructions, and files only when the project overview is explicitly opened. Sending the first message or opening history hides the project overview header and resource rail and restores the ordinary conversation layout. Instructions have a compact scrollable preview and a full editor. Narrow windows expose the rail through the Project Resources button.
+
+Scheduled tasks are filtered by the selected project and execution location. Each task has one conversation entry. Clicking it retrieves the latest run again; tasks with no runs show an empty state without starting execution. The settings button opens the existing task management page. Earlier runs remain available in task history.
+
+### Page loading
+While page code loads, the project list shows skeletons for the heading, actions, search field, and project cards. The first data request uses the same card skeletons; refreshing an existing list keeps its content visible. Selecting a project opens the shared conversation interface and loads project resources separately. Skeletons adapt to narrow screens and dark themes, and freeze the shimmer when the system requests reduced motion.
+
+In the project overview, the model and thinking-effort menu always opens downward. Its height is limited to the space below the trigger; longer lists do not flip it upward. The ordinary bottom composer chooses its direction from available space. Long lists scroll inside the menu. Resizing, viewport zoom and scrolling recalculate the bounds for all model and effort options.
+
 ### How project context enters a conversation
 
-When a conversation is started inside a project (the request carries `project_id`), `api/routes/v1/chats.py` assembles the workflow context:
+When a conversation is started inside a project (the request carries `project_id`), `core/chat/operations/request_context.py` assembles the workflow context:
 
-1. Project metadata is loaded — `project_name`, `project_instructions`, the linked folder name and file inventory;
-2. `core/llm/agent_factory.py` injects these into the system prompt via `_build_project_section` (`build_system_prompt(cfg, ctx=...)`);
+1. Project metadata is loaded — `project_name`, `project_instructions`, the linked folder name and working directory. Instructions still come from `AGENTS.md`; cloud and local project files are not recursively enumerated;
+2. `core/llm/factory/build.py` injects these into the system prompt via `_build_project_section` (`build_system_prompt(cfg, ctx=...)`);
 3. The project-level memory scope takes effect: the workspace becomes `project:<project_id>`; team projects use the mem0 bucket `team:<team_id>` (members share memories), and the project's own `metadata.memory_enabled` / `memory_write_enabled` override the user-level toggles (defaulting to on inside projects) — see [Memory System](./memory.md);
-4. Sandbox path scoping: in project conversations, the agent's `/myspace/...` file operations are redirected under the linked folder (the explicit `ProjectScope` parameter mechanism in `core/llm/tools/myspace_vfs.py`).
+4. Sandbox path scoping: in project conversations, the agent's `/myspace/...` file operations are redirected under the linked folder (the explicit `ProjectScope` parameter mechanism in `core/files/spaces/`).
 
-Team project permissions follow team roles: owner/admin always have admin rights; members are governed by `file_permission` (editor/viewer) (`core/auth/permissions_iface.py::require_project_access`).
+Custom project-mode prompt templates use project names, directory scope and instructions. Before upgrading an existing deployment, remove obsolete file-inventory and file-count placeholders from saved templates; the runtime no longer supplies those variables.
+
+Team project permissions follow team roles: owner/admin always have admin rights; members are governed by `file_permission` (editor/viewer) (`core/auth/personal_permissions_iface.py::require_project_access`).
 
 ### Project sidebar controls
 
@@ -67,12 +88,14 @@ The left sidebar groups each project with its conversations and provides these
 shortcuts on the project row:
 
 - Select the project name area to expand or collapse its conversation list.
-- Select the new-chat button to open a blank conversation already bound to the
-  project.
+- Select the new-chat button to open a blank conversation in the normal chat layout
+  with the project selected. The overview header, project history and resource rail stay hidden.
 - Open the more-actions menu to pin the project, open it in the project panel,
   or remove it. Pinning and removal require project-admin access. Removal soft
   deletes the project, and existing conversations return to the regular chat
   history.
+
+Local folder projects use a laptop icon, cloud personal projects use a folder icon, and team projects use a folder icon with a sharing arrow so their location and ownership are clear in the sidebar.
 
 ### Desktop project-creation entry points
 
@@ -120,9 +143,11 @@ File uploads go through the unified `POST /v1/file/upload` (with optional `folde
 - `team/`: team scope tree, breadcrumb, move-to-team, permission modals (Enterprise Edition, EE);
 - State: `stores/mySpaceStore.ts`.
 
-Project frontend lives in `src/frontend/src/components/projects/`: `ProjectsPanel` (list), `ProjectCard`, `CreateProjectModal`, `ProjectDetailPanel` (files + instructions + chats), `ProjectRightRail`, `ProjectMemoriesModal` (project memory viewer); state in `stores/projectStore.ts`.
+Project frontend lives in `src/frontend/src/components/projects/`: `ProjectsPanel` (list), `ProjectCard`, `CreateProjectModal`, `ProjectHeader` (files + instructions + chats), `ProjectRightRail`, `ProjectMemoriesModal` (project memory viewer); state in `stores/projectStore.ts`.
 
 ## Team folders and team files (Enterprise Edition, EE)
+
+Opening Team folders loads all accessible teams and shows their first-level folders. Nested folders expand on demand and are not flattened into the overview. The left tree has no expansion arrows: click a directory row to expand it and click again to collapse it. Team directories use the same colored icons as personal folders; selecting a directory opens its files. Opening Canvas on the right keeps folder navigation and files side by side, hiding secondary file metadata such as size, source, and time when space is limited.
 
 User-facing routes are in `src/backend/edition_ee/routes/team_files.py`, gated by the `multi_tenancy` feature flag (EE router table); the admin counterpart is `/v1/config/teams/*` (`edition_ee/routes/config_teams.py`).
 
@@ -142,8 +167,8 @@ Permission model: `TeamMember.role` (owner/admin/member) + `file_permission` (vi
 
 Three complementary paths:
 
-1. **Attachment injection (hooks)**: frontend requests send only `file_id`, `name`, and `mime_type` in each `attachments[]` item, never the file body. `core/llm/hooks.py` lazily downloads and parses by `file_id`, caching `parsed_text` and its summary; the first turn injects only metadata and a bounded preview of at most 5,000 characters, while xlsx previews also include total dimensions, headers, and a few data rows. The model reads content beyond the preview on demand through `read_artifact`; images still use multimodal injection. Every read validates `user_id` ownership to block forged cross-user access;
-2. **Project file inventory**: a project conversation's system prompt carries the linked folder's file list (see above); the agent reads specific contents on demand via `read_artifact` or sandbox tools;
+1. **Attachment injection (hooks)**: frontend requests send only `file_id`, `name`, and `mime_type` in each `attachments[]` item, never the file body. `core/harness/hooks.py` lazily downloads and parses by `file_id`, caching `parsed_text` and its summary; the first turn injects only metadata and a bounded preview of at most 5,000 characters, while xlsx previews also include total dimensions, headers, and a few data rows. The model reads content beyond the preview on demand through `read_artifact`; images still use multimodal injection. Every read validates `user_id` ownership to block forged cross-user access;
+2. **Project file access**: a project conversation's system prompt supplies project instructions and directory scope without an automatic file inventory or count. The agent discovers files on demand through directory, search and read tools;
 3. **Sandbox virtual filesystem**: with code execution enabled, the `/myspace/...` path maps MySpace into the sandbox (lazy loading + reverse sync); team projects map the team folder — see [Sandbox](./sandbox.md).
 
 ## Source map
@@ -151,8 +176,8 @@ Three complementary paths:
 | Path | Responsibility |
 |---|---|
 | `src/backend/api/routes/v1/projects.py` | Projects API |
-| `src/backend/core/services/project_service.py` / `project_file_service.py` | Project business logic |
-| `src/backend/core/services/project_scope.py` | `ProjectScope` (sandbox path scoping) |
+| `src/backend/core/projects/` / `project_file_service.py` | Project business logic |
+| `src/backend/core/projects/personal_scope.py` | `ProjectScope` (sandbox path scoping) |
 | `src/backend/api/routes/v1/myspace_folders.py` | Personal folders API |
 | `src/backend/api/routes/v1/artifacts.py` | Asset list / chat favorites / add-to-KB |
 | `src/backend/edition_ee/routes/team_files.py` | Team folders & files API (Enterprise Edition, EE) |
@@ -161,9 +186,9 @@ Three complementary paths:
 | `src/backend/core/db/models/identity.py` | Shared identity ORM such as `UserFolder` |
 | `src/backend/edition_ee/db/models/identity.py` | `Team` / `TeamMember` / `TeamFolder` ORM (EE only) |
 | `src/backend/core/db/models/artifact.py` | `Artifact` ORM |
-| `src/backend/core/llm/hooks.py` | Attachment context injection (`_build_file_context`, etc.) |
-| `src/backend/core/llm/agent_factory.py` | Project section injection into the system prompt |
-| `src/backend/core/llm/tools/myspace_vfs.py` | MySpace ↔ sandbox mapping layer |
+| `src/backend/core/harness/hooks.py` | Attachment context injection (`_build_file_context`, etc.) |
+| `src/backend/core/llm/factory/build.py` | Project section injection into the system prompt |
+| `src/backend/core/files/spaces/` | MySpace ↔ sandbox mapping layer |
 | `src/frontend/src/components/projects/` | Project frontend components |
 | `src/frontend/src/components/sidebar/Sidebar.tsx` | Sidebar project groups, quick chat creation, and project actions |
 | `src/frontend/src/components/myspace/` | MySpace frontend components |
@@ -200,3 +225,79 @@ Config **Team management** offers Owner, Administrator, Editor and Read-only. Re
 | Owner / Administrator | Yes | Yes | Yes |
 
 `GET/PUT /v1/projects/{id}/source` uses project-relative paths. Saving requires the revision returned by the previous read, preventing lost updates. Agent Read/Edit/Write and bash recheck current permissions on every call, including already registered tools. Team bash operates in the conversation work copy at `/workspace/projects/{id}` and saves changes with revision checks. Delete shared source through project file management; shell deletion does not automatically remove shared files.
+
+### Team sandbox dependencies and automatic synchronization (EE)
+
+Both automatic team workspace synchronization and the save after bash exclude paths named
+`node_modules`, `.git`, `__pycache__`, `.venv`, or `.vite` at any depth, including their contents.
+This also applies to symbolic links whose targets are unavailable in the backend container.
+Dependencies remain in the sandbox. Other source paths retain symlink safety and revision conflict
+checks. These are built-in exclusions; the project's `.gitignore` is not read.
+
+Successfully published site files are stored independently by the hosting service and survive sandbox
+reclamation. Later editing can restore the build environment from synchronized source, dependency
+manifests and lockfiles. Unsynchronized changes must not be treated as durably saved.
+
+
+### Browsing large project file lists
+
+Initially, only root files and first-level folders are visible. Click a folder to show its immediate files and subfolders; nested folders remain collapsed. Project file rows show the file name and size on one line. Folders have no expansion arrow; click their names to expand or collapse them. Preview and delete controls appear on hover or keyboard focus and remain visible on touch devices. Users with edit permission can delete a cloud-project folder using its right-side button. Confirmation cascade-soft-deletes the folder, its subfolders and files. Desktop local-folder projects continue to use the system file manager for deletion.
+
+The project file panel uses a fixed-height virtual list that renders only visible rows. Folder expansion, scrolling, preview and deletion remain available. Project instructions have a wider reading area and a larger, vertically resizable editor. A failed file request can be retried without hiding project details or instructions.
+
+After scrolling, clicking a file name or preview button opens that file and preserves the list position. File buttons support Enter and Space. Their focus and keyboard events do not scroll or expand the tree. The tree itself retains keyboard navigation.
+
+### Unique personal file paths
+
+A user can have only one live file with a given name in a directory, including the
+root. Database unique indexes enforce this rule. Other users and directories can
+reuse the name. A file and a directory cannot occupy the same path.
+Uploads, generated files, copies and moves that create a duplicate return HTTP 409.
+Update the original file by ID; edits, including sandbox edits, retain that ID.
+A name can be reused after deletion.
+
+Listing files and starting sandbox commands attempt normal synchronization once.
+Incomplete synchronization does not block reading or command execution; temporary
+staleness is allowed. Failed registrations, missing files and failed downloads are
+revisited at the next normal synchronization, without continuous background retries.
+
+Before upgrading, stop writers and back up the database and myspace_cache.
+Inspect duplicate names and review a cleanup and recovery plan before upgrading.
+There is no standalone deduplication script.
+Then upgrade Alembic (EE: personalname01; CE: ce_0018), resume services and run
+reconciliation and end-to-end checks. Migration refuses remaining duplicates
+instead of silently deleting data in another environment.
+To restore, stop writers, downgrade the unique indexes and restore the backup;
+never restore duplicate records into the running service.
+
+### Space file tools
+
+Space file tools share the `core/files/spaces/` registration entry point: `space_list_myspace_files`, `space_stage_myspace_file`, `space_create_folder`, `space_move`, and `space_delete`. EE also provides `space_list_team_files`. Generic Read/Write/Edit/Glob/Grep names remain unchanged.
+Favorite-chat tools have been removed; historical chats remain accessible through `list_related_chats` and `read_chat`.
+
+
+### Unified mounted-space synchronization
+
+Personal listeners live in `core/files/spaces/`; team adapters live in `edition_ee/services/workspace_adapter.py`. Callbacks enqueue in memory, workers batch a durable SQLite journal outside writable mounts, then update database metadata and object storage with authorization and version checks. Native moves retain file/folder IDs. Empty directories, deletion, restart recovery and parsed-cache invalidation share this pipeline. Committed database changes refresh registered mounts; rollback publishes nothing. Conflicts preserve local bytes and fail synchronization barriers. Network transfers and human approval are outside callback latency; measure complete synchronization in the actual deployment.
+
+### Project environment
+
+New projects can use **All available resources** or a **Custom project environment**. All mode follows the current account's available resources, including newly added resources. Local folder projects start in All mode. Project administrators can change this under **Project settings → Bind environment**.
+
+Custom environments bind subagents, plugins, skills and connectors. The main agent remains unchanged. Dependencies appear in the corresponding resource pickers. Skills and connectors contained inside a bound plugin remain inside that plugin and are not repeated below. Explicitly bound resources remain visible. Removing a parent removes dependencies that are no longer needed, while manually bound resources remain. Each resource picker can acquire resources from its marketplace; acquired resources join the pending bindings and take effect after saving. Connectors use the executing user's authorization. A binding does not share the creator's credentials or permissions with other members.
+
+The backend limits capability registration, explicit invocation, restored session capabilities, subagents and dynamic plugin loading. An empty custom environment never falls back to all resources. Changes apply from the next turn; running responses and their derived jobs keep the original configuration. Conversations outside the project are unaffected. Basic file and conversation tools retain their existing permission rules.
+
+Implementation follows separate responsibilities: `core/projects/environment/` validates configuration and resolves dependencies without catalog access. The resource service reads authorized inventory, the environment service saves and previews configuration, and the runtime policy freezes and narrows registration and invocation. The frontend editor composes the interface; `useProjectEnvironment` loads resources, previews dependencies and handles marketplace acquisition. Resource pickers display explicit bindings and inferred dependencies.
+
+### Online cloud document editing
+
+Writable Markdown files open as rendered, editable content with headings, bold text, lists and tables. TXT and code files use source editing. There is no Edit or Cancel editing button and no blue outline. Save sits beside Download in the existing header, with no extra action row. Saving keeps the editor open. Read-only files retain their previews. Ctrl/Cmd+S saves the draft. File switches, tab closure and page reload warn about unsaved changes. Failed saves and revision conflicts retain the draft. Copy the draft before reopening the file to merge changes.
+
+Editing accepts UTF-8 text up to 2 MiB, including empty content. Saving preserves the file ID, name, folder and MIME type. Binary files, other encodings, Office files and PDFs do not use this text editor. Team viewers can preview; the server checks write permission again when saving.
+
+GET/PUT `/v1/file/{file_id}/text` reads and saves content. Reads return content, revision and can_edit. Saves require content and the revision from the read. A changed file rejects stale saves with HTTP 409. Saving clears parsing caches; existing knowledge base indexes are not updated automatically.
+
+Apply EE migration `textedit01` or CE migration `ce_0023` before using this feature. They allow zero-byte artifacts without changing existing files or rows. Downgrade stops if empty files exist. Restore their content before downgrading.
+
+HTML opens in a sandboxed preview with Preview (eye) and Source (code) icon buttons beside Save in the header. Switching retains the draft and previews its current content; Save persists it. Excel supports Ctrl/Cmd+S through the same export and upload flow as the header Save button. Space file saves have no success toast or temporary success icon. Failures remain visible and retain edits.

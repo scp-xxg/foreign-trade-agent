@@ -2,10 +2,11 @@
 import io
 import json
 import zipfile
+from unittest.mock import AsyncMock
 
 import pytest
 from PIL import Image
-from core.services import foreign_trade_content_generation as generation
+from core.foreign_trade import content_generation as generation
 
 
 @pytest.fixture
@@ -28,6 +29,7 @@ async def test_grounded_generation_and_all_downloads(monkeypatch, pack):
     monkeypatch.setattr(generation, "_translate", model)
     pack["outputs"] = await generation.generate_pack(pack, photo())
     assert pack["outputs"]["method"] == "ai_grounded"
+    assert pack["outputs"]["generation_mode"] == "ai"
     assert len(pack["outputs"]["assets"]) == 3
     assert pack["outputs"]["faq"][0]["source_refs"] == [1]
     content, mime, name = generation.export_pack(pack, "zip", photo())
@@ -42,6 +44,87 @@ async def test_grounded_generation_and_all_downloads(monkeypatch, pack):
                 assert image.size == (w, h)
                 assert "CC BY 4.0" in image.info["Attribution"]
                 assert "without cropping" in image.info["Processing"]
+
+
+async def test_explicit_template_never_calls_model_and_exports_three_images(monkeypatch, pack):
+    model = AsyncMock(side_effect=AssertionError("No model is allowed in explicit template mode"))
+    monkeypatch.setattr(generation, "_translate", model)
+    pack["outputs"] = await generation.generate_pack(pack, photo(), "template")
+    model.assert_not_awaited()
+    assert pack["outputs"]["method"] == "template" and pack["outputs"]["generation_mode"] == "template"
+    assert pack["outputs"]["warnings"][0] == generation.LOCAL_TEMPLATE_NOTICE
+    assert pack["outputs"]["translated_facts"] == [{"label": "USB", "value": "2 USB 3.0 ports", "source_refs": [1]}]
+    assert len(pack["outputs"]["assets"]) == 3
+    content, mime, _ = generation.export_pack(pack, "zip", photo())
+    assert mime == "application/zip"
+    with zipfile.ZipFile(io.BytesIO(content)) as archive:
+        assert len(archive.namelist()) == 8
+        assert generation.LOCAL_TEMPLATE_NOTICE in archive.read("english-listing.md").decode()
+        assert generation.LOCAL_TEMPLATE_NOTICE in archive.read("provenance.txt").decode()
+        assert json.loads(archive.read("facts.json"))["facts"] == pack["facts"]
+        for kind, width, height in generation.ASSETS:
+            with Image.open(io.BytesIO(archive.read(f"product-{kind}.png"))) as image:
+                assert image.size == (width, height)
+    model.assert_not_awaited()
+
+
+@pytest.mark.parametrize("field", ["name", "label", "value"])
+async def test_explicit_template_keeps_cjk_originals_and_suspends_images(monkeypatch, pack, field):
+    model = AsyncMock(side_effect=AssertionError("No model is allowed"))
+    monkeypatch.setattr(generation, "_translate", model)
+    if field == "name":
+        pack["product_name"] = "树莓派 5"
+    else:
+        pack["facts"][0][field] = "两个 USB 3.0 接口"
+    pack["outputs"] = await generation.generate_pack(pack, photo(), "template")
+    model.assert_not_awaited()
+    assert pack["outputs"]["assets"] == []
+    assert pack["outputs"]["listing"]["title"] == pack["product_name"]
+    assert pack["outputs"]["translated_facts"][0]["value"] == pack["facts"][0]["value"]
+    data, _, _ = generation.export_pack(pack, "zip", photo())
+    with zipfile.ZipFile(io.BytesIO(data)) as archive:
+        assert not any(name.endswith(".png") for name in archive.namelist())
+    with pytest.raises(ValueError):
+        generation.export_pack(pack, "square", photo())
+
+
+def test_public_english_csv_is_an_exact_projection_of_existing_facts():
+    import csv
+    from pathlib import Path
+    folder = Path(__file__).resolve().parents[1] / "extensions/foreign_trade/demo_product"
+    with (folder / "product_facts.csv").open(encoding="utf-8-sig", newline="") as source:
+        original = list(csv.DictReader(source))
+    with (folder / "product_facts_en.csv").open(encoding="utf-8-sig", newline="") as target:
+        english = list(csv.DictReader(target))
+    assert len(english) == len(original) == 8
+    assert english == [{"key": row["key"], "label": row["label_en"], "value": row["value_en"],
+                        "source_url": row["source_url"], "verified_at": row["verified_at"], "evidence": row["evidence"]}
+                       for row in original]
+
+
+async def test_generic_image_labels_work_for_schematics_without_rewriting_attribution(monkeypatch, pack):
+    from PIL import ImageDraw
+    rendered_text = []
+    original_text = ImageDraw.ImageDraw.text
+    def capture_text(self, xy, text, *args, **kwargs):
+        rendered_text.append(text)
+        return original_text(self, xy, text, *args, **kwargs)
+    monkeypatch.setattr(ImageDraw.ImageDraw, "text", capture_text)
+    # The original attribution may legitimately say Photo and must stay exact.
+    original_credit = pack["image_credit"]
+    pack["outputs"] = await generation.generate_pack(pack, photo(), "template")
+    data, _, _ = generation.export_pack(pack, "zip", photo())
+    assert "Product reference image" in rendered_text
+    assert any("Original image layout" in line for line in rendered_text)
+    assert not any("Product reference photo" in line or "Original photo layout" in line for line in rendered_text)
+    generic_faq = pack["outputs"]["faq"][-1]
+    assert generic_faq["question"].startswith("Does the image") and generic_faq["answer"].startswith("The image")
+    with zipfile.ZipFile(io.BytesIO(data)) as archive:
+        assert original_credit in archive.read("provenance.txt").decode()
+        assert original_credit in archive.read("english-listing.md").decode()
+        for kind, _, _ in generation.ASSETS:
+            with Image.open(io.BytesIO(archive.read(f"product-{kind}.png"))) as image:
+                assert image.info["Attribution"] == original_credit
 
 
 @pytest.mark.parametrize("row", [

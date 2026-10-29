@@ -1,5 +1,9 @@
 /** 英文字典（hooks 域）：key 为中文原文，value 为英文译文。 */
 export const HOOKS_DICT: Record<string, string> = {
+  '运行位置已变化，请重新发送。': 'The execution location changed. Please send again.',
+  '无法读取引用文件：{name}': 'Cannot read the referenced file: {name}',
+  '文件过大，无法添加：{name}': 'The file is too large to attach: {name}',
+  '文件上传失败，请重试': 'File upload failed. Please try again.',
   // useStreaming — file upload warnings
   '文件"{name}"上传失败，发送后将无法下载': 'File "{name}" upload failed; download will be unavailable after sending',
   '文件上传失败，请移除后重试：{names}': 'File upload failed. Remove and retry: {names}',
@@ -15,6 +19,7 @@ export const HOOKS_DICT: Record<string, string> = {
   // useStreaming — design pick timeout
   '设计方案选择已超时，助手将自行选择方案继续。': 'The design picker timed out; the assistant will pick an option and continue.',
   '等待回答已超时，助手将采用稳妥的默认方案继续。': 'The answer wait timed out; the assistant will continue with the safest default.',
+  '连接已中断，任务状态尚未同步': 'The connection was interrupted; task status has not been synchronized.',
   // useStreaming — network / send errors
   '与服务端连接中断，请重新发送': 'Connection to server lost. Please resend.',
   '发送失败：{msg}': 'Send failed: {msg}',
@@ -22,8 +27,6 @@ export const HOOKS_DICT: Record<string, string> = {
   // useStreaming — regenerate / edit errors
   '重新生成失败：{msg}': 'Regeneration failed: {msg}',
   '编辑重发失败：{msg}': 'Edit & resend failed: {msg}',
-  // useStreaming — cancel batch error
-  '取消批量并继续失败：{msg}': 'Cancel batch & resume failed: {msg}',
   // usePlanMode — plan card status
   '执行中...': 'Running...',
   '执行出错': 'Execution error',

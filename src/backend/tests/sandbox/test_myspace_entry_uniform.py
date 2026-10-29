@@ -4,14 +4,9 @@ opensandbox / cube 是一人一沙箱，靠容器里的软链；script_runner �
 不能建全局软链（会指向最后一个用的人），改成按请求把路径改写到该用户目录。
 """
 
-import sys
-from pathlib import Path
-
 import pytest
 
-_SERVICES = Path(__file__).resolve().parents[2] / "services"
-if str(_SERVICES) not in sys.path:
-    sys.path.insert(0, str(_SERVICES))
+pytestmark = pytest.mark.usefixtures("provider_database")
 
 UID = "user_a9e0c627c2674456"
 
@@ -20,7 +15,7 @@ UID = "user_a9e0c627c2674456"
 
 
 def _rewrite(value, user_id=UID):
-    from script_runner_service.server import _rewrite_myspace_refs
+    from core.sandbox.runner.sandbox_workspace import _rewrite_myspace_refs
 
     return _rewrite_myspace_refs(value, user_id)
 
@@ -51,24 +46,37 @@ def test_rewrite_rejects_a_traversal_user_id():
         _rewrite("cat /myspace/x", user_id="../other")
 
 
-def test_bash_path_lands_in_the_session_workspace():
-    from script_runner_service.server import _rewrite_execution_paths
-
-    out = _rewrite_execution_paths(
-        "cat /myspace/x.txt", "bash", "/workspace/session_workspaces/abc", user_id=UID
-    )
-    assert out == f"cat /workspace/session_workspaces/abc/myspace/{UID}/x.txt"
+def test_workspace_paths_are_never_rewritten():
+    """``/workspace`` 不再被改写：模型拿到的就是真实路径，执行前后都不做映射。"""
+    assert _rewrite("cat /workspace/a.txt") == "cat /workspace/a.txt"
+    assert _rewrite("ls /workspace") == "ls /workspace"
 
 
 # ── cube：软链拼进执行命令，不额外多花一次往返 ──────────────────────────────
 
 
-def test_cube_command_creates_the_symlink_inline():
-    """cube 一人一沙箱，可以建软链；必须拼在同一条命令里，且不影响脚本退出码。"""
-    import inspect
+def test_cube_command_creates_the_symlink_inline(monkeypatch):
+    """Observe the SDK command at the provider boundary, independent of helper layout."""
+    import asyncio
+    from unittest.mock import AsyncMock
+    from .provider_test_support import _install_fake_e2b, _fake_sbx, _reload_cube, _bash_req
 
-    from core.sandbox.cube_provider import CubeSandboxProvider
-
-    src = inspect.getsource(CubeSandboxProvider._run)
-    assert "ln -s {mp} /myspace" in src, "cube 必须建 /myspace 软链"
-    assert "{myspace_prefix}cd {WORKSPACE}" in src, "软链要拼进同一条命令，不另花一次往返"
+    sdk, _, _ = _install_fake_e2b(monkeypatch)
+    sandbox = _fake_sbx(stdout="ok", exit_code=0)
+    sdk.create = AsyncMock(return_value=sandbox)
+    factory = _reload_cube(monkeypatch)
+    factory.reset_provider_cache()
+    provider = factory.get_sandbox_provider()
+    result = asyncio.run(
+        provider.run_to_completion(_bash_req(script_content="ls /myspace", user_id=UID))
+    )
+    assert result.exit_code == 0
+    commands = [call.args[0] for call in sandbox.commands.run.call_args_list]
+    command = next(cmd for cmd in commands if "ls /myspace" in cmd)
+    assert f"ln -s /workspace/myspace/{UID} /myspace" in command
+    assert (
+        next(
+            call for call in sandbox.commands.run.call_args_list if call.kwargs.get("background")
+        ).kwargs["cwd"]
+        == "/workspace"
+    )

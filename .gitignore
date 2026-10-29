@@ -1,10 +1,9 @@
-# Modified by foreign-trade-agent contributors, 2026-10-21; see CHANGES_FOREIGN_TRADE.md.
 /xdevfiles
 
 # Runtime-generated catalog (synced from DB + filesystem at startup)
 src/backend/configs/catalog.json
 
-# OpenSandbox config — generated from docker/opensandbox-config.toml.tpl by the
+# OpenSandbox config — generated from docker/opensandbox-server/opensandbox-config.toml.tpl by the
 # opensandbox-config-init service at compose-up (sed 把 @@HOST_REPO_PATH@@
 # 替换成各机 .env 里的实际仓库路径)。.tpl 入库，实文件不入库。
 opensandbox-config.toml
@@ -61,6 +60,8 @@ spike/
 .DS_Store
 
 # Project specific
+# 根目录 examples/（示例工程）仅本地使用，不入库
+/examples/
 output/
 images/
 logs/
@@ -151,10 +152,12 @@ dist/
 # 部署/打包脚本与产物（环境内部资产，不入库；详见 internal design docs）
 scripts/deploy/
 
-# Evaluation Gym 运行产物与数据集（README 入库，数据/结果不入库）
+# 评测数据：本地题集、生成包与运行产物不入库；data/ageval 下的模板与冒烟题入库
+# （其中生成内容由 data/ageval 内各级 .gitignore 排除）
 evaluation/results/
 evaluation/data/*
 !evaluation/data/README.md
+!evaluation/data/ageval/
 
 # DBHub / ES MCP 实际连接配置（含密码/密钥，由后端面板渲染；仅 .example + .gitkeep 入库）
 docker/dbhub/dbhub.toml
@@ -165,20 +168,25 @@ deploy_kit/
 node_modules/
 
 # 建站模板必须完整入库（覆盖上面的 lib/ 与 AGENTS.md 规则），但依赖树除外
-!docker/site-template/**
-docker/site-template/react-vite/node_modules/
+!docker/sandbox/site-template/**
+docker/sandbox/site-template/react-vite/node_modules/
 .jobtest/
 
 # Local scratch scripts and verification artifacts
 /.scratch/
-/.runtime/
+# macOS native release archives (desktop/scripts/workbench-macos-native.mjs)
+/release-archive/
+.ageval
 
-# foreign-trade-agent team-local configuration (templates remain tracked)
-*.local.json
-secrets.json
-.env.team
+# Local evaluation identity and workspace binding
+/evaluation/data/ageval/hugagent-bench/bridge.json
 
-# Keep templates but never add machine-specific dotenv files.
-.env.*
-!.env.example
-!.env.*.example
+# Foreign-trade local runtime and validation environments
+.runtime/
+.venv-upstream-*/
+extensions/foreign_trade/.runtime/
+extensions/foreign_trade/dist/
+
+# Canonical venv link and preserved pre-upgrade environment
+/.venv
+/.venv-before-upstream-*/

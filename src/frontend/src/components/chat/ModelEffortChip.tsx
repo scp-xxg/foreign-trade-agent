@@ -1,9 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { RightOutlined, ThunderboltOutlined } from '@ant-design/icons';
+import { Dropdown } from 'antd';
+import '../../styles/model-effort-popup.css';
+import { RobotOutlined, RightOutlined, ThunderboltOutlined } from '@ant-design/icons';
 import { useChatStore, useChatModeStore, useModelCapabilitiesStore } from '../../stores';
-import type { ThinkingEffort } from '../../stores/chatStore';
+import { projectOverviewId, type ThinkingEffort } from '../../stores/chatStore';
+import { useModelMenuBounds } from './useModelMenuBounds';
 import { ChipChevron } from '../common/ChipChevron';
 import { t } from '../../i18n';
+import { selectedReasoningPolicy, thinkingLevels, normalizeThinkingEffort, effortLabels } from '../../utils/reasoningEffort';
 
 interface EffortMeta {
   key: ThinkingEffort;
@@ -29,7 +33,7 @@ export default function ModelEffortChip() {
   const setChatMode = useChatStore((s) => s.setChatMode);
   const modeSlug = useChatStore((s) => s.modeSlug);
   const modeOf = useChatModeStore((s) => s.modeOf);
-  const supportsReasoningEffort = useModelCapabilitiesStore((s) => s.capabilities.supports_reasoning_effort);
+  const capabilities = useModelCapabilitiesStore((s) => s.capabilities);
   const userModelSwitchEnabled = useModelCapabilitiesStore((s) => s.capabilities.user_model_switch_enabled);
   const selectableModels = useModelCapabilitiesStore((s) => s.capabilities.user_selectable_models);
   const selectedModelProviderId = useModelCapabilitiesStore((s) => s.selectedModelProviderId);
@@ -41,23 +45,28 @@ export default function ModelEffortChip() {
 
   useEffect(() => {
     if (!open) return;
-    const onDown = (e: MouseEvent) => {
-      if (!rootRef.current?.contains(e.target as Node)) setOpen(false);
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        setOpen(false);
+      }
     };
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false); };
-    document.addEventListener('mousedown', onDown);
     document.addEventListener('keydown', onKey);
     return () => {
-      document.removeEventListener('mousedown', onDown);
       document.removeEventListener('keydown', onKey);
     };
   }, [open]);
 
+  const projectOverview = useChatStore(s => !!projectOverviewId(s.store.chats[s.currentChatId]));
+  const menuBounds = useModelMenuBounds(rootRef, open, projectOverview);
   // 「思考强度不可调」现在由模式说了算（chat_modes.effort_locked），不再是
   // 硬编码的 chatMode==='turbo'——自定义模式也能锁死强度。
   const activeMode = modeOf(modeSlug);
   const turbo = activeMode.effort_locked || chatMode === 'turbo';
   const modelPickable = userModelSwitchEnabled && selectableModels.length > 0;
+
+  const policy = selectedReasoningPolicy(capabilities, selectedModelProviderId);
+  const supportsReasoningEffort = policy.supports_reasoning_effort;
 
   const efforts = useMemo<EffortMeta[]>(() => {
     const fast: EffortMeta = {
@@ -74,20 +83,22 @@ export default function ModelEffortChip() {
         short: t('思考'),
       }];
     }
-    return [
-      fast,
-      { key: 'medium', title: t('思考·中'),   desc: t('默认思考强度，兼顾速度与质量'), short: t('思考·中') },
-      { key: 'high',   title: t('思考·高'),   desc: t('更深入推理，处理复杂分析'),     short: t('思考·高') },
-      { key: 'max',    title: t('思考·超高'), desc: t('研究级别的专家智能体'),         short: t('思考·超高') },
-    ];
-  }, [supportsReasoningEffort]);
+    return [fast, ...thinkingLevels(policy).map(({ key }) => {
+      const label = key === 'max' && !policy.reasoning_effort_configured
+        ? t('思考·超高') : t(effortLabels[key]);
+      return { key, title: label, short: label,
+        desc: key === policy.default_reasoning_effort ? t('默认思考档位') : t('作答前先推理，处理需要拆解的问题') };
+    })];
+  }, [policy, supportsReasoningEffort]);
 
   // 模型不支持多档时，high/max 一律按「思考」显示，避免报出一个后端并不会照做的档位
   const effectiveEffort: ThinkingEffort = turbo
     ? 'fast'
-    : supportsReasoningEffort
-      ? (chatMode as ThinkingEffort)
-      : (chatMode === 'fast' ? 'fast' : 'medium');
+    : normalizeThinkingEffort(chatMode, policy) as ThinkingEffort;
+  useEffect(() => {
+    if (!turbo && effectiveEffort !== chatMode) setChatMode(effectiveEffort);
+  }, [turbo, effectiveEffort, chatMode, setChatMode]);
+
   const currentEffort = efforts.find((e) => e.key === effectiveEffort) ?? efforts[0];
 
   const currentModel = modelPickable
@@ -120,28 +131,38 @@ export default function ModelEffortChip() {
   // 让用户为了改一件事先点开一个只有一行的目录，是白赚的一次点击。
   const singlePane: 'root' | 'effort' = modelPickable ? 'root' : 'effort';
 
-  const toggle = () => {
-    setPane(singlePane);
-    setOpen((v) => !v);
-  };
+  const trigger = (
+    <button
+      type="button"
+      className={`jx-composerChip jx-modelEffortBtn${open ? ' open' : ''}`}
+      aria-haspopup="menu"
+      aria-expanded={open}
+      title={triggerLabel + (triggerAside ? ' · ' + triggerAside : '') + ' — ' + t('切换模型与思考强度')}
+      aria-label={t('切换模型与思考强度')}
+      aria-description={triggerLabel + (triggerAside ? ' · ' + triggerAside : '')}
+    >
+      <RobotOutlined className="jx-modelEffortCompactIcon" aria-hidden="true" />
+      <span className="jx-composerChip-label">{triggerLabel}</span>
+      {triggerAside && <span className="jx-modelEffortAside">{triggerAside}</span>}
+      <ChipChevron />
+    </button>
+  );
 
   return (
     <div className="jx-modelEffort" ref={rootRef}>
-      <button
-        type="button"
-        className={`jx-composerChip jx-modelEffortBtn${open ? ' open' : ''}`}
-        onClick={toggle}
-        aria-haspopup="menu"
-        aria-expanded={open}
-        title={t('切换模型与思考强度')}
-      >
-        <span className="jx-composerChip-label">{triggerLabel}</span>
-        {triggerAside && <span className="jx-modelEffortAside">{triggerAside}</span>}
-        <ChipChevron />
-      </button>
+      <Dropdown
+        transitionName=""
+        open={open}
+        onOpenChange={(next) => { if (next) setPane(singlePane); setOpen(next); }}
+        trigger={['click']}
+        placement={menuBounds.below ? 'bottomRight' : 'topRight'}
+        autoAdjustOverflow={false}
+        destroyOnHidden
+        classNames={{ root: 'jx-modelEffortPopup' }}
+        styles={{ root: menuBounds.popupStyle }}
+        popupRender={() => (
 
-      {open && (
-        <div className="jx-modelEffortMenu" role="menu">
+        <div className="jx-modelEffortMenu" role="menu" style={{ maxHeight: menuBounds.height }}>
           {pane === 'root' && (
             <>
               {modelPickable && (
@@ -232,7 +253,10 @@ export default function ModelEffortChip() {
             </>
           )}
         </div>
-      )}
+        )}
+      >
+        {trigger}
+      </Dropdown>
     </div>
   );
 }

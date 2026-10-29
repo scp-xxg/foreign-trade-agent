@@ -1,0 +1,82 @@
+/* A named boundary follows the available pane, independent of viewport and placement.
+   The toolbar measures its expanded controls before switching all labels to icons. */
+.jx-composerToolbar {
+  container: composer-toolbar / inline-size;
+  width:100%;
+  min-width:0;
+  flex:none;
+}
+.jx-composerBar {
+  position:relative;
+  display:flex;
+  flex-wrap:nowrap;
+  align-items:center;
+  gap:6px;
+  min-width:0;
+  padding:8px 12px 12px;
+  background:var(--color-bg-container);
+  border-radius:0 0 16px 16px;
+}
+.jx-composerTools,
+.jx-composerPrimary {
+  display:flex;
+  align-items:center;
+  gap:4px;
+  min-width:0;
+  max-width:100%;
+}
+.jx-composerTools { flex:1 1 auto; flex-wrap:nowrap; }
+.jx-composerPrimary { flex:0 1 auto; margin-inline-start:auto; }
+.jx-composerPrimary .jx-modelEffort,
+.jx-composerPrimary .jx-modelEffortStatic { flex:none; min-width:0; max-width:none; }
+.jx-composerPrimary .jx-modelEffortBtn { width:max-content; max-width:none; }
+/* Measure and display the full model name; the toolbar switches to icons when it cannot fit. */
+.jx-modelEffortBtn .jx-composerChip-label { flex:none; overflow:visible; text-overflow:clip; }
+.jx-composerTools > * { max-width:100%; }
+.jx-projectDropName { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.jx-composerBar .jx-attachBtn { margin:0; }
+.jx-composerBar :is(button, [role="button"]):focus-visible {
+  outline:2px solid var(--color-primary);
+  outline-offset:2px;
+}
+/* Measure expanded controls even while icons are displayed, so labels return
+   as soon as they fit without resize feedback. */
+.jx-composerBar[data-measuring] > div { flex:none; width:max-content; max-width:none; }
+.jx-composerBar[data-measuring] .jx-modelEffort { flex:none; }
+.jx-composerBar[data-measuring] .jx-modelEffortBtn { width:max-content; max-width:none; }
+.jx-composerBar .jx-modelEffortCompactIcon,
+.jx-modeChip-compactIcon { display:none; }
+.jx-composerBar[data-compact] .jx-composerChip-label,
+.jx-composerBar[data-compact] .jx-modelEffortAside,
+.jx-composerBar[data-compact] .jx-modeArrow,
+.jx-composerBar[data-compact] .jx-voiceStatus { display:none; }
+.jx-composerBar[data-compact] .jx-modelEffortCompactIcon { display:inline-flex; }
+.jx-composerBar[data-compact] .jx-composerChip { justify-content:center; padding-inline:6px; }
+.jx-composerBar[data-compact] { padding-inline:8px; gap:4px; }
+.jx-composerBar[data-compact] .jx-modeChip { padding:0; gap:0; flex:none; }
+.jx-composerBar[data-compact] .jx-modeChip > .anticon,
+.jx-composerBar[data-compact] .jx-modeChip-closeIcon { display:none; }
+.jx-composerBar[data-compact] .jx-modeChip-compactIcon { display:inline-flex; font-size:13px; }
+.jx-composerBar[data-compact] .jx-modeChip-close {
+  width:var(--jx-chip-h); height:var(--jx-chip-h); opacity:.75;
+}
+/* At physically smaller widths than the icons, keep send fixed and let the
+   tools scroll horizontally. Keyboard focus scrolls each original control into view. */
+.jx-composerBar[data-compact] .jx-composerTools {
+  overflow-x:auto; scrollbar-width:none;
+}
+.jx-composerBar[data-compact] .jx-composerTools::-webkit-scrollbar { display:none; }
+.jx-composerBar[data-compact] .jx-composerTools > * { flex-shrink:0; max-width:none; }
+.jx-composerPrimary { flex-shrink:0; }
+.jx-composerPrimary .jx-sendBtn { flex:none; }
+/* Real hit targets participate in flow and cannot steal adjacent controls' clicks. */
+@media (pointer:coarse) {
+  .jx-composerBar { --jx-chip-h:44px; }
+  .jx-composerBar :is(.jx-composerChip, .jx-attachBtn, .jx-sendBtn) {
+    min-width:44px;
+    min-height:44px;
+  }
+  .jx-composerBar .jx-attachBtn { width:44px; height:44px; flex:none; }
+  .jx-composerBar .jx-sendBtn { width:44px; height:44px; flex:none; }
+  .jx-modeChip-close { width:44px; height:44px; }
+}

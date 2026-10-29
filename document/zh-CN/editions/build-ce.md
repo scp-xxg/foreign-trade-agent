@@ -26,13 +26,13 @@ manifest 按处理顺序分为以下几段：
 
 glob 模式（相对仓库根），命中即不拷贝。覆盖：
 
-- **后端 EE 模块**：完整的 `edition_ee/**` 实现根（团队/RBAC、SSO、License 验签与闸门、EE ORM、Dify 集成），以及云存储（`core/storage/s3.py`、`oss.py`）、持久沙箱 provider、记忆审计、技能蒸馏等 EE 服务；
+- **后端 EE 模块**：完整的 `edition_ee/**` 实现根（团队/RBAC、SSO、License 验签与闸门、EE ORM、Dify 集成），以及云存储（`core/files/storage/s3.py`、`oss.py`）、Cube 沙箱 provider、记忆审计、技能蒸馏等 EE 服务；
 - **EE 路由**：`api/routes/v1/admin_*.py`、`config_*.py`、`audit.py`、`auth.py`、`team_files.py`、`service_configs.py`、`data_sources.py`、`db_metadata.py`、`gateway_*.py`；
-- **行业 MCP**：`mcp_servers/query_database_mcp/**`、`ai_chain_information_mcp/**`；
+- **行业 MCP**：`extensions/mcp_servers/query_database_mcp/**`、`ai_chain_information_mcp/**`；
 - **行业专属前端与种子**：产业链 Canvas、资讯 / 企业画像渲染器、行业 API 客户端、图标资源，
   以及依赖企业画像工具的内置本体示例包；
 - **主仓 alembic 链整体**（`alembic/versions/**`，CE 用 overlay 的独立链，见下文）；
-- **10 个行业 / 品牌技能**（`skill_bundles/marketplace/` 下，前 5 个硬依赖 EE 行业 MCP，后 5 个含品牌域文案）；
+- **10 个行业 / 品牌技能**（`extensions/skills/marketplace/` 下，前 5 个硬依赖 EE 行业 MCP，后 5 个含品牌域文案）；
 - **EE 强耦合测试**、`tests/licensing/**`；
 - **前端管理台**：`AdminApp.tsx`、`ConfigApp.tsx`、`components/admin/**`、`components/config/**`（lab = 自动化实验室属 CE，保留）；
 - **根级 EE 部署物与开源卫生项**：EE Dockerfile / compose 片段、LiteLLM 网关配置（`docker/litellm/**`）、`internal design docs`、`CLAUDE.md`、`.github/**`、内部 `.env` 默认、品牌操作手册 PDF、内置商业字体资产、内嵌第三方凭据的技能、签发工具 `scripts/license_tool.py`、生成器自身（`ce/**`、`scripts/build_ce.py`）；
@@ -56,8 +56,8 @@ transforms 只改文件内容不改路径，因此本步骤为确有需要的路
 |---|---|---|
 | `catalog_json` | `core/config/catalog.json` | 去掉 EE MCP 种子（`database_query`、`query_database`、`ai_chain_information_mcp`） |
 | `package_json` | `src/frontend/package.json` | 改名 `hugagent-ui`；删商业 License 预设 `@univerjs/preset-sheets-advanced` 与死依赖 `pptxgenjs`；固定 `@univerjs/icons=1.1.1`，避免无主仓 lockfile 时与 Univer 0.19 发生导出契约不兼容 |
-| `requirements` | `requirements.txt` | 删云存储 / 持久沙箱依赖（boto3 / oss2 / opensandbox）；neo4j / mem0ai 移入独立档 `requirements-mem0.txt`（无 Docker 一键安装器会默认安装该档） |
-| `docker_compose` | `docker-compose.yml` | 删 opensandbox / litellm 服务及 depends_on；`script-runner` 摘掉 profile 转默认启动；整树摘除被排除组件的 env 注入（含 `OPENSANDBOX_` / `S3_` / `INDUSTRY_` / `COMPANY_` 等前缀）；把后端版本、认证与 SSO 默认值固定为 CE 本地会话模式，前端构建默认固定为 CE |
+| `requirements` | `requirements.txt` | 保留 OpenSandbox SDK；删除云存储与 Cube 依赖（boto3 / oss2 / e2b-code-interpreter）；neo4j / mem0ai 移入独立档 `requirements-mem0.txt`（无 Docker 一键安装器会默认安装该档） |
+| `docker_compose` | `docker-compose.yml` | 保留 OpenSandbox 控制器与配置初始化；Docker CE 默认选择 opensandbox profile；script-runner 保留可选 profile。控制器不映射宿主端口，使用初始化生成的密钥。删除企业模型网关与企业环境变量 |
 | `frontend_lock` | `package-lock.json` + 前端 Dockerfile | 删 lock（与裁剪后的 package.json 必然失同步）、`npm ci` 改 `npm install` |
 | `repository_resources` | 内置商业字体的构建与源码引用 | 从 CE Dockerfile 删除字体复制/安装段，并清除后端的仓库字体目录回退引用；生成后由禁止产物门禁再次检查 |
 | `text_ranges` | 前后端共享源码中的版本专属分支 | 按精确标记删除产业链工具映射、专属引用提取、Canvas 状态、提示词和样式；标记缺失或数量变化时直接失败，防止上游重构后静默回流 |
@@ -81,16 +81,16 @@ CE 前端不按工具名猜测远程 MCP 的业务结构。用户接入的远程
 | `.hugagent-edition` | 仅在派生后出现的机器可读 `ce` 标识；让发布工具区分派生 CE checkout 与生成器异常缺失的源代码 checkout |
 | `.github/workflows/desktop-release.yml` | 公开 CE 桌面发版 workflow，包含 release tag / 版本前置门禁 |
 | `src/backend/api/routes/v1/__init__.py` | CE 路由注册表；`EE_ROUTERS` 恒为空 |
-| `src/backend/core/auth/permissions_iface.py` | 单租户 owner-only 权限接口；不导出团队权限函数 |
-| `src/backend/core/services/artifact_edition.py` | 个人空间 artifact 作用域接口；不暴露团队字段、权限或仓储方法 |
+| `src/backend/core/auth/personal_permissions_iface.py` | 单租户 owner-only 权限接口；不导出团队权限函数 |
+| `src/backend/core/files/edition.py` | 个人空间 artifact 作用域接口；不暴露团队字段、权限或仓储方法 |
 | `src/backend/core/llm/tools/edition_{myspace,myspace_vfs,artifact_recovery}.py` | 个人空间工具、VFS 与恢复接口；组织空间实现不进入 CE |
-| `src/backend/core/config/edition_display_names.py` | CE 工具展示名；不包含团队工具名称 |
+| `src/backend/core/config/display_names.py` | CE 工具展示名；不包含团队工具名称 |
 | `src/backend/core/memory/audit.py` | 记忆审计 no-op stub（同名接口、不落数据） |
 | `src/backend/alembic/versions/ce_000{1,2}_*.py` | CE 独立迁移链基线与幂等 Schema 升级（见下节） |
-| `src/backend/core/services/edition_startup.py` | CE 启动接缝；为 EE 数据源恢复、蒸馏调度提供 no-op 实现，避免导入已裁除模块 |
+| `src/backend/orchestration/workers/edition_startup.py` | CE 启动接缝；为 EE 数据源恢复、蒸馏调度提供 no-op 实现，避免导入已裁除模块 |
 | `src/backend/tests/ce_release/` | 可执行 CE 发布回归套件，覆盖登录、私有技能/MCP、数据库升级及启动/Compose 契约 |
 | `src/backend/api/routes/v1/{agents,content,kb_models,projects}.py` | 去除管理端点与组织字段后的 CE API 契约 |
-| `src/backend/mcp_servers/_ports.py` | 7 个通用工具的端口表（EE 行业工具与已退役端口标注 reserved） |
+| `src/backend/extensions/mcp_servers/_ports.py` | 7 个通用工具的端口表（EE 行业工具与已退役端口标注 reserved） |
 | `src/frontend/default.conf.template` | CE 前端 Nginx 模板，移除 `/gateway/**` 反代与 litellm upstream |
 | `src/frontend/src/main.tsx` | CE 入口：只挂主应用 / API 文档 / 分享预览，不挂 /admin、/config |
 | `.claude/skills/hugagent-{backend,frontend}-dev/…` | 项目开发 skill 的 CE 版 SKILL.md 与 references（剔除 admin 面板 / EE 路由注册等商业版段落） |
@@ -183,7 +183,7 @@ EE 始终全量建表。维护规则：**新增 EE 专属模型必须放进 `edi
 | overlay 目录 | `ce/overlay/` |
 | 派生树版本标识 | `ce/overlay/.hugagent-edition` |
 | 公开桌面发版 workflow | `ce/overlay/.github/workflows/desktop-release.yml` |
-| CE/EE 建表边界 | `src/backend/core/db/edition_tables.py` |
+| CE/EE 建表边界 | `src/backend/edition_ee/db/edition_tables.py` |
 | 幂等 Schema 升级器 | `src/backend/core/db/schema_reconcile.py` |
 | 启动建表 CE 分支 | `src/backend/core/db/engine.py::init_db` |
 | CE 独立迁移链 | `ce/overlay/src/backend/alembic/versions/ce_000{1,2}_*.py` |
@@ -191,3 +191,11 @@ EE 始终全量建表。维护规则：**新增 EE 专属模型必须放进 `edi
 | 路由注册表 | `src/backend/api/routes/v1/__init__.py` |
 
 相关阅读：[社区版与商业版总览](overview.md) · [License 机制](license.md)
+
+CE 升级迁移 `ce_0013` 补齐工具媒体存储表。工具返回的图片按内容哈希保存，历史只保留引用；跨轮或进程重启后从数据库恢复，重复升级保留已有媒体。
+
+CE 升级迁移 `ce_0019` 为历史消息补齐可空的 `tool_calls_display` 展示投影；旧消息保留原始工具结果，缺少投影时按原结果读取。重复升级安全，回滚只删除派生列，不删除原消息。
+
+### ARM64 Docker 原生构建
+
+后端和 MCP 的构建阶段安装 Rust/Cargo，用于编译 AgentScope 依赖的 ripgrep；Linux ARM64 没有对应版本的预编译 wheel。编译器只存在于 builder 阶段，运行镜像只复制安装结果。构建环境需要访问 PyPI 镜像、crates.io 索引和 crate 下载服务。

@@ -4,11 +4,13 @@ from copy import deepcopy
 from decimal import localcontext
 import hashlib
 import json
+import sys
 from pathlib import Path
 import unittest
 from unittest.mock import patch
 
-from extensions.foreign_trade import calculate_quote, get_product, search_products
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "extensions"))
+from foreign_trade import calculate_quote, get_product, search_products
 
 
 class ForeignTradeEngineTests(unittest.TestCase):

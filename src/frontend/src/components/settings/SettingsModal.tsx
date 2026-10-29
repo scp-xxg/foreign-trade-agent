@@ -1,22 +1,20 @@
-import { useEffect, useMemo, useRef, useState, type ReactElement } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactElement } from 'react';
 import {
-  Alert, Modal, Switch, Button, Tag, Slider, message, Tabs, Empty, Input, Select,
-  Skeleton, Spin, Tooltip,
+  Alert, Modal, Switch, Button, Tag, Slider, message, Input,
+  Spin, Tooltip,
 } from 'antd';
 import {
   ApiOutlined, AppstoreOutlined, CheckOutlined, CloseOutlined, DatabaseOutlined,
   DeploymentUnitOutlined, EditOutlined, ExclamationCircleFilled, FileTextOutlined,
-  KeyOutlined, LinkOutlined, LockOutlined, LogoutOutlined, MessageOutlined, RobotOutlined,
+  KeyOutlined, LinkOutlined, LockOutlined, LogoutOutlined, LayoutOutlined, RobotOutlined,
   UserOutlined,
   SafetyCertificateOutlined,
   ExperimentOutlined,
 } from '@ant-design/icons';
 import { AnimatePresence, motion } from 'motion/react';
-import { useSettingsStore, useAuthStore, useCatalogStore, useUIStore, useEditionStore, usePluginStore } from '../../stores';
+import { useSettingsStore, useAuthStore, useCatalogStore, useEditionStore, usePluginStore } from '../../stores';
 import { DUR, EASE, SLIDE_EASE } from '../../utils/motionTokens';
-import type { MemoryItem } from '../../types';
 import { resolveAvatarUrl } from '../../utils/avatar';
-import { mdToHtml } from '../../utils/markdown';
 import {
   getMyProfile,
   getMySystemAccess,
@@ -40,11 +38,12 @@ import { SystemServicePanel } from './SystemServicePanel';
 import { MyLogsPanel } from './MyLogsPanel';
 import { PasswordManagementPanel } from './PasswordManagementPanel';
 import { ChatModesPanel } from './ChatModesPanel';
-import { FactsList } from '../memory/FactsList';
-import { MemoryGraphView } from '../memory/MemoryGraphView';
+import { MemoryManagerModal } from '../memory/MemoryManagerModal';
 import { OntologyManager } from '../ontology';
-import { getLang, setLang, t, type Lang } from '../../i18n';
-import type { ThemeMode } from '../../theme';
+import { t } from '../../i18n';
+import { PageSettingsPanel } from './PageSettingsPanel';
+import { navigateTo, pathForPanel } from '../../routing/navigation';
+import { useSettingsSection } from '../../routing/subPages';
 
 interface SectionDef {
   id: string;
@@ -54,7 +53,7 @@ interface SectionDef {
 
 const SETTINGS_SECTIONS: SectionDef[] = [
   { id: 'profile', label: t('个人信息'), icon: <UserOutlined /> },
-  { id: 'session', label: t('会话设置'), icon: <MessageOutlined /> },
+  { id: 'session', label: t('页面设置'), icon: <LayoutOutlined /> },
   { id: 'memory', label: t('进化控制台'), icon: <DatabaseOutlined /> },
   { id: 'ontology', label: t('本体校验'), icon: <SafetyCertificateOutlined /> },
   { id: 'enabled', label: t('已启用清单'), icon: <AppstoreOutlined /> },
@@ -101,7 +100,6 @@ function getCropBounds(imageWidth: number, imageHeight: number, zoom: number) {
 }
 
 export default function SettingsPage() {
-  const { dispatchProcessVisible, setDispatchProcessVisible, themeMode, setThemeMode } = useUIStore();
   const {
     memoryEnabled,
     memoryWriteEnabled,
@@ -109,10 +107,7 @@ export default function SettingsPage() {
     embeddingAvailable,
     memoryItems,
     memoryPanelOpen,
-    memoryLoading,
     memoryProfile,
-    memoryGraph,
-    memoryGraphEnabled,
     lastToggleError,
     ontologyEnabled,
     ontologyAvailable,
@@ -123,10 +118,6 @@ export default function SettingsPage() {
     toggleMemoryWrite,
     toggleOntology,
     loadOntologySettings,
-    loadMemoryAllLayers,
-    loadMemories,
-    removeMemory,
-    clearMemories,
   } = useSettingsStore();
 
   const { authUser, doLogout, setAvatarUrl, setAuthUser, loggingOut } = useAuthStore();
@@ -161,7 +152,7 @@ export default function SettingsPage() {
   }, [isCE, authUser?.user_id]);
   // Only show a section in the settings center when the admin has enabled the corresponding capability bit
   const sections = useMemo<SectionDef[]>(() => {
-    let base = multiTenancy
+    let base = (multiTenancy || (isCE && sysAccess))
       ? [...SETTINGS_SECTIONS, ...EDITION_SETTINGS_SECTIONS]
       : SETTINGS_SECTIONS;
     if (!ontologyValidationAllowed) {
@@ -242,9 +233,13 @@ export default function SettingsPage() {
   const [messageApi, contextHolder] = message.useMessage();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const dragStartRef = useRef<{ x: number; y: number; offsetX: number; offsetY: number } | null>(null);
-  const [activeSection, setActiveSection] = useState<string>('profile');
+  // 子菜单也是一页：地址是 `/settings/<子菜单>`，可分享、刷新回到原处
+  const activeSection = useSettingsSection('profile');
+  const setActiveSection = useCallback(
+    (id: string) => navigateTo(pathForPanel('settings', id)),
+    [],
+  );
   const [passwordModalOpen, setPasswordModalOpen] = useState(false);
-  const [memoryTab, setMemoryTab] = useState('profile');
   // Switch optimistic-update rollback on failure → shake the corresponding row once
   const [shakeRowKey, setShakeRowKey] = useState<'memory' | 'memoryWrite' | 'ontology' | null>(null);
   useEffect(() => {
@@ -637,66 +632,9 @@ export default function SettingsPage() {
           </section>
         )}
 
-        {/* ── Session settings ─────────────────────────────────── */}
+        {/* ── Page settings ─────────────────────────────────── */}
         {activeSection === 'session' && (
-        <section id="section-session" className="jx-settings-section">
-        <h3 className="jx-settings-section-title">{t('会话设置')}</h3>
-        <div className="jx-settings-card">
-          <div className="jx-settings-row">
-            <div className="jx-settings-rowLeft">
-              <span className="jx-settings-rowLabel">{t('显示调度过程')}</span>
-              <span className="jx-settings-rowDesc">
-                {t('控制对话中是否显示对话里调度的智能体、连接器、技能等组件')}
-              </span>
-            </div>
-            <Switch
-              checked={dispatchProcessVisible}
-              onChange={(checked) => setDispatchProcessVisible(checked)}
-            />
-          </div>
-
-          <div className="jx-settings-divider" />
-
-          <div className="jx-settings-row">
-            <div className="jx-settings-rowLeft">
-              <span className="jx-settings-rowLabel">{t('界面语言')}</span>
-              <span className="jx-settings-rowDesc">
-                {t('切换界面显示语言，切换后页面将自动刷新')}
-              </span>
-            </div>
-            <Select
-              value={getLang()}
-              style={{ width: 140 }}
-              options={[
-                { value: 'zh-CN', label: t('简体中文') },
-                { value: 'en', label: 'English' },
-              ]}
-              onChange={(v) => setLang(v as Lang)}
-            />
-          </div>
-
-          <div className="jx-settings-divider" />
-
-          <div className="jx-settings-row">
-            <div className="jx-settings-rowLeft">
-              <span className="jx-settings-rowLabel">{t('外观')}</span>
-              <span className="jx-settings-rowDesc">
-                {t('切换界面深浅配色，选择跟随系统时自动匹配系统外观')}
-              </span>
-            </div>
-            <Select
-              value={themeMode}
-              style={{ width: 140 }}
-              options={[
-                { value: 'system', label: t('跟随系统') },
-                { value: 'light', label: t('浅色') },
-                { value: 'dark', label: t('深色') },
-              ]}
-              onChange={(v) => setThemeMode(v as ThemeMode)}
-            />
-          </div>
-        </div>
-        </section>
+        <PageSettingsPanel />
         )}
 
         {/* ── Memory settings ─────────────────────────────────── */}
@@ -761,10 +699,7 @@ export default function SettingsPage() {
                   </span>
                   <a
                     className="jx-settings-memoryLink"
-                    onClick={() => {
-                      setMemoryPanelOpen(true);
-                      void loadMemoryAllLayers();
-                    }}
+                    onClick={() => setMemoryPanelOpen(true)}
                   >
                     {t('查看分层详情')}
                   </a>
@@ -886,7 +821,7 @@ export default function SettingsPage() {
         </section>
         )}
 
-        <EditionSettingsContent activeSection={activeSection} enabled={multiTenancy} />
+        <EditionSettingsContent activeSection={activeSection} enabled={multiTenancy || (isCE && sysAccess)} />
 
         {/* ── API-Key (shown only when the admin has enabled it) ─────────────────── */}
         {apiKeyEnabled && activeSection === 'apikey' && (
@@ -1076,127 +1011,7 @@ export default function SettingsPage() {
         onClose={() => setEvolutionCardOpen(false)}
       />
 
-      <Modal
-        title={t('我的分层记忆')}
-        open={memoryPanelOpen}
-        onCancel={() => setMemoryPanelOpen(false)}
-        footer={null}
-        // 图谱页要摆得下画布 + 关系抽屉，比另外两页宽一档
-        width={memoryTab === 'graph' ? 960 : 720}
-      >
-        {memoryLoading ? (
-          <div aria-busy="true"><Skeleton active title={false} paragraph={{ rows: 4 }} style={{ padding: '16px 0' }} /></div>
-        ) : (
-          <Tabs
-            activeKey={memoryTab}
-            onChange={setMemoryTab}
-            animated={{ tabPane: false }}
-            destroyOnHidden
-            items={[
-              {
-                key: 'profile',
-                label: tabLabel(t('档案 L1'), memoryProfile?.length, t('字')),
-                pane: renderProfileTab(memoryProfile),
-              },
-              {
-                key: 'facts',
-                label: tabLabel(t('做法 L2'), memoryItems.length),
-                pane: renderFactsTab(memoryItems, removeMemory, clearMemories, loadMemories),
-              },
-              {
-                key: 'graph',
-                label: tabLabel(t('图谱 L3'), memoryGraphEnabled ? memoryGraph.length : undefined),
-                pane: renderGraphTab(memoryGraph, memoryGraphEnabled, loadMemories),
-              },
-            ].map(({ key, label, pane }) => ({
-              key,
-              label,
-              // destroyOnHidden remounts on Tab switch → uniformly play the enter animation once
-              children: (
-                <motion.div
-                  key={`memory-tab-${key}`}
-                  initial={{ opacity: 0, x: 8 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ duration: 0.18, ease: EASE.standard }}
-                >
-                  {pane}
-                </motion.div>
-              ),
-            }))}
-          />
-        )}
-      </Modal>
+      <MemoryManagerModal open={memoryPanelOpen} onClose={() => setMemoryPanelOpen(false)} />
     </>
   );
-}
-
-
-// ─── Rendering of each layered-memory Tab ────────────────────────────────────────────────
-
-function tabLabel(base: string, count: number | undefined, unit: string = ''): string {
-  if (count === undefined || count === null || count === 0) return base;
-  return `${base} · ${count}${unit}`;
-}
-
-function renderProfileTab(profile: import('../../types').MemoryProfile | null) {
-  if (!profile || !profile.enabled) {
-    return <Empty className="jx-anim-fadeIn" description={t('永久记忆未启用')} />;
-  }
-  const ratio = profile.max_chars > 0 ? Math.min(100, Math.round((profile.length / profile.max_chars) * 100)) : 0;
-  if (!profile.content_md) {
-    return (
-      <div>
-        <div style={{ fontSize: 12, color: '#888', marginBottom: 8 }}>
-          {t('会话启动时冻结注入的用户画像 markdown（上限 {n} 字符）', { n: profile.max_chars })}
-        </div>
-        <Empty className="jx-anim-fadeIn" description={t('档案为空，开始对话后智能体会自动沉淀你的身份和偏好')} />
-      </div>
-    );
-  }
-  return (
-    <div>
-      <div style={{ fontSize: 12, color: '#888', marginBottom: 8 }}>
-        {t('每次会话启动时冻结注入 · {used}/{max} 字 ({pct}%)', { used: profile.length, max: profile.max_chars, pct: ratio })}
-      </div>
-      <div className="jx-settings-profileMeter" role="progressbar" aria-valuenow={ratio} aria-valuemin={0} aria-valuemax={100}>
-        <motion.div
-          className={`jx-settings-profileMeterFill${ratio > 85 ? ' warn' : ''}`}
-          initial={{ width: 0 }}
-          animate={{ width: `${ratio}%` }}
-          transition={{ duration: 0.5, ease: 'easeOut' }}
-        />
-      </div>
-      <div
-        style={{
-          padding: 12, background: 'var(--color-bg-gray)', borderRadius: 6,
-          maxHeight: 400, overflow: 'auto', fontSize: 13, lineHeight: 1.7,
-        }}
-        dangerouslySetInnerHTML={{ __html: mdToHtml(profile.content_md) }}
-      />
-    </div>
-  );
-}
-
-function renderFactsTab(
-  items: MemoryItem[],
-  removeMemory: (id: string) => Promise<void>,
-  clearMemories: () => Promise<void>,
-  reload: () => void,
-) {
-  return (
-    <FactsList
-      items={items}
-      onRemove={removeMemory}
-      onClearAll={clearMemories}
-      onEdited={reload}
-    />
-  );
-}
-
-function renderGraphTab(
-  relations: import('../../types').MemoryGraphRelation[],
-  enabled: boolean,
-  reload: () => void,
-) {
-  return <MemoryGraphView relations={relations} enabled={enabled} onReload={reload} />;
 }

@@ -1,0 +1,358 @@
+{
+  "document_type": "foreign_trade_collaboration",
+  "document_version": 1,
+  "title": "模拟订单岗位协同",
+  "scope": "current_user_role_coordination",
+  "is_demo_transaction": true,
+  "source_note": "演示询盘：公开公司信息仅用于核验示例，不代表与该公司的真实采购或合作关系。 本单仅为当前账号下的岗位协同记录，未向负责人发送通知。",
+  "inquiry_id": "inq_74763a75677a4cc9b7a3e53d37502c80",
+  "content_pack_id": "pack_d469d8f437a54780a4cb98a0b4dc469a",
+  "content_relationship": "transaction",
+  "source_refs": [
+    {
+      "key": "inquiry",
+      "kind": "inquiry",
+      "id": "inq_74763a75677a4cc9b7a3e53d37502c80",
+      "revision": 3,
+      "fingerprint": "94075f04f28eefa33f2c0a012aec4e33d915da850b12e770748fd19cb2d5c143",
+      "relationship": "transaction",
+      "stale": false
+    },
+    {
+      "key": "quote",
+      "kind": "quote",
+      "id": "DEMO-35EA14C2FED13D93",
+      "revision": 3,
+      "fingerprint": "8b91f5874b112d033cef6bb818b21944fe0e198dc481f0477931b0d8596f5015",
+      "relationship": "transaction",
+      "stale": false
+    },
+    {
+      "key": "content_pack",
+      "kind": "content_pack",
+      "id": "pack_d469d8f437a54780a4cb98a0b4dc469a",
+      "revision": 3,
+      "relationship": "transaction",
+      "fingerprint": "b875f11834c02848244408895394ec021f621109cf2b0feeafea9647a4e8214a",
+      "stale": false
+    }
+  ],
+  "content_preparation": {
+    "created": true,
+    "pack_id": "pack_d469d8f437a54780a4cb98a0b4dc469a",
+    "facts_confirmed": false,
+    "generated": false,
+    "note": "仅导入模拟目录候选事实和几何示意图；请人工确认后生成"
+  },
+  "tasks": [
+    {
+      "id": "sales_requirements",
+      "title": "确认需求和买家资料",
+      "role": "sales",
+      "assignee_label": "sales operator",
+      "status": "done",
+      "depends_on": [],
+      "source_keys": [
+        "inquiry"
+      ],
+      "acceptance_criteria": [
+        "保留询盘原文和明确需求",
+        "区分公开买家事实、未知项和模拟交易"
+      ],
+      "result_note": "已核对本版本来源与验收条件；此处为模拟业务验收记录",
+      "unresolved_items": [
+        "实际运费、供货、认证仍待供应商确认"
+      ],
+      "risks": [
+        "不能作为实际采购或交期承诺"
+      ],
+      "review": {
+        "actor_user_id": "alice",
+        "at": "2026-10-28T02:36:10.297421+00:00",
+        "note": "测试用户明确确认当前验收条件和未确认事项；非对外承诺"
+      },
+      "stale": false,
+      "blockers": [],
+      "blocked": false
+    },
+    {
+      "id": "procurement_quote",
+      "title": "核对供货条件和模拟报价",
+      "role": "procurement",
+      "assignee_label": "procurement operator",
+      "status": "done",
+      "depends_on": [
+        "sales_requirements"
+      ],
+      "source_keys": [
+        "inquiry",
+        "quote"
+      ],
+      "acceptance_criteria": [
+        "核对当前报价金额、币种和费用范围",
+        "保留运费、供应商和目标市场待确认项"
+      ],
+      "result_note": "已核对本版本来源与验收条件；此处为模拟业务验收记录",
+      "unresolved_items": [
+        "实际运费、供货、认证仍待供应商确认"
+      ],
+      "risks": [
+        "不能作为实际采购或交期承诺"
+      ],
+      "review": {
+        "actor_user_id": "alice",
+        "at": "2026-10-28T02:36:10.303505+00:00",
+        "note": "测试用户明确确认当前验收条件和未确认事项；非对外承诺"
+      },
+      "stale": false,
+      "blockers": [],
+      "blocked": false
+    },
+    {
+      "id": "design_assets",
+      "title": "准备产品图片素材",
+      "role": "design",
+      "assignee_label": "design operator",
+      "status": "done",
+      "depends_on": [
+        "sales_requirements"
+      ],
+      "source_keys": [
+        "content_pack"
+      ],
+      "acceptance_criteria": [
+        "核对图片来源、署名及实际生成素材",
+        "模拟示意图不得称为实物照片"
+      ],
+      "result_note": "已核对本版本来源与验收条件；此处为模拟业务验收记录",
+      "unresolved_items": [
+        "实际运费、供货、认证仍待供应商确认"
+      ],
+      "risks": [
+        "不能作为实际采购或交期承诺"
+      ],
+      "review": {
+        "actor_user_id": "alice",
+        "at": "2026-10-28T02:36:10.311066+00:00",
+        "note": "测试用户明确确认当前验收条件和未确认事项；非对外承诺"
+      },
+      "stale": false,
+      "blockers": [],
+      "blocked": false
+    },
+    {
+      "id": "operations_content",
+      "title": "审阅商品文案与 FAQ",
+      "role": "operations",
+      "assignee_label": "operations operator",
+      "status": "done",
+      "depends_on": [
+        "design_assets"
+      ],
+      "source_keys": [
+        "content_pack"
+      ],
+      "acceptance_criteria": [
+        "核对当前已确认事实、英文文案和 FAQ",
+        "未提供商务条件不得写成承诺"
+      ],
+      "result_note": "已核对本版本来源与验收条件；此处为模拟业务验收记录",
+      "unresolved_items": [
+        "实际运费、供货、认证仍待供应商确认"
+      ],
+      "risks": [
+        "不能作为实际采购或交期承诺"
+      ],
+      "review": {
+        "actor_user_id": "alice",
+        "at": "2026-10-28T02:36:10.317035+00:00",
+        "note": "测试用户明确确认当前验收条件和未确认事项；非对外承诺"
+      },
+      "stale": false,
+      "blockers": [],
+      "blocked": false
+    },
+    {
+      "id": "compliance_review",
+      "title": "审核来源和对外表述",
+      "role": "compliance",
+      "assignee_label": "compliance operator",
+      "status": "done",
+      "depends_on": [
+        "procurement_quote",
+        "operations_content"
+      ],
+      "source_keys": [
+        "inquiry",
+        "quote",
+        "content_pack"
+      ],
+      "acceptance_criteria": [
+        "核对证据、图片许可与模拟标记",
+        "审核完成不代表认证或法规结论通过"
+      ],
+      "result_note": "已核对本版本来源与验收条件；此处为模拟业务验收记录",
+      "unresolved_items": [
+        "实际运费、供货、认证仍待供应商确认"
+      ],
+      "risks": [
+        "不能作为实际采购或交期承诺"
+      ],
+      "review": {
+        "actor_user_id": "alice",
+        "at": "2026-10-28T02:36:10.322855+00:00",
+        "note": "测试用户明确确认当前验收条件和未确认事项；非对外承诺"
+      },
+      "stale": false,
+      "blockers": [],
+      "blocked": false
+    },
+    {
+      "id": "sales_handoff",
+      "title": "汇总内部交接草稿",
+      "role": "sales",
+      "assignee_label": "sales operator",
+      "status": "done",
+      "depends_on": [
+        "compliance_review"
+      ],
+      "source_keys": [
+        "inquiry",
+        "quote",
+        "content_pack"
+      ],
+      "acceptance_criteria": [
+        "核对所有岗位有效验收记录",
+        "列明未确认项与风险，明确未发送和未发布"
+      ],
+      "result_note": "已核对本版本来源与验收条件；此处为模拟业务验收记录",
+      "unresolved_items": [
+        "实际运费、供货、认证仍待供应商确认"
+      ],
+      "risks": [
+        "不能作为实际采购或交期承诺"
+      ],
+      "review": {
+        "actor_user_id": "alice",
+        "at": "2026-10-28T02:36:10.329148+00:00",
+        "note": "测试用户明确确认当前验收条件和未确认事项；非对外承诺"
+      },
+      "stale": false,
+      "blockers": [],
+      "blocked": false
+    }
+  ],
+  "external_actions": {
+    "messages_sent": false,
+    "published": false
+  },
+  "history": [
+    {
+      "event": "created",
+      "at": "2026-10-28T02:36:10.276293+00:00",
+      "revision": 1,
+      "actor_user_id": "alice"
+    },
+    {
+      "event": "sources_refreshed",
+      "at": "2026-10-28T02:36:10.291057+00:00",
+      "revision": 2,
+      "actor_user_id": "alice"
+    },
+    {
+      "event": "task_updated",
+      "at": "2026-10-28T02:36:10.294108+00:00",
+      "revision": 3,
+      "actor_user_id": "alice",
+      "task_id": "sales_requirements"
+    },
+    {
+      "event": "task_reviewed",
+      "at": "2026-10-28T02:36:10.297432+00:00",
+      "revision": 4,
+      "actor_user_id": "alice",
+      "task_id": "sales_requirements"
+    },
+    {
+      "event": "task_updated",
+      "at": "2026-10-28T02:36:10.300058+00:00",
+      "revision": 5,
+      "actor_user_id": "alice",
+      "task_id": "procurement_quote"
+    },
+    {
+      "event": "task_reviewed",
+      "at": "2026-10-28T02:36:10.303517+00:00",
+      "revision": 6,
+      "actor_user_id": "alice",
+      "task_id": "procurement_quote"
+    },
+    {
+      "event": "task_updated",
+      "at": "2026-10-28T02:36:10.306068+00:00",
+      "revision": 7,
+      "actor_user_id": "alice",
+      "task_id": "design_assets"
+    },
+    {
+      "event": "task_reviewed",
+      "at": "2026-10-28T02:36:10.311080+00:00",
+      "revision": 8,
+      "actor_user_id": "alice",
+      "task_id": "design_assets"
+    },
+    {
+      "event": "task_updated",
+      "at": "2026-10-28T02:36:10.313539+00:00",
+      "revision": 9,
+      "actor_user_id": "alice",
+      "task_id": "operations_content"
+    },
+    {
+      "event": "task_reviewed",
+      "at": "2026-10-28T02:36:10.317044+00:00",
+      "revision": 10,
+      "actor_user_id": "alice",
+      "task_id": "operations_content"
+    },
+    {
+      "event": "task_updated",
+      "at": "2026-10-28T02:36:10.319344+00:00",
+      "revision": 11,
+      "actor_user_id": "alice",
+      "task_id": "compliance_review"
+    },
+    {
+      "event": "task_reviewed",
+      "at": "2026-10-28T02:36:10.322863+00:00",
+      "revision": 12,
+      "actor_user_id": "alice",
+      "task_id": "compliance_review"
+    },
+    {
+      "event": "task_updated",
+      "at": "2026-10-28T02:36:10.325244+00:00",
+      "revision": 13,
+      "actor_user_id": "alice",
+      "task_id": "sales_handoff"
+    },
+    {
+      "event": "task_reviewed",
+      "at": "2026-10-28T02:36:10.329160+00:00",
+      "revision": 14,
+      "actor_user_id": "alice",
+      "task_id": "sales_handoff"
+    }
+  ],
+  "collaboration_id": "collab_cc16eaed1b83438399beb9c33a382e9b",
+  "revision": 14,
+  "created_at": "2026-10-28T02:36:10.276293+00:00",
+  "updated_at": "2026-10-28T02:36:10.329160+00:00",
+  "workflow_status": {
+    "total_tasks": 6,
+    "done_tasks": 6,
+    "blocked_tasks": 0,
+    "stale_tasks": 0,
+    "ready_for_handoff": true
+  }
+}

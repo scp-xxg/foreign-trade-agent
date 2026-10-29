@@ -21,7 +21,8 @@ from datetime import datetime, timedelta, timezone
 from typing import Dict, List, Optional
 
 from core.db.engine import SessionLocal
-from core.evolution.trace_assembler import assemble_episode
+from core.db.usage_filters import model_usage_message_filter
+from core.evolution.evidence.trace_assembler import assemble_episode
 
 logger = logging.getLogger(__name__)
 
@@ -45,7 +46,7 @@ def _candidate_messages(
             ChatMessage.chat_seq,
         )
         .filter(
-            ChatMessage.role == "assistant",
+            model_usage_message_filter(),
             ChatMessage.created_at >= since,
             ChatMessage.created_at < until,
             ~ChatMessage.message_id.in_(db.query(existing.c.message_id)),
@@ -107,16 +108,14 @@ def _outcome_from_logs(db, message_id: str, chat_id: str) -> Optional[Dict[str, 
     apart from an explicit user judgement and weight it accordingly.
     """
     from core.db.models import ChatMessage
-    from core.evolution.trace_assembler import _tool_rows_for
+    from core.evolution.evidence.trace_assembler import _tool_rows_for
 
     rows = _tool_rows_for(db, message_id, chat_id)
     if not rows:
         return None
 
     failed = [r for r in rows if str(r.status or "success") != "success"]
-    message = (
-        db.query(ChatMessage).filter(ChatMessage.message_id == message_id).first()
-    )
+    message = db.query(ChatMessage).filter(ChatMessage.message_id == message_id).first()
     answered = bool(message is not None and (message.content or "").strip())
     message_errored = bool(message is not None and message.error)
 
@@ -155,7 +154,6 @@ def backfill_episodes(
     start = end - timedelta(days=days)
 
     stats = {"scanned": 0, "created": 0, "skipped": 0, "batches": 0}
-    offset = 0
 
     while True:
         if max_batches is not None and stats["batches"] >= max_batches:
@@ -164,9 +162,7 @@ def backfill_episodes(
 
         try:
             with SessionLocal() as db:
-                rows = _candidate_messages(
-                    db, since=start, until=end, limit=batch_size, offset=0
-                )
+                rows = _candidate_messages(db, since=start, until=end, limit=batch_size, offset=0)
                 if not rows:
                     break
 
@@ -177,12 +173,10 @@ def backfill_episodes(
 
                     # Historical runs have tool logs but no trace events;
                     # bridge them so the backfill is actually usable for mining.
-                    from core.evolution.events import TraceSink
-                    from core.evolution.trace_assembler import emit_tool_events
+                    from core.evolution.evidence.events import TraceSink
+                    from core.evolution.evidence.trace_assembler import emit_tool_events
 
-                    sink = TraceSink(
-                        message_id=message_id, chat_id=chat_id or "", user_id=user_id
-                    )
+                    sink = TraceSink(message_id=message_id, chat_id=chat_id or "", user_id=user_id)
                     if emit_tool_events(sink, message_id, chat_id or ""):
                         sink.flush()
 

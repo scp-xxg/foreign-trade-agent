@@ -31,7 +31,7 @@ async def run_turn(client, chat_id: str, message: str, label: str):
     tool_calls: list[str] = []
     tool_results: list = []
     text_buf: list[str] = []
-    async with client.stream("POST", "/v1/chats/stream", json=payload) as resp:
+    async with client.stream("POST", "/v1/agents/responses", json={**payload, "stream": True}) as resp:
         print(f"[{label}] stream status: {resp.status_code}")
         async for line in resp.aiter_lines():
             if not line or not line.startswith("data:"):
@@ -128,8 +128,8 @@ async def main() -> None:
         ck("T2 真实执行成功（输出含 sentinel2）", S2 in blob2)
 
         # ── Context reconstruction: message bodies the next turn sees must have no </think> residue ──
-        from core.services.chat_service import ChatService
-        from core.services.compaction_service import load_session_history
+        from core.chat.service import ChatService
+        from core.chat.compaction.service import load_session_history
 
         db = SessionLocal()
         try:

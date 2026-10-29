@@ -1,25 +1,23 @@
 import { create } from 'zustand';
-import type { AutomationTask } from '../types';
 import {
-  listAutomations,
   automationAvailabilityWarning,
   deleteAutomation as deleteAutomationApi,
+  listAutomations,
   pauseAutomation as pauseApi,
   resumeAutomation as resumeApi,
   triggerAutomation as triggerApi,
   updateAutomation as updateApi,
   type UpdateAutomationRequest,
 } from '../api';
+import { navigateTo, pathForPanel } from '../routing/navigation';
+import type { AutomationTask } from '../types';
 
 interface AutomationState {
   tasks: AutomationTask[];
   loading: boolean;
   availabilityWarning: string;
   createModalOpen: boolean;
-  selectedTaskId: string | null;
 
-  setTasks: (tasks: AutomationTask[]) => void;
-  setLoading: (v: boolean) => void;
   setCreateModalOpen: (v: boolean) => void;
   setSelectedTaskId: (id: string | null) => void;
 
@@ -31,28 +29,31 @@ interface AutomationState {
   reset: () => void;
 }
 
+let taskRequestVersion = 0;
+
 export const useAutomationStore = create<AutomationState>((set, get) => ({
   tasks: [],
   loading: false,
   availabilityWarning: '',
   createModalOpen: false,
-  selectedTaskId: null,
 
-  setTasks: (tasks) => set({ tasks }),
-  setLoading: (loading) => set({ loading }),
   setCreateModalOpen: (v) => set({ createModalOpen: v }),
-  setSelectedTaskId: (id) => set({ selectedTaskId: id }),
+  // 打开 / 关闭任务详情 = 换地址（/automation/<任务id>），不在 store 里另存一份位置
+  setSelectedTaskId: (id) => navigateTo(pathForPanel('automation', id)),
 
   fetchTasks: async () => {
+    const version = ++taskRequestVersion;
     set({ loading: true });
     try {
       const tasks = await listAutomations();
+      if (version !== taskRequestVersion) return;
       set({ tasks, availabilityWarning: automationAvailabilityWarning() });
     } catch (e) {
+      if (version !== taskRequestVersion) return;
       set({ availabilityWarning: e instanceof Error ? e.message : '任务列表暂不可用' });
       console.error('Failed to fetch automations:', e);
     } finally {
-      set({ loading: false });
+      if (version === taskRequestVersion) set({ loading: false });
     }
   },
 
@@ -95,5 +96,5 @@ export const useAutomationStore = create<AutomationState>((set, get) => ({
     return updated;
   },
 
-  reset: () => set({ tasks: [], availabilityWarning: '', loading: false, createModalOpen: false, selectedTaskId: null }),
+  reset: () => { taskRequestVersion += 1; set({ tasks: [], availabilityWarning: '', loading: false, createModalOpen: false }); },
 }));

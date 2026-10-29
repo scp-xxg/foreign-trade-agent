@@ -1,7 +1,7 @@
 import pytest
 from agentscope.message import Msg, TextBlock, ThinkingBlock
-from core.llm.providers.registry import get_spec
-from core.llm.providers.vendor_models import build_native_model
+from core.models.providers.registry import get_spec
+from core.models.providers.vendor_models import build_native_model
 
 
 def native(provider, model):
@@ -31,8 +31,8 @@ async def test_foreign_reasoning_is_not_an_anthropic_thinking_block():
     )
     wire = await native("anthropic", "claude-test").formatter.format([msg])
     assert not any(b.get("type") == "thinking" for row in wire for b in row["content"])
-    assert "old reasoning" in str(wire)
-    assert "Historical reasoning" in str(wire)
+    assert "old reasoning" not in str(wire)
+    assert "Historical reasoning" not in str(wire)
     assert msg.content[0].type == "thinking"
 
 
@@ -68,13 +68,12 @@ async def test_same_anthropic_model_preserves_signature():
         },
     ],
 )
-async def test_unknown_or_other_model_reasoning_becomes_explicit_reference(origin):
+async def test_unknown_or_other_model_reasoning_is_excluded(origin):
     block = ThinkingBlock(thinking="reason", **origin)
     wire = await native("anthropic", "claude-test").formatter.format(
         [Msg(name="assistant", role="assistant", content=[block])]
     )
-    assert wire[0]["content"][0]["type"] == "text"
-    assert "Historical reasoning" in str(wire)
+    assert wire == []
     assert "foreign-signature" not in str(wire)
 
 
@@ -92,7 +91,7 @@ async def test_same_anthropic_model_missing_signature_fails_explicitly():
 @pytest.mark.asyncio
 @pytest.mark.parametrize("provider, expected_native", [("deepseek", True), ("anthropic", False)])
 async def test_echo_formatter_preserves_only_target_model_reasoning(provider, expected_native):
-    from core.llm.chat_models import ReasoningEchoChatFormatter
+    from core.models.chat_models import ReasoningEchoChatFormatter
 
     formatter = ReasoningEchoChatFormatter(
         replay_provider="deepseek", replay_model="m", replay_protocol="openai_chat"
@@ -115,7 +114,7 @@ async def test_echo_formatter_preserves_only_target_model_reasoning(provider, ex
 def test_new_output_is_stamped_for_live_replay():
     from types import SimpleNamespace
 
-    from core.llm.reasoning_replay import stamp_reasoning_origin
+    from core.models.reasoning_replay import stamp_reasoning_origin
 
     block = ThinkingBlock(thinking="reason")
     stamp_reasoning_origin(
@@ -126,7 +125,7 @@ def test_new_output_is_stamped_for_live_replay():
 
 @pytest.mark.asyncio
 async def test_other_protocol_does_not_reuse_native_reasoning():
-    from core.llm.chat_models import ReasoningEchoChatFormatter
+    from core.models.chat_models import ReasoningEchoChatFormatter
 
     formatter = ReasoningEchoChatFormatter(
         replay_provider="deepseek", replay_model="m", replay_protocol="openai_chat"
@@ -142,4 +141,5 @@ async def test_other_protocol_does_not_reuse_native_reasoning():
         [Msg(name="assistant", role="assistant", content=[block, TextBlock(text="answer")])]
     )
     assert "reasoning_content" not in wire[0]
-    assert "Historical reasoning" in str(wire[0]["content"])
+    assert "Historical reasoning" not in str(wire[0]["content"])
+    assert "reason" not in str(wire[0]["content"])

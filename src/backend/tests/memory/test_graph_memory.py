@@ -1,10 +1,13 @@
 """L3 graph memory keeps declarative relations separate and actionable."""
+from core.memory import graph as graph_module
+from core.memory import graph_contract as graph_contract_module
 
 from types import SimpleNamespace
 
 import pytest
 from core.memory import graph as G
-from core.memory import service as S
+from core.memory import queries as S
+from core.memory import backend as memory_backend
 from core.memory.context import MemoryContext
 from core.memory.extractors import writers as W
 from core.memory.extractors.router import ExtractorType
@@ -12,7 +15,7 @@ from core.memory.retrieval_types import RetrievedRelation
 
 
 def test_relation_parser_accepts_only_the_bounded_graph_vocabulary():
-    relation = G.parse_relation(
+    relation = graph_contract_module.parse_relation(
         {
             "source": "项目北斗",
             "source_type": "project",
@@ -25,9 +28,9 @@ def test_relation_parser_accepts_only_the_bounded_graph_vocabulary():
     assert relation is not None
     assert relation.relationship == "依赖"
     assert relation.confidence == 1.0
-    assert G.parse_relation({"source": "A", "predicate": "invented", "target": "B"}) is None
+    assert graph_contract_module.parse_relation({"source": "A", "predicate": "invented", "target": "B"}) is None
     assert (
-        G.parse_relation(
+        graph_contract_module.parse_relation(
             {
                 "source": "项目北斗",
                 "predicate": "depends_on",
@@ -47,7 +50,7 @@ def test_relation_parser_deduplicates_one_turn():
         "target": "数据中台",
         "target_type": "system",
     }
-    assert len(G.parse_relations([raw, dict(raw)])) == 1
+    assert len(graph_contract_module.parse_relations([raw, dict(raw)])) == 1
 
 
 def test_graph_read_uses_a_non_reserved_cypher_parameter(monkeypatch):
@@ -68,9 +71,9 @@ def test_graph_read_uses_a_non_reserved_cypher_parameter(monkeypatch):
         def session():
             return Session()
 
-    monkeypatch.setattr(G, "_get_driver", lambda: Driver())
+    monkeypatch.setattr(graph_module, 'get_driver', lambda: Driver())
     assert (
-        G._read_sync(
+        graph_module.read_sync(
             scope_user_id="u1",
             workspace_id="default",
             limit=5,
@@ -117,8 +120,8 @@ def test_graph_outbox_effect_receipt_does_not_reinforce_on_replay(monkeypatch):
         def session():
             return Session()
 
-    monkeypatch.setattr(G, "_get_driver", lambda: Driver())
-    relation = G.parse_relation(
+    monkeypatch.setattr(graph_module, 'get_driver', lambda: Driver())
+    relation = graph_contract_module.parse_relation(
         {
             "source": "项目北斗",
             "source_type": "project",
@@ -129,8 +132,8 @@ def test_graph_outbox_effect_receipt_does_not_reinforce_on_replay(monkeypatch):
     )
     ctx = MemoryContext(user_id="u1", effect_id="mout-candidate-1")
 
-    first = G._write_sync(ctx, [relation])
-    second = G._write_sync(ctx, [relation])
+    first = graph_module.write_sync(ctx, [relation])
+    second = graph_module.write_sync(ctx, [relation])
 
     assert first[0]["seen_count"] == 1
     assert first[0]["replayed"] is False
@@ -195,7 +198,7 @@ async def test_graph_writer_reports_an_addressable_l3_relation(monkeypatch):
 async def test_retrieved_relations_carry_identity_from_the_graph_store(monkeypatch):
     """Retrieval must not discard the id/confidence the store already returns."""
     monkeypatch.setattr(
-        S,
+        memory_backend,
         "settings",
         SimpleNamespace(memory=SimpleNamespace(enabled=True, graph_enabled=True)),
     )
@@ -225,11 +228,11 @@ async def test_retrieved_relations_carry_identity_from_the_graph_store(monkeypat
 @pytest.mark.asyncio
 async def test_graph_relations_survive_a_vector_store_outage(monkeypatch):
     monkeypatch.setattr(
-        S,
+        memory_backend,
         "settings",
         SimpleNamespace(memory=SimpleNamespace(enabled=True, graph_enabled=True)),
     )
-    monkeypatch.setattr(S, "_get_memory", lambda: None)
+    monkeypatch.setattr(memory_backend, "_get_memory", lambda: None)
 
     async def fake_graph(**_kwargs):
         return (

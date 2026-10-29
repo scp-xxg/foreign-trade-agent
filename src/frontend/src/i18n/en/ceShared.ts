@@ -1,5 +1,11 @@
 /** English translations used by CE source but owned by mixed EE/CE dictionaries upstream. */
 export const CE_SHARED_DICT: Record<string, string> = {
+  '应用 ID': 'Application ID',
+  '应用名称': 'Application name',
+  '应用简介': 'Application description',
+  '跳转 URL': 'Destination URL',
+  '应用 ID 已存在': 'Application ID already exists',
+  '下载失败': 'Download failed',
   '团队文件夹': 'Team Folder',
   '发布': 'Publish',
   '重新加载': 'Reload',
@@ -19,7 +25,6 @@ export const CE_SHARED_DICT: Record<string, string> = {
   '确认重新初始化飞书应用？': 'Re-initialize the Feishu app?',
   '初始化失败：{msg}': 'Initialization failed: {msg}',
   '系统配置': 'System Config',
-  '激活': 'Activate',
   '测试': 'Test',
   '停用': 'Disabled',
   '未测试': 'Not tested',
@@ -28,8 +33,6 @@ export const CE_SHARED_DICT: Record<string, string> = {
   '编辑模型供应商': 'Edit Model Provider',
   '添加模型供应商': 'Add Model Provider',
   '厂商 / 协议': 'Vendor / Protocol',
-  '版本管理': 'Version Management',
-  '编辑内容': 'Edit Content',
   '禁用': 'Disable',
   '工具': 'Tools',
   '本体治理': 'Ontology Governance',

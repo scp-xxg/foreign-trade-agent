@@ -5,7 +5,22 @@ from types import SimpleNamespace
 
 import pytest
 from core.db.models import AdminMcpServer, ContentBlock, InstalledPlugin
-from core.services import plugin_service
+from core.capabilities.plugins import management as plugin_service
+from features.workbench.ui import contributions as plugin_ui
+
+
+@pytest.fixture(autouse=True)
+def isolated_catalog_caches():
+    # Each test uses a fresh DB; process-wide catalog snapshots must not leak
+    # from earlier API/plugin tests into this bootstrap contract.
+    from core.capabilities.catalog.runtime import invalidate_runtime_catalog_cache
+    from core.capabilities.catalog.resolver import invalidate_capability_cache
+
+    invalidate_runtime_catalog_cache()
+    invalidate_capability_cache()
+    yield
+    invalidate_runtime_catalog_cache()
+    invalidate_capability_cache()
 
 
 def test_ce_default_plugins_bootstrap_once_and_are_globally_available(db_session):
@@ -17,7 +32,7 @@ def test_ce_default_plugins_bootstrap_once_and_are_globally_available(db_session
         .order_by(InstalledPlugin.slug)
         .all()
     )
-    assert [row.slug for row in installs] == ["automation", "sites", "skill-manager"]
+    assert [row.slug for row in installs] == ["automation", "sites", "skill-manager", "visualize"]
     assert all(row.created_by == "system_bootstrap" for row in installs)
 
     plugin_mcps = {
@@ -39,13 +54,14 @@ def test_ce_default_plugins_bootstrap_once_and_are_globally_available(db_session
         "automation",
         "skill-manager",
         "sites",
+        "visualize",
     }
     assert all(item["enabled"] is True for item in visible_to_user)
 
     marker = db_session.get(ContentBlock, plugin_service.DEFAULT_BOOTSTRAP_MARKER_ID)
     assert marker.payload == {
         "version": 1,
-        "plugins": ["automation", "skill-manager", "sites"],
+        "plugins": ["automation", "skill-manager", "sites", "visualize"],
     }
     assert plugin_service.ensure_default_plugins_bootstrapped(db_session) is False
 
@@ -64,7 +80,7 @@ def test_default_plugin_marker_preserves_later_user_uninstall(db_session):
 
 @pytest.mark.asyncio
 async def test_ce_compose_startup_runs_default_plugin_bootstrap(monkeypatch):
-    app_module = importlib.import_module("api.app")
+    app_module = importlib.import_module("api.startup.plugins")
     engine_module = importlib.import_module("core.db.engine")
     calls = []
 
@@ -87,13 +103,17 @@ async def test_ce_compose_startup_runs_default_plugin_bootstrap(monkeypatch):
         "ensure_default_plugins_bootstrapped",
         lambda db: calls.append(db) or True,
     )
+    monkeypatch.setattr(
+        'core.capabilities.plugins.management.defaults.ensure_visualize_plugin_bootstrapped',
+        lambda db: calls.append(("visualize", db)) or True,
+    )
     # 启动钩子同时负责把 ui_contributions 与 bundle 清单对齐（存量安装回填）
     monkeypatch.setattr(
-        plugin_service,
+        plugin_ui,
         "refresh_builtin_ui_contributions",
         lambda db: calls.append(("refresh_ui", db)) or 0,
     )
 
     await app_module._startup_seed_default_plugins()
 
-    assert calls == [session, ("refresh_ui", session), "close"]
+    assert calls == [session, ("visualize", session), ("refresh_ui", session), "close"]

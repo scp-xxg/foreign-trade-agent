@@ -1,0 +1,296 @@
+"""API request/response models."""
+
+from typing import Annotated, Any, Dict, List, Literal, Optional, Union
+
+from core.chat.limits import CONTENT_MAX
+from core.config.settings import DEFAULT_CHAT_MODEL_ALIAS
+from pydantic import BaseModel, ConfigDict, Field, PrivateAttr, field_validator, model_validator
+
+ChatMode = Literal["turbo", "fast", "low", "medium", "high", "xhigh", "max"]
+
+# A user message is stored verbatim in chat_messages.content, whose CHECK
+# constraint is CONTENT_MAX characters; accepting more would be clamped on write.
+USER_MESSAGE_MAX = CONTENT_MAX
+
+
+class AttachmentItem(BaseModel):
+    """单个文件附件"""
+
+    name: str = Field(..., description="文件名")
+    mime_type: str = Field("", description="MIME 类型")
+    file_id: str = Field(..., min_length=1, description="持久化后的文件 ID")
+
+
+class QuoteMessageSource(BaseModel):
+    """引用来自本会话的一条消息。"""
+
+    kind: Literal["message"]
+    ts: Optional[int] = Field(None, description="被引用消息的前端时间戳")
+
+
+class QuoteFileSource(BaseModel):
+    """引用来自右侧预览中打开的一份文件。"""
+
+    kind: Literal["file"]
+    file_id: str = Field(..., min_length=1, max_length=128, description="文件 ID")
+    file_name: str = Field(..., min_length=1, max_length=255, description="文件名")
+    locator: Optional[str] = Field(
+        None, max_length=200, description="文件内位置：最近的标题、页码或 Sheet1!A1:C5 这类区域"
+    )
+
+
+QuoteSource = Annotated[Union[QuoteMessageSource, QuoteFileSource], Field(discriminator="kind")]
+
+
+class QuotedFollowUpItem(BaseModel):
+    """用户为本轮引用的一段原文，及其出处。"""
+
+    text: str = Field(..., description="被引用的原始文本", min_length=1, max_length=8000)
+    source: Optional[QuoteSource] = Field(None, description="原文出处：会话消息或文件")
+
+    @field_validator("text")
+    @classmethod
+    def validate_text(cls, v: str) -> str:
+        if not v or not v.strip():
+            raise ValueError("Quoted text cannot be empty")
+        return v.strip()
+
+
+class ReferencedChatItem(BaseModel):
+    """用户为本轮显式引用的一段历史会话。
+
+    只带 ID：标题、时间、概览等名片信息一律由后端按当前权限现查（见
+    ``core.chat.references``），前端传什么都不作数——否则任何人都能伪造
+    一段"来自另一个会话"的内容塞进模型。
+    """
+
+    chat_id: str = Field(..., description="被引用会话的 ID", max_length=100)
+
+
+class ChatRequest(BaseModel):
+    """聊天请求模型"""
+
+    model_config = ConfigDict(protected_namespaces=())
+    _resolved_skill_ids: List[str] = PrivateAttr(default_factory=list)
+    _resolved_reference_cards: List[Any] = PrivateAttr(default_factory=list)
+    _resolved_mcp_ids: List[str] = PrivateAttr(default_factory=list)
+    _resolved_plugin_skill_ids: List[str] = PrivateAttr(default_factory=list)
+    _resolved_plugin_mcp_ids: List[str] = PrivateAttr(default_factory=list)
+
+    client_session_id: Optional[str] = Field(None, min_length=32, max_length=32, exclude=True, repr=False)
+    chat_id: str = Field(..., description="会话ID，用于维持对话上下文", max_length=100)
+    message: str = Field(
+        ..., description="用户消息内容", min_length=1, max_length=USER_MESSAGE_MAX
+    )
+    stream: bool = Field(False, strict=True, description="true 返回 SSE 事件流；false 一次返回完整 JSON 回复")
+    model_name: Optional[str] = Field(
+        DEFAULT_CHAT_MODEL_ALIAS, description="使用的模型名称（qwen/deepseek）", max_length=50
+    )
+    model_provider_id: Optional[str] = Field(
+        default=None,
+        description="用户端模型切换选择的模型供应商 ID；仅在后台开关开启且供应商为 active chat 时生效",
+        max_length=64,
+    )
+    mode_slug: Optional[str] = Field(
+        default=None,
+        max_length=64,
+        description=(
+            "对话模式标识（chat_modes.slug）：standard=标准、turbo=极速，以及管理员/用户"
+            "自建的模式。决定这段对话的工具面、技能、插件与专属提示词。"
+            "留空按 standard 处理；老客户端只发 chat_mode='turbo' 时后端按极速解析。"
+        ),
+    )
+    chat_mode: Optional[ChatMode] = Field(
+        default=None,
+        description=(
+            "对话模式：turbo=极速（政策速查，最小工具集）、fast=快速、medium=思考·中、"
+            "low=思考·低、high=思考·高、xhigh=思考·超高、max=思考·最高。"
+            "为 None 时按 enable_thinking 兜底（true→medium、false→fast）。"
+            "可用档位及上游参数由模型配置决定；未启用的档位采用该模型的默认档位。"
+        ),
+    )
+    attachments: List[AttachmentItem] = Field(
+        default_factory=list,
+        description="上传的文件附件列表",
+    )
+    referenced_chats: List[ReferencedChatItem] = Field(
+        default_factory=list,
+        description=(
+            "本轮显式引用的历史会话（斜杠命令选择或从侧边栏拖入）。后端按当前用户权限"
+            "解析成会话名片拼进用户消息，全文由智能体调用 read_chat 按需读取。"
+        ),
+        max_length=5,
+    )
+    enabled_kbs: Optional[List[str]] = Field(
+        default=None,
+        description="当前会话中启用的知识库 ID 列表（前端运行时注入）",
+    )
+    enabled_skills: Optional[List[str]] = Field(
+        default=None,
+        description="本次请求启用的 skill ID 列表（不传则使用用户/系统默认配置）",
+    )
+    enabled_mcps: Optional[List[str]] = Field(
+        default=None,
+        description="本次请求启用的 MCP 工具 ID 列表（不传则使用用户/系统默认配置）",
+    )
+    enabled_agents: Optional[List[str]] = Field(
+        default=None,
+        description="本次请求启用的子智能体 ID 列表（不传则使用用户/系统默认配置）",
+    )
+    agent_id: Optional[str] = Field(
+        default=None,
+        description="子智能体 ID，传入时使用该智能体配置对话（不传则使用主智能体）",
+        max_length=64,
+    )
+    mention_agent_id: Optional[str] = Field(
+        default=None,
+        description=(
+            "本轮通过 @ 显式指定的子智能体 ID。传入时主智能体保留正常思考与流式输出，"
+            "并通过真实 call_subagent 工具把任务交给该子智能体；不会永久绑定整个会话。"
+        ),
+        max_length=64,
+    )
+    plan_chat: bool = Field(
+        default=False,
+        description="是否为计划模式对话（从应用中心入口创建的对话）",
+    )
+    workflow_chat: bool = Field(
+        default=False,
+        description=(
+            "是否为工作流模式对话（用户显式触发：输入框 / 斜杠命令、或 + 菜单里选「工作流模式」）。"
+            "为 True 时才注册 run_job 批量作业工具，并在系统提示中给出作业脚本写法。"
+            "与计划模式同属用户触发的模式：不触发就完全不存在，"
+            "避免普通问答被无关的批量规则干扰。"
+        ),
+    )
+    site_chat: bool = Field(
+        default=False,
+        description=(
+            "是否为站点会话（实验室『站点』入口创建的建站 / 站点编辑对话）。"
+            "为 True 时由后端在系统提示里注入建站或编辑的作业规则——"
+            "这段规则不进用户消息，历史里看不到它。"
+        ),
+    )
+    skill_id: Optional[str] = Field(
+        default=None,
+        description="显式调用的技能 ID（斜杠命令选择）",
+        max_length=64,
+    )
+    skill_name: Optional[str] = Field(
+        default=None,
+        description="显式调用的技能名（仅用于会话记录回显徽标，不参与路由）",
+        max_length=255,
+    )
+    mention_name: Optional[str] = Field(
+        default=None,
+        description=(
+            "@ 引用的子智能体名，用于会话记录回显徽标；旧客户端未传 "
+            "mention_agent_id 时，后端会按唯一可访问名称解析委派目标。"
+        ),
+        max_length=255,
+    )
+    connector_id: Optional[str] = Field(
+        default=None,
+        description=(
+            "用户在输入框中显式选择的连接器 ID。后端会强制模型先真实调用该连接器的至少一个工具；"
+            "连接或调用约束无法满足时，本轮直接报错而不是静默回答。"
+        ),
+        max_length=255,
+    )
+    connector_name: Optional[str] = Field(
+        default=None,
+        description="显式选择的连接器名（用于本轮提示、错误信息与会话记录回显徽标）",
+        max_length=255,
+    )
+    plugin_name: Optional[str] = Field(
+        default=None,
+        description="显式引用的插件名（用于注入提示，可选）",
+        max_length=255,
+    )
+    plugin_id: Optional[str] = Field(
+        default=None,
+        description=(
+            "显式引用的已安装插件实例 ID。后端据此校验安装归属，并从安装记录展开本轮可用组件；"
+            "不信任客户端自行声明的插件组件列表。"
+        ),
+        max_length=160,
+    )
+    quoted_follow_up: Optional[QuotedFollowUpItem] = Field(
+        default=None,
+        description="本轮引用的原文及出处（会话消息或文件），拼进发给模型的用户消息",
+    )
+    project_id: Optional[str] = Field(
+        default=None,
+        description="若挂载于项目（Claude-style 工作空间），传项目 ID。会写入 chat_sessions.project_id；项目 instructions 会注入 system prompt，项目文件会作为可访问范围。",
+        max_length=64,
+    )
+
+    @field_validator("message")
+    @classmethod
+    def validate_message(cls, v: str) -> str:
+        """Validate message is not just whitespace."""
+        if not v or not v.strip():
+            raise ValueError("Message cannot be empty or whitespace only")
+        return v.strip()
+
+    @model_validator(mode="before")
+    @classmethod
+    def reject_client_expanded_capabilities(cls, data):
+        """Plugin components are server-resolved; clients may only send stable selection IDs."""
+        if isinstance(data, dict):
+            forbidden = [key for key in ("skill_ids", "mcp_ids", "agent_api_scope", "api_key_id") if key in data]
+            if forbidden:
+                raise ValueError(
+                    "client-expanded capability fields are not supported; "
+                    "send plugin_id, skill_id, or connector_id instead"
+                )
+        return data
+
+    @model_validator(mode="after")
+    def validate_connector_selection(self) -> "ChatRequest":
+        """Keep display metadata and enforceable capability identities in lockstep."""
+        if self.connector_name and not self.connector_id:
+            raise ValueError("connector_id is required when connector_name is provided")
+        if self.plugin_name and not self.plugin_id:
+            raise ValueError("plugin_id is required when plugin_name is provided")
+        return self
+
+    @field_validator("model_name")
+    @classmethod
+    def validate_model_name(cls, v: Optional[str]) -> Optional[str]:
+        """Validate model name is in allowed list."""
+        if v is None:
+            return DEFAULT_CHAT_MODEL_ALIAS
+        allowed_models = ["qwen", "deepseek", "gpt-4", "claude"]
+        if v not in allowed_models:
+            raise ValueError(f"Invalid model name. Allowed: {', '.join(allowed_models)}")
+        return v
+
+    @field_validator("model_provider_id")
+    @classmethod
+    def validate_model_provider_id(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return None
+        value = v.strip()
+        return value or None
+
+
+class ChatResponse(BaseModel):
+    """聊天响应模型"""
+
+    chat_id: str = Field(..., description="会话ID")
+    response: str = Field(..., description="AI响应内容")
+    timestamp: str = Field(..., description="响应时间戳")
+    is_markdown: bool = Field(False, description="响应是否为Markdown格式")
+    route: Optional[str] = Field(None, description="路由信息（main/subagent）")
+    sources: List[Dict[str, Any]] = Field(default_factory=list, description="数据来源列表")
+    artifacts: List[Dict[str, Any]] = Field(default_factory=list, description="生成的附件列表")
+    warnings: List[str] = Field(default_factory=list, description="警告信息列表")
+
+
+class HealthResponse(BaseModel):
+    """健康检查响应"""
+
+    status: str
+    service: str
+    timestamp: str

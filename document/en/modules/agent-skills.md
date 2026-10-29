@@ -6,6 +6,19 @@ A skill is HugAgentOS's standard vehicle for "teaching the model a workflow": on
 
 Division of labour with [MCP tools](mcp-tools.md): MCP servers are *programmatic atomic capabilities* (one call, one function), skills are *knowledge-encoded workflows* (teaching the model to compose bash, file tools and MCP calls into complex jobs). The office suite (Word/Excel/PPT/PDF) is the canonical example of a capability migrated from MCP form to skill form — each skill vendors its own CLI engine and runs inside the sandbox.
 
+## Desktop capability fault isolation
+
+The desktop chat factory degrades individual capabilities instead of failing the entire turn:
+
+- Local skill instructions, scripts and added files may change. New tasks read the current installation; running tasks retain a separate revision and use writable execution copies, so query outputs do not change the verified task snapshot.
+- Preparation includes skills offered in the current turn and their dependencies, not every resolved local skill. Missing files, failed preparation or unavailable dependencies remove the affected capability while other tools and conversation remain available.
+- Busy paths and link conflicts trigger view repair or a fresh isolated view. Persistent failures suspend the affected capability without deleting user files occupying the old path.
+- Failed explicitly selected connectors and plugins with no tools produce conversational status and alternatives. The agent must not fabricate successful execution or silently switch a user-specified data source.
+- Running skills retain their revision. Changed connector configurations cannot reconnect a new endpoint under the old identity. Disabling a skill, plugin or connector rejects subsequent affected calls without ending ordinary conversation.
+- Legacy task recovery retains original bytes; if that version is no longer recoverable, only the affected skill is suspended instead of replaying modified scripts.
+
+Download integrity, path containment and account ownership checks remain enforced; degradation never grants rejected permissions. Changes are confined to capability preparation/loading/call boundaries, not the harness scheduler. A desktop backend containing this change is required.
+
 ## Anatomy of a skill
 
 ```
@@ -16,24 +29,24 @@ Division of labour with [MCP tools](mcp-tools.md): MCP servers are *programmatic
 └── _scripts.json     # optional: script whitelist (auto-detected by extension when absent)
 ```
 
-Parsing and data structures live in `core/agent_skills/registry.py`: `AgentSkillMetadata` (lightweight, for listings) and `AgentSkillSpec` (full instructions, for execution). When `_scripts.json` is missing, `loader._auto_detect_scripts` builds the whitelist from file extensions automatically.
+Parsing and data structures live in `core/capabilities/skills/registry.py`: `AgentSkillMetadata` (lightweight, for listings) and `AgentSkillSpec` (full instructions, for execution). When `_scripts.json` is missing, `loader._auto_detect_scripts` builds the whitelist from file extensions automatically.
 
 ## Multi-source loading and priorities
 
-`core/agent_skills/loader.py::MultiSourceSkillLoader` loads skills from several sources through a backend abstraction (`backends/`: filesystem / database / composite); on ID conflicts the higher-priority source wins (`core/agent_skills/config.py`):
+`core/capabilities/skills/loader.py::MultiSourceSkillLoader` loads skills from several sources through a backend abstraction (`backends/`: filesystem / database / composite); on ID conflicts the higher-priority source wins (`core/capabilities/skills/config.py`):
 
 | Source | Directory | Priority | Notes |
 |---|---|---|---|
-| built-in | `src/backend/skill_bundles/default/` | 0 | Ships with the repo, always on |
+| built-in | `src/backend/extensions/skills/default/` | 0 | Ships with the repo, always on |
 | user | `~/.hugagent/skills/` (`HUGAGENT_USER_SKILLS_DIR`) | 50 | Filesystem user skills |
 | admin | `/app/storage/admin_skills/` (`HUGAGENT_ADMIN_SKILLS_DIR`) | 75 | Managed via the admin console (DB-stored + materialized) |
 | project | `.hugagent/skills/` (`HUGAGENT_PROJECT_SKILLS_DIR`) | 100 | Project-level overrides |
 
 Each source can be disabled individually via `HUGAGENT_DISABLE_{ADMIN,USER,PROJECT}_SKILLS=1`.
 
-## skill_bundles layering: default vs marketplace
+## extensions/skills layering: default vs marketplace
 
-`src/backend/skill_bundles/` has two tiers with very different loading semantics:
+`src/backend/extensions/skills/` has two tiers with very different loading semantics:
 
 - **`default/` — 12 built-in skills** (always-on; the built-in loader's single-level `glob("*/SKILL.md")` scan picks them up):
 
@@ -60,13 +73,18 @@ Each source can be disabled individually via `HUGAGENT_DISABLE_{ADMIN,USER,PROJE
   replaced by this system's runtime/delivery-chain section. **OfficeCLI does not
   handle PDF** — reading, merging, splitting and form-filling still go through `pdf-editing`.
 
+  The CLI baseline is `1.0.157` for both sandbox images and full desktop runtimes. Skills
+  have been checked and synchronized against upstream commit
+  [`2900a4a20f49`](https://github.com/iOfficeAI/OfficeCLI/commit/2900a4a20f49d6a94384d6ea7fb8cc0120999825)
+  (2026-10-20), preserving this system's Chinese triggers and runtime/delivery rules.
+
 - **`marketplace/` — 45 installable skill packages** (install-to-use): each directory holds the raw SKILL.md, referenced files and a `marketplace.json` manifest. Because they sit two levels deep at `marketplace/<slug>/SKILL.md`, the built-in loader **never** auto-loads them — before installation they don't appear in the catalog and aren't registered with agents; only an explicit install persists them.
 
   Ten of these are industry/brand skills (economic-indicator query, enterprise profiling, industry-chain analysis, etc.) hard-wired to the [EE industry MCP servers](mcp-tools.md) and are therefore **Enterprise EE**; the CE derivation strips them via `ce/manifest.yaml`.
 
 ## Injection: how skills enter the prompt
 
-Skill registration happens while `core/llm/agent_factory.py` builds the agent. The enabled set comes from the [catalog](catalog.md) `skills` section plus the user/sub-agent configuration (private skills are filtered by `owner_user_id` to prevent cross-user leakage), then each skill is registered through AgentScope's `toolkit.register_agent_skill(skill_dir)`. AgentScope renders a skills section into the system prompt — name, description and the `{dir}` directory path per skill.
+Skill registration happens while `core/llm/factory/build.py` builds the agent. The enabled set comes from the [catalog](catalog.md) `skills` section plus the user/sub-agent configuration (private skills are filtered by `owner_user_id` to prevent cross-user leakage), then each skill is registered through AgentScope's `toolkit.register_agent_skill(skill_dir)`. AgentScope renders a skills section into the system prompt — name, description and the `{dir}` directory path per skill.
 
 A crucial path redirection follows (`loader._repoint_skill_dir_to_sandbox`): the registered directory is a **backend physical path** (built-ins in the source tree, DB skills materialized under `/app/storage/sandbox_skills/<id>`), but scripts actually execute in the **sandbox**, where every skill lives at the unified path `/workspace/skills/<id>`. The prompt-facing `dir` is rewritten to that sandbox path immediately after registration — otherwise the model would feed backend paths to `bash` and be rejected by the path validator.
 
@@ -131,11 +149,11 @@ Key points:
 - **Scope**: main-chat assembly and sub-agents. A sub-agent's bound plugins are deferred the same way, but activation lives only within that run and is never persisted (sub-agent runs are short-lived and isolated; writing under the parent chat's key would leak the activation into the main agent's assembly). Plugins pinned by a restricted chat mode stay eagerly loaded (a deliberate admin narrowing); plugins with stdio-transport MCP components are not deferred.
 - **Kill switch**: set `PLUGIN_PROGRESSIVE_LOADING=false` to revert to eager assembly.
 
-Implementation: `core/llm/plugin_loader.py` (deferral resolution / directory rendering / activation tool) plus the assembly hook in `core/llm/agent_factory.py`.
+Implementation: `core/capabilities/plugins/runtime/__init__.py` (deferral resolution / directory rendering / activation tool) plus the assembly hook in `core/llm/factory/build.py`.
 
 ## The Skill Marketplace
 
-The marketplace is an installable skill library with two sources — curated presets and community submissions — implemented in `core/services/marketplace_service.py`.
+The marketplace is an installable skill library with two sources — curated presets and community submissions — implemented in `features/marketplace/`.
 
 ### Browsing and installing
 
@@ -187,7 +205,7 @@ admin  GET/PUT /v1/admin/marketplace/skills/{slug}/visibility          (skill ma
        GET     /v1/admin/visibility/principals    ← brief user/team/role lists (picker data source)
 ```
 
-Storage: `marketplace_listing_states.visibility` (missing row = public) plus the `marketplace_visibility_grants` whitelist table; user-side resolution is centralized in `core/auth/marketplace_visibility.py` (roles include both direct assignments and team-default roles inherited via team membership).
+Storage: `marketplace_listing_states.visibility` (missing row = public) plus the `marketplace_visibility_grants` whitelist table; user-side resolution is centralized in `edition_ee/auth/marketplace_visibility.py` (roles include both direct assignments and team-default roles inherited via team membership).
 
 ## Admin skill management
 
@@ -196,7 +214,7 @@ The `/admin` console's skill management maps to `api/routes/v1/admin_skills.py` 
 - **Create/edit**: hand-written SKILL.md (`POST /`, `PUT /{id}`) or **zip upload** of an entire package (`POST /upload`, auto-detects directory prefixes, base64-encodes binaries into the DB, 200 MB cap);
 - **File-level management**: `GET/PUT/DELETE /{id}/files/{filename}` for inline editing of auxiliary files;
 - **Operations**: toggle (`/{id}/toggle`), ordering, icons, fork, bulk export/import (cross-environment migration);
-- **Dependency management**: `POST /{id}/rescan-deps` statically scans scripts for pip/apt dependencies via `core/agent_skills/deps_detector.py`, with `PUT /{id}/dependencies` for manual correction; the aggregated manifest feeds the sandbox image rebuild (see the admin dependency rebuild in the [sandbox module](sandbox.md)).
+- **Dependency management**: `POST /{id}/rescan-deps` statically scans scripts for pip/apt dependencies via `core/capabilities/skills/deps/detector.py`, with `PUT /{id}/dependencies` for manual correction; the aggregated manifest feeds the sandbox image rebuild (see the admin dependency rebuild in the [sandbox module](sandbox.md)).
 
 ## Skill distillation (Enterprise EE)
 
@@ -215,7 +233,7 @@ daily cron (default 02:30, DISTILL_CRON_EXPRESSION)
      approve → promoted to AdminSkill; reject / delete; manual trigger-daily-scan available
 ```
 
-Thresholds, keywords and budgets are all overridable via `DISTILL_*` environment variables (`core/config/distillation.py`). The distillation pipeline (`skill_distiller.py`, the scheduler) is **Enterprise EE**; the CE tree strips it, and the draft-review console only appears in the Enterprise Edition.
+Thresholds, keywords and budgets are all overridable via `DISTILL_*` environment variables (`features/distillation/config.py`). The distillation pipeline (`skill_distiller.py`, the scheduler) is **Enterprise EE**; the CE tree strips it, and the draft-review console only appears in the Enterprise Edition.
 
 ## User self-service skills (capability center)
 
@@ -229,28 +247,56 @@ Regular users (gated by the `can_add_skill` permission flag granted in the admin
 | `PUT /v1/me/skills/{id}/icon` | Set an icon |
 | `DELETE /v1/me/skills/{id}` | Delete |
 
-Private skills land in the same `AdminSkill` table (`owner_user_id` = the user); at runtime `agent_factory._filter_skill_ids_for_user` guarantees they never leak to others. Once a private skill matures, the community-publishing flow above brings it to the marketplace.
+Private skills land in the same `AdminSkill` table (`owner_user_id` = the user); at runtime `factory/selection/capabilities.py::_filter_skill_ids_for_user` guarantees they never leak to others. Once a private skill matures, the community-publishing flow above brings it to the marketplace.
+
+## Desktop Local Files and Cloud Submission
+
+Dual-mode desktop discovers valid skills at `<HUGAGENT_CAPS_ROOT>/skills/<folder>/SKILL.md`
+and `<HUGAGENT_CAPS_ROOT>/skills/local/<folder>/SKILL.md`. They appear in the device
+listing and capability cards. The visible skills page refreshes on focus and every 10 seconds.
+Duplicate IDs never overwrite existing installations; invalid folders produce diagnostics.
+These locations are in the capability store, not the execution workspace or runtime link directory.
+
+Cards indicate unsubmitted files or local changes. Only explicit comparison contacts the cloud;
+there is no automatic upload. All ordinary package files participate, including `query.json`,
+logs and caches, without purpose-based filtering. Internal `.inventory.json` is store metadata,
+not a user package file. Links, special files, unsafe paths and oversized packages are rejected.
+Suspected sensitive content requires confirmation; existing cloud credential export protection remains.
+
+Verified downloads and successful submissions capture the common baseline. Changes to different files
+merge automatically. Same-file conflicts offer local, cloud, both with a new path, or manual text merging.
+Older installations without a baseline conservatively require a choice. Submission rechecks both
+versions and retains previous cloud versions and idempotency receipts instead of silently replacing
+edits made during confirmation. Users without edit rights may create a private copy of their local
+files; cloud self-service permissions still apply.
+
+Saving files is distinct from activating cloud execution. New plugins, execution declaration changes,
+and local stdio or credential-reference configurations are saved as inactive versions and do not bypass
+existing installation or authorization rules. Valid skills and display-only metadata of existing plugins
+can update through validation. Merged database connector configuration requires confirmation in the
+local editor; it is not automatically written to the local database. Synchronization failures affect
+only submission, never conversation or continued local editing.
 
 ## Source map
 
 | Path | Description |
 |---|---|
-| `src/backend/core/agent_skills/registry.py` | SKILL.md parsing, metadata / full-spec dataclasses |
-| `src/backend/core/agent_skills/loader.py` | Multi-source loading, DB-skill materialization, sandbox path repointing |
-| `src/backend/core/agent_skills/config.py` | Source priorities, unified sandbox skills dir, built-in sync |
-| `src/backend/core/agent_skills/selector.py` | LLM-based skill selection per user intent (progressive disclosure) |
-| `src/backend/core/agent_skills/deps_detector.py` | Static pip/apt dependency detection for scripts |
-| `src/backend/core/agent_skills/backends/` | filesystem / database / composite loading backends |
+| `src/backend/core/capabilities/skills/registry.py` | SKILL.md parsing, metadata / full-spec dataclasses |
+| `src/backend/core/capabilities/skills/loader.py` | Multi-source loading, DB-skill materialization, sandbox path repointing |
+| `src/backend/core/capabilities/skills/config.py` | Source priorities, unified sandbox skills dir, built-in sync |
+| `src/backend/core/llm/skill_selection.py` | LLM-based skill selection per user intent (progressive disclosure) |
+| `src/backend/core/capabilities/skills/deps/detector.py` | Static pip/apt dependency detection for scripts |
+| `src/backend/core/capabilities/skills/backends/` | filesystem / database / composite loading backends |
 | `src/backend/core/llm/tools/skill_tool.py` | Restricted view_text_file + {baseDir} substitution + Runtime Hint |
-| `src/backend/skill_bundles/default/` | The 12 built-in skills (incl. the 10 OfficeCLI ones) |
-| `src/backend/skill_bundles/marketplace/` | The 45 installable marketplace packages |
-| `src/backend/core/services/marketplace_service.py` | Marketplace listing / install / secret injection / submission review |
-| `src/backend/api/routes/v1/marketplace.py` | User-side marketplace API (browse/install/submit/withdraw) |
-| `src/backend/api/routes/v1/admin_marketplace.py` | Admin marketplace API (global install / submission review) |
+| `src/backend/extensions/skills/default/` | The 12 built-in skills (incl. the 10 OfficeCLI ones) |
+| `src/backend/extensions/skills/marketplace/` | The 45 installable marketplace packages |
+| `src/backend/features/marketplace/` | Marketplace listing / install / secret injection / submission review |
+| `src/backend/features/marketplace/api/marketplace.py` | User-side marketplace API (browse/install/submit/withdraw) |
+| `src/backend/features/marketplace/api/admin_marketplace.py` | Admin marketplace API (global install / submission review) |
 | `src/backend/api/routes/v1/admin_skills.py` | Admin skill CRUD / zip / dependency management |
-| `src/backend/api/routes/v1/admin_skill_drafts.py` | Distillation draft review (EE) |
-| `src/backend/core/llm/skill_distiller.py` | Skill distillation LLM pipeline (EE) |
-| `src/backend/orchestration/schedulers/distillation_cron_scheduler.py` | Daily distillation scheduler (EE) |
+| `src/backend/features/distillation/api/admin_skill_drafts.py` | Distillation draft review (EE) |
+| `src/backend/features/distillation/` | Skill distillation LLM pipeline (EE) |
+| `src/backend/orchestration/workers/distillation_cron_scheduler.py` | Daily distillation scheduler (EE) |
 | `src/backend/api/routes/v1/me_capabilities.py` | User self-service skill / private MCP API |
 
 Related docs: [Sandbox execution](sandbox.md) · [MCP tool system](mcp-tools.md) · [Capability catalog](catalog.md) · [Admin console](admin-console.md) · [Editions & licensing](../editions/overview.md)

@@ -3,19 +3,19 @@ import asyncio
 import json
 import re
 from mcp import ClientSession
-from mcp.client.streamable_http import streamablehttp_client
+from mcp.client.streamable_http import streamable_http_client
 
 async def main():
-    async with streamablehttp_client("http://127.0.0.1:9120/mcp") as (reader, writer, _):
+    async with streamable_http_client("http://127.0.0.1:9120/mcp") as (reader, writer):
         async with ClientSession(reader, writer) as session:
             await session.initialize()
             names = {tool.name for tool in (await session.list_tools()).tools}
             assert names == {"search_products", "get_product", "calculate_quote"}, names
             async def call(name, args):
                 result = await session.call_tool(name, args)
-                assert not result.isError, result
-                if result.structuredContent is not None:
-                    return result.structuredContent
+                assert not result.is_error, result
+                if result.structured_content is not None:
+                    return result.structured_content
                 return json.loads(next(b.text for b in result.content if b.type == "text"))
             search = await call("search_products", {"query": "DESK-001", "limit": 5})
             assert search["ok"] and search["data"]["products"][0]["sku"] == "DESK-001"
@@ -50,7 +50,7 @@ async def main():
             strict = await session.call_tool("calculate_quote", {
                 "items": [{"sku": "DESK-001", "quantity": 500}], "requested_lead_days": True,
             })
-            assert strict.isError is True
+            assert strict.is_error is True
             print(json.dumps({"ok": True, "tools": sorted(names), "verified_quotes": results,
                               "invalid_inputs_rejected": 5, "catalog_version": product["catalog_version"]},
                              ensure_ascii=False, indent=2))

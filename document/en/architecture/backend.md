@@ -12,16 +12,18 @@ src/backend/
 ├── edition_ee/      # EE routes, License, Team/RBAC, ORM, Dify, and service implementations
 ├── orchestration/   # Chat orchestration: Run executor, workflow, strategy, citations, schedulers
 ├── core/            # Domain core: 17 submodules (auth/llm/db/ontology/services/...)
-├── mcp_servers/     # 10 standalone MCP servers (streamable-http processes)
 ├── prompts/         # Prompt assembly runtime + file fallback texts
-├── skill_bundles/   # Skill assets: default (preinstalled) + marketplace (seeds)
-├── services/        # Standalone sidecar: script_runner_service (restricted script exec)
+├── extensions/       # Bundled extensions
+│   ├── skills/       # default / marketplace
+│   ├── agents/       # default / marketplace
+│   ├── plugins/      # default / marketplace
+│   └── mcp_servers/  # MCP process implementations
 ├── scripts/         # Ops scripts: content export/import, entrypoint, init SQL
 ├── alembic/         # DB migration chain (EE main chain; CE has its own baseline, see Data Model)
 └── tests/           # pytest suite
 ```
 
-Dependencies are one-directional: `api → orchestration → core`; `mcp_servers` and `services/script_runner_service` never import backend business code — they interact only over HTTP/MCP.
+Dependencies are one-directional: `api → orchestration → core`; `extensions/mcp_servers` and `core/sandbox/runner` expose separate process entry points. The runner shares process-lifecycle primitives without loading backend settings or databases; the backend calls it over HTTP.
 
 ## core/ Submodules
 
@@ -43,13 +45,13 @@ Dependencies are one-directional: `api → orchestration → core`; `mcp_servers
 
 | File | Responsibility |
 |---|---|
-| `agent_factory.py` | The core factory `create_agent_executor`: assembles prompts, filters MCP servers, registers tools and skills, and produces an AgentScope 2.0 Agent |
+| `factory/build.py` | The core factory `create_agent_executor`: assembles prompts, filters MCP servers, registers tools and skills, and produces an AgentScope 2.0 Agent |
 | `chat_models.py` | Model factory (builds AgentScope ChatModels from DB model config) |
 | `mcp_manager.py` / `mcp_pool.py` | MCP client pool: stable connections are reused; transient ones are closed per request |
 | `tool_collector.py` | Adapts incremental `register_*` style to the 2.0 one-shot Toolkit |
 | `middlewares.py` | AgentScope 2.0 middlewares (replacing 1.x hooks): pre_reply / post_acting / post_reasoning |
 | `hooks.py` | Pure-logic helpers: file-context construction, per-turn state, model resolution |
-| `tools/` | Built-in tool registrations: `read/write/edit/glob/grep_tool.py` (general-purpose file read/write/search tools), `sandbox_tool.py` (bash + artifact staging), `myspace_tool.py` + `myspace_vfs.py` (MySpace virtual filesystem), `skill_tool.py` (skill loading), `pin_tool.py`, `read_artifact_tool.py`, `_myspace_confirm.py` (hard-pause confirmation gate for writes) |
+| `tools/` | Built-in tool registrations: `read/write/edit/glob/grep_tool.py` (general-purpose file read/write/search tools), `sandbox_tool.py` (bash + artifact staging), `skill_tool.py` (skill loading), `pin_tool.py`, `read_artifact_tool.py`, `_tool_confirmation/` (shared tool approval and interaction) |
 | `context_manager.py` / `history_summarizer.py` / `summarizer.py` | Context-window budgeting, structured history summarization, conversation summarization |
 | `offloader.py` | Spills oversized tool results to the sandbox `/workspace/.offload` for read-back |
 | `subagent_tool.py` | The `call_subagent` tool: lets the main agent dispatch tasks to sub-agents |
@@ -107,22 +109,31 @@ Enterprise Edition (EE): `team_service` / `team_folder_service` / `sso_sync` (te
 
 ### core/sandbox — sandbox providers
 
-| File | Responsibility |
-|---|---|
-| `protocol.py` | Unified sandbox provider interface and data contracts (execute / put_file / get_file / snapshots…) |
-| `factory.py` | Singleton factory selecting the provider via `SANDBOX_PROVIDER` |
-| `script_runner_provider.py` | Lightweight stateless execution wrapping the script-runner container (CE default) |
-| `opensandbox_provider.py` + `_opensandbox_*.py` (Enterprise Edition, EE) | OpenSandbox persistent sandbox: session, snapshot, and file-op mixins |
-| `cube_provider.py` (Enterprise Edition, EE) | Tencent CubeSandbox (E2B-compatible MicroVM) provider |
-| `_pool.py` | Sandbox pre-warm pool |
-| `errors.py` / `_common.py` | Unified exceptions and shared helpers |
+The root contains only the protocol, errors, factory, and package initializer. Implementations are grouped by provider and shared responsibility.
 
-### core/agent_skills — the skill engine
+| File/Package | Responsibility |
+|---|---|
+| `protocol.py` / `errors.py` / `factory.py` | Interfaces, data contracts, exceptions, and provider selection via `SANDBOX_PROVIDER` |
+| `providers/script_runner/` | HTTP client and authentication for script-runner |
+| `providers/opensandbox/` | OpenSandbox provider, session creation/lifecycle, snapshots, volumes, transport, warm pool, and recovery (shared by CE/EE) |
+| `providers/cube/` (Enterprise Edition, EE) | Tencent CubeSandbox (E2B-compatible MicroVM) provider |
+| `providers/evaluation/` | Evaluation sandbox bindings and process limits |
+| `providers/edition.py` / `providers/account_env.py` | Edition adapter and account environment assembly |
+| `runner/` | Standalone execution service; Docker and desktop use `core.sandbox.runner.server:app` |
+| `processes/` | Foreground/background processes, output, deadlines, cloud adapters, and thread/event-loop dispatch |
+| `sessions/` | Session registry, routing, binding, keepalive, and metadata |
+| `workspace/` | Local/container/desktop paths, mounts, archives, streaming writes, and temporary credential cleanup |
+| `permissions/` | Local path/command permission evaluation and OS sandbox admission |
+| `oslayer/` | OS isolation policy models, path rules, policy builders, and platform execution |
+
+The runner depends only on process and path primitives that do not load backend settings or databases. OpenSandbox-specific components stay with that provider; shared processes, paths, and account environment support serve both OpenSandbox and Cube.
+
+### core/capabilities/skills — the skill engine
 
 | File | Responsibility |
 |---|---|
 | `loader.py` + `registry.py` | Multi-source skill loading and registration (SKILL.md spec, skill-creator aligned) |
-| `backends/` | Storage backend abstraction: `filesystem` (skill_bundles), `database` (admin_skills table), `composite` merge |
+| `backends/` | Storage backend abstraction: `filesystem` (extensions/skills), `database` (admin_skills table), `composite` merge |
 | `selector.py` | Dynamically selects skills based on user intent |
 | `skill_archive.py` | Builds and caches tar.gz archives of skill directories for fast sandbox delivery |
 | `deps_detector.py` | Detects pip/npm/apt runtime dependencies from a skill's bundled files |
@@ -133,12 +144,12 @@ Enterprise Edition (EE): `team_service` / `team_folder_service` / `sso_sync` (te
 | Submodule | Responsibilities and key files |
 |---|---|
 | `core/chat` | Workflow context assembly (`context.py`), SSE tool-log event construction (`tool_log.py`) |
-| `core/content` | Attachment parsing (`file_parser.py`), KB document chunking/keywords/vectorization (`kb_processing.py`), upload validation (`file_validation.py`), artifact reading and summaries (`artifact_reader/refs/summary.py`), content-block import/export (`content_blocks.py`), `svg_fit.py` |
-| `core/kb` / `edition_ee/kb` | Shared private-KB parsing and Milvus vector storage stay in `core/kb`; the Dify client and external retrieval adapter live only in `edition_ee/kb` (EE) |
-| `core/artifacts` | Artifact store `store.py`: local / OSS dual mode |
-| `core/infra` | Unified responses (`responses.py`), exceptions (`exceptions.py`), structured logging (`logging.py`), rate limiting (`rate_limit.py`), Redis singleton (`redis.py`), metrics (`metrics.py`), background-task registry (`runtime_state.py`), data masking (`data_masking.py`), distillation budget gates (`distillation_budget.py`, Enterprise Edition, EE) |
+| `core/files/content` | Attachment parsing (`file_parser.py`), KB document chunking/keywords/vectorization (`kb_processing.py`), upload validation (`file_validation.py`), artifact reading and summaries (`artifact_reader/refs/summary.py`), content-block import/export (`content_blocks.py`), `svg_fit.py` |
+| `features/knowledge` / `edition_ee/kb` | Shared private-KB parsing and Milvus vector storage stay in `features/knowledge`; the Dify client and external retrieval adapter live only in `edition_ee/kb` (EE) |
+| `core/files/artifacts` | Artifact store `store.py`: local / OSS dual mode |
+| `core/infra` | Unified responses (`responses.py`), exceptions (`exceptions.py`), structured logging (`logging.py`), Redis singleton (`redis.py`), metrics (`metrics.py`), background-task registry (`runtime_state.py`), data masking (`data_masking.py`), distillation budget gates (`distillation_budget.py`, Enterprise Edition, EE) |
 | `edition_ee/licensing` | Feature enums, signature verification, clock guard, seat policy, middleware, and the manager all exist only in EE; the CE tree has no License package and gets a fixed edition probe from its `api/middleware/edition.py` overlay |
-| `core/storage` | Storage protocol `protocol.py` + factory `factory.py`; `local.py` (CE), `s3.py` / `oss.py` (Enterprise Edition, EE) |
+| `core/files/storage` | Storage protocol `protocol.py` + factory `factory.py`; `local.py` (CE), `s3.py` / `oss.py` (Enterprise Edition, EE) |
 
 ## orchestration/ — the orchestration layer
 
@@ -155,7 +166,6 @@ Enterprise Edition (EE): `team_service` / `team_folder_service` / `sso_sync` (te
 | `registry.py` | Agent registry |
 | `tool_payloads.py` | SSE tool_result payload builders (artifact cards, skill loading, and other special shapes) |
 | `tool_callbacks.py` | Tool-call soft warnings (observation only — never blocks) |
-| `batch_orchestrator.py` | Batch execution orchestration (phase 2 of the batch flow) |
 | `subagents/plan_mode.py` | Plan-mode sub-agent: generates and executes structured plans |
 | `schedulers/automation_scheduler.py` | Automation scheduler: polls the DB for due tasks and fires them |
 | `schedulers/distillation_cron_scheduler.py` (Enterprise Edition, EE) | Daily skill-distillation cron |
@@ -164,7 +174,7 @@ Enterprise Edition (EE): `team_service` / `team_folder_service` / `sso_sync` (te
 
 ### Application and middleware
 
-`api/app.py` creates the FastAPI app and runs startup hooks serially in its lifespan: table fallback → Run recovery → stale-Run reaper → sandbox pool warm-up → page-config / prompt-version seeding → MCP catalog sync → preloading → automation and distillation schedulers → memory warm-up. Middleware lives in `api/middleware/`: `cors.py`, `logging.py` (structured request logs + trace_id), and `error_handler.py` (exceptions → unified error envelope). `api/deps.py` provides auth and user-resolution dependencies, `api/health.py` the health checks, and `api/schemas.py` the shared Pydantic models.
+`api/app.py` creates the FastAPI app and runs startup hooks serially in its lifespan: table fallback → Run recovery → stale-Run reaper → sandbox pool warm-up → page-config / prompt-version seeding → MCP catalog sync → preloading → automation and distillation schedulers → memory warm-up. Middleware lives in `api/middleware/`: `cors.py`, `logging.py` (structured request logs + trace_id), and `error_handler.py` (exceptions → unified error envelope). `api/deps.py` provides auth and user-resolution dependencies, `api/health.py` the health checks, and `core/chat/schemas.py` the shared Pydantic models.
 
 ### The router registry (CE/EE seam C1)
 
@@ -178,17 +188,17 @@ CE routes live under `api/routes/v1/`; physically split commercial routes live u
 |---|---|
 | Chat and streaming | `chats.py` (the SSE streaming entry point), `chat_runs.py`, `chat_shares.py`, `summary.py`, `classify.py`, `memories.py` |
 | Content and files | `content.py`, `file_upload.py`, `file_parse.py`, `artifacts.py`, `myspace_folders.py`, `kb.py` (+ `kb_models.py`, Pydantic models only), `projects.py` |
-| Capabilities and config | `catalog.py`, `models.py`, `config.py`, `marketplace.py`, `me_capabilities.py` (self-service capability center), `ontologies.py` (user setting, version governance, evidence loop), `agents.py`, `plans.py`, `automations.py`, `batch.py` + `internal_batch.py`, `meta.py` (edition / feature probe, unauthenticated) |
+| Capabilities and config | `catalog.py`, `models.py`, `config.py`, `marketplace.py`, `me_capabilities.py` (self-service capability center), `ontologies.py` (user setting, version governance, evidence loop), `agents.py`, `plans.py`, `automations.py`, `meta.py` (edition / feature probe, unauthenticated) |
 | Users and auth | `users.py`, `me.py`, `api_keys.py`, `mock_sso.py` (dev) |
 | Content console (Enterprise Edition, EE; backend of `/admin`) | `admin_skills.py`, `admin_prompts.py`, `admin_kb.py`, `admin_agents.py`, `admin_mcp_servers.py`, `admin_marketplace.py`, `admin_skill_drafts.py`, `admin_sandbox.py`, `admin_logs.py`, `admin_usage_logs.py`, `admin_billing.py`, `admin_chat_history.py` |
 | System console (Enterprise Edition, EE; backend of `/config`) | `config_users.py`, `config_teams.py`, `config_invites.py`, `config_security.py`, `config_verify.py`, `config_license.py`, `service_configs.py` |
 | Other Enterprise Edition (EE) | `auth.py` (SSO ticket exchange), `audit.py`, `team_files.py`, `data_sources.py`, `db_metadata.py`, `gateway_admin.py`, `gateway_anthropic.py` |
 
-## mcp_servers/ and sidecars
+## extensions/mcp_servers/ and sidecars
 
-`mcp_servers/` hosts 9 servers: `internet_search_mcp`, `web_fetch_mcp`, `generate_chart_tool_mcp`, `batch_runner_mcp`, `automation_task_mcp`, `skill_manager_mcp`, `retrieve_dataset_content_mcp`, plus the intranet-dependent `query_database_mcp` and `ai_chain_information_mcp` (Enterprise Edition, EE). Shared plumbing: `_launcher.py` (spawns all processes inside the mcp container according to the `_ports.py` port table), `_serve.py`, `_common.py`, `_retrieve_cleaning.py`. Word, Excel, and other document exports are handled by Agent skills inside the sandbox.
+`extensions/mcp_servers/` hosts the servers: `internet_search_mcp`, `web_fetch_mcp`, `automation_task_mcp`, `skill_manager_mcp`, `retrieve_dataset_content_mcp`, plus the intranet-dependent `query_database_mcp` and `ai_chain_information_mcp` (Enterprise Edition, EE). Shared plumbing: `_launcher.py` (starts process servers using registry placement and ports), `_serve.py`, `_common.py`, `_retrieve_cleaning.py`. Word, Excel, and other document exports are handled by Agent skills inside the sandbox.
 
-`services/script_runner_service/server.py` is the skill-script execution sidecar: its own container, resource-limited subprocesses, and no database / Redis / API-key access.
+`core/sandbox/runner/server.py` is the skill-script execution sidecar: its own container, resource-limited subprocesses, and no database / Redis / API-key access.
 
 ## prompts/ — prompt assembly
 
@@ -208,11 +218,13 @@ CE routes live under `api/routes/v1/`; physically split commercial routes live u
 |---|---|
 | App entry and startup hooks | `src/backend/api/app.py` |
 | Router registry | `src/backend/api/routes/v1/__init__.py` |
-| Agent factory | `src/backend/core/llm/agent_factory.py` |
-| Run executor / workflow | `src/backend/orchestration/chat_run_executor.py`, `workflow.py` |
-| Capability catalog | `src/backend/core/config/catalog.py` |
+| Agent factory | `src/backend/core/llm/factory/build.py` |
+| Run executor / workflow | `src/backend/core/chat/runtime/`, `workflow.py` |
+| Capability catalog | `src/backend/core/capabilities/catalog/` |
 | Sandbox protocol | `src/backend/core/sandbox/protocol.py` |
 | Memory pipeline | `src/backend/core/memory/pipeline.py` |
 | EE License implementation / CE edition middleware | `src/backend/edition_ee/licensing/`, `src/backend/api/middleware/edition.py` |
-| Skill engine | `src/backend/core/agent_skills/loader.py` |
-| MCP port table | `src/backend/mcp_servers/_ports.py` |
+| Skill engine | `src/backend/core/capabilities/skills/loader.py` |
+| MCP registry and ports | `src/backend/extensions/mcp_servers/registry.py`, `_ports.py` |
+
+The space MCP interface lives in `extensions/mcp_servers/space_files_mcp/`. The registry separates installation placement from exposure. Hybrid desktops access spaces through the capability gateway; mutations use unified approval. See [space file mounts](../deployment/space-files.md).

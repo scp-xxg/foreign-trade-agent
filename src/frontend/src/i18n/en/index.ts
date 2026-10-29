@@ -1,7 +1,14 @@
-// Modified by foreign-trade-agent contributors, 2026-10-21; see CHANGES_FOREIGN_TRADE.md.
+// Modified by foreign-trade-agent contributors, 2026-10-28; see CHANGES_FOREIGN_TRADE.md.
+import { PERSONAL_AGENT_DICT } from './personalAgent';
+import { WORKBENCH_DICT } from './workbench';
+import { WORKBENCH_AUTH_DICT } from './workbenchAuth';
+import { ARCHIVE_DICT } from './archive';
+import { PROJECT_ENVIRONMENT_DICT } from "./projectEnvironment";
+import MODEL_REASONING_DICT from './modelReasoning';
 /** Community-edition English dictionaries only. */
 import { CORE_DICT } from './core';
 import { CHAT_DICT } from './chat';
+import { CHAT_FORK_DICT } from './chatFork';
 import { HOOKS_DICT } from './hooks';
 import { PANELS_DICT } from './panels';
 import { TOOL_DICT } from './tool';
@@ -14,14 +21,29 @@ import { STORES_DICT } from './stores';
 import { APIDOC_DICT } from './apidoc';
 import { AGENT_MARKET_DICT } from './agentMarket';
 import { ONBOARDING_DICT } from './onboarding';
+import { APPLICATION_HOSTING_DICT } from './applicationHosting';
 import { CE_SHARED_DICT } from './ceShared';
+import { SIDEBAR_LAYOUT_DICT } from './sidebarLayout';
+
 import { FOREIGN_TRADE_DICT } from './foreignTrade';
 import { FOREIGN_TRADE_INQUIRY_DICT } from './foreignTradeInquiry';
 import { FOREIGN_TRADE_CONTENT_DICT } from './foreignTradeContent';
+import { FOREIGN_TRADE_COLLABORATION_DICT } from './foreignTradeCollaboration';
 
 export const EN_DICT: Record<string, string> = {
+  ...FOREIGN_TRADE_DICT,
+  ...FOREIGN_TRADE_INQUIRY_DICT,
+  ...FOREIGN_TRADE_CONTENT_DICT,
+  ...FOREIGN_TRADE_COLLABORATION_DICT,
+  ...PERSONAL_AGENT_DICT,
+  ...WORKBENCH_DICT,
+  ...WORKBENCH_AUTH_DICT,
+  ...ARCHIVE_DICT,
+  ...PROJECT_ENVIRONMENT_DICT,
   ...CORE_DICT,
+  ...MODEL_REASONING_DICT,
   ...CHAT_DICT,
+  ...CHAT_FORK_DICT,
   ...HOOKS_DICT,
   ...PANELS_DICT,
   ...TOOL_DICT,
@@ -35,7 +57,6 @@ export const EN_DICT: Record<string, string> = {
   ...AGENT_MARKET_DICT,
   ...ONBOARDING_DICT,
   ...CE_SHARED_DICT,
-  ...FOREIGN_TRADE_DICT,
-  ...FOREIGN_TRADE_INQUIRY_DICT,
-  ...FOREIGN_TRADE_CONTENT_DICT,
+  ...SIDEBAR_LAYOUT_DICT,
+  ...APPLICATION_HOSTING_DICT,
 };

@@ -1,0 +1,6 @@
+/* App Center uses the same icon/title/description cards as the other application pages. */
+.jx-agentCard.jx-appCenterCard{display:block;width:100%;font:inherit;text-align:left;color:var(--color-text);}
+.jx-appCenterCard .jx-agentCard-body{display:flex;}
+.jx-appCenterCard .jx-applicationIcon{width:28px;height:28px;border-radius:50%;}
+.jx-appCenterCard-source{font-size:12px;line-height:1.5;color:var(--color-text-secondary);}
+.jx-appCenterCard:focus-visible{outline:2px solid var(--color-primary);outline-offset:2px;}

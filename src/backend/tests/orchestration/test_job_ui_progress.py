@@ -22,25 +22,30 @@ from core.chat.tool_log import attach_subagent_step
 @pytest.fixture()
 def pushed(monkeypatch) -> List[Dict[str, Any]]:
     """截获 _subagent_stream 旁路上真正被推出去的事件。"""
-    from core.llm import _subagent_stream
+    from core.llm.subagents import stream as _subagent_stream
 
     events: List[Dict[str, Any]] = []
     monkeypatch.setattr(_subagent_stream, "is_active", lambda chat_id: True)
-    monkeypatch.setattr(
-        _subagent_stream, "push", lambda chat_id, payload: events.append(payload)
-    )
+    monkeypatch.setattr(_subagent_stream, "push", lambda chat_id, payload: events.append(payload))
     return events
 
 
 def test_ui_progress_carries_numbers_and_dodges_the_swallowed_sub_type(pushed):
-    from orchestration import job_runtime
+    import core.jobs.notifications as job_runtime
 
     job_runtime._emit_ui_progress(
         "chat_1",
         "job_1",
         "补全展品",
-        {"total": 568, "settled": 128, "done": 120, "failed": 3, "not_found": 5,
-         "running": 8, "pending": 432},
+        {
+            "total": 568,
+            "settled": 128,
+            "done": 120,
+            "failed": 3,
+            "not_found": 5,
+            "running": 8,
+            "pending": 432,
+        },
     )
 
     assert len(pushed) == 1
@@ -53,8 +58,8 @@ def test_ui_progress_carries_numbers_and_dodges_the_swallowed_sub_type(pushed):
 
 
 def test_ui_progress_binds_to_the_current_tool_call(pushed):
-    from core.llm.middlewares import CURRENT_TOOL_CALL_ID
-    from orchestration import job_runtime
+    import core.jobs.notifications as job_runtime
+    from core.harness.tool_call_context import CURRENT_TOOL_CALL_ID
 
     token = CURRENT_TOOL_CALL_ID.set("call_abc")
     try:
@@ -67,8 +72,8 @@ def test_ui_progress_binds_to_the_current_tool_call(pushed):
 
 def test_ui_progress_silent_without_an_active_stream(monkeypatch):
     """后台作业跑到主对话已经收尾之后：没有监听者就什么都别推。"""
-    from core.llm import _subagent_stream
-    from orchestration import job_runtime
+    import core.jobs.notifications as job_runtime
+    from core.llm.subagents import stream as _subagent_stream
 
     pushes: List[Any] = []
     monkeypatch.setattr(_subagent_stream, "is_active", lambda chat_id: False)

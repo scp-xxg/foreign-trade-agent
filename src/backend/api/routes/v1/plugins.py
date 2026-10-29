@@ -25,6 +25,7 @@ admins can use them without exposing the instance-wide app setup to ordinary use
 """
 
 from __future__ import annotations
+from features.marketplace import plugin_market
 
 import json
 import logging
@@ -38,10 +39,11 @@ from api.deps import require_system_settings
 from core.auth.backend import UserContext, get_current_user
 from core.auth.capabilities import resolve_user_capabilities
 from core.db.engine import get_db
-from core.infra.exceptions import AccessDeniedError, BadRequestError
+from core.infra.exceptions import AccessDeniedError, BadRequestError, ResourceNotFoundError
 from core.infra.responses import created_response, success_response
-from core.services import marketplace_listing as ml
-from core.services import plugin_service as ps
+from features.marketplace import edition as ml
+from core.capabilities.plugins import management as ps
+from core.harness.registry.run_capabilities import has_run_capabilities
 
 router = APIRouter(prefix="/v1/plugins", tags=["Plugin"])
 logger = logging.getLogger(__name__)
@@ -61,7 +63,9 @@ def _parse_secrets(secrets: Optional[str]) -> Dict[str, str]:
 def _require_can_import_plugin(user_id: str, db: Session) -> None:
     """Plugin install/import permission: personal explicit (user management) -> team default (team management) -> off by default."""
     if not resolve_user_capabilities(db, user_id)["can_import_plugin"]:
-        raise AccessDeniedError(message="管理员未开放插件安装/导入功能", reason="can_import_plugin_disabled")
+        raise AccessDeniedError(
+            message="管理员未开放插件安装/导入功能", reason="can_import_plugin_disabled"
+        )
 
 
 @router.get("", summary="内置插件包列表")
@@ -69,7 +73,7 @@ def list_plugins(
     user: UserContext = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    items = ps.list_plugins(db, owner_user_id=str(user.user_id))
+    items = plugin_market.list_plugins(db, owner_user_id=str(user.user_id))
     return success_response(data={"items": items})
 
 
@@ -78,9 +82,15 @@ def list_installed(
     user: UserContext = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
-    return success_response(data={"items": ps.list_installed(
-        db, owner_user_id=str(user.user_id), include_global=True
-    )})
+    from features.desktop.capabilities import device_catalog
+
+    items = ps.list_installed(db, owner_user_id=str(user.user_id), include_global=True)
+    # 云端账号装的插件登记在本机登记表里、业务库没有行，要投影进来才看得到。按 slug
+    # 合并：install_id 两边天生对不上（见 merge_items_by_id），云端那份的信息为准。
+    items = device_catalog.merge_items(
+        items, device_catalog.plugin_entries(user_id=str(user.user_id)), key="slug"
+    )
+    return success_response(data={"items": items})
 
 
 @router.get("/installed/{install_id}/detail", summary="已安装插件详情（含组件）")
@@ -90,9 +100,15 @@ def get_installed_detail(
     db: Session = Depends(get_db),
 ):
     """已安装插件的完整详情：技能（含指令/文件清单）+ MCP（含工具列表）。"""
-    return success_response(data=ps.get_installed_detail(
-        db, install_id, owner_user_id=str(user.user_id)
-    ))
+    # 云端同步来的插件在本机业务库里查不到，走登记表那份，否则详情页直接 404。
+    from features.desktop.capabilities import device_catalog
+
+    projected = device_catalog.plugin_detail(install_id, user_id=str(user.user_id))
+    if projected is not None:
+        return success_response(data=projected)
+    return success_response(
+        data=ps.get_installed_detail(db, install_id, owner_user_id=str(user.user_id))
+    )
 
 
 @router.get("/feishu-cli/app/status", summary="查询飞书插件共享应用初始化状态")
@@ -102,23 +118,23 @@ async def get_feishu_app_status(_: str = Depends(require_system_settings)):
     CE does not ship the Config console, so the system-settings capability is
     the shared authorization seam for both CE instance admins and EE admins.
     """
-    from core.services.lark_service import LarkService
+    from integrations.lark.service import LarkService
 
-    return success_response(data=LarkService(None).app_status())
+    return success_response(data=LarkService().app_status())
 
 
 @router.post("/feishu-cli/app/init", summary="从飞书插件页发起共享应用初始化")
 async def init_feishu_app(_: str = Depends(require_system_settings)):
-    from core.services.lark_service import LarkService
+    from integrations.lark.service import LarkService
 
-    return success_response(data=await LarkService(None).start_app_init())
+    return success_response(data=await LarkService().start_app_init())
 
 
 @router.post("/feishu-cli/app/reset", summary="从飞书插件页重置共享应用")
 async def reset_feishu_app(_: str = Depends(require_system_settings)):
-    from core.services.lark_service import LarkService
+    from integrations.lark.service import LarkService
 
-    return success_response(data=await LarkService(None).reset_app())
+    return success_response(data=await LarkService().reset_app())
 
 
 @router.get("/{slug}", summary="内置插件详情")
@@ -132,7 +148,9 @@ def get_plugin(
 
 
 class InstallRequest(BaseModel):
-    secrets: Dict[str, str] = Field(default_factory=dict, description="凭据键值（按 required_secrets 提供）")
+    secrets: Dict[str, str] = Field(
+        default_factory=dict, description="凭据键值（按 required_secrets 提供）"
+    )
 
 
 @router.post("/{slug}/install", status_code=201, summary="从插件市场安装（私有）")
@@ -145,29 +163,47 @@ def install_plugin(
     # Both installing from and importing into the plugin marketplace require can_import_plugin
     # (same as the skill marketplace's can_add_skill); granted per user via the Config backend
     # "User Management -> Permission Config". Admin global install goes through admin_plugins.
+    if has_run_capabilities():
+        from features.desktop.local.market_install import install_plugin as install_local
+
+        return created_response(data=install_local(db, str(user.user_id), slug, body.secrets))
     _require_can_import_plugin(str(user.user_id), db)
     ml.ensure_item_visible(db, ml.KIND_PLUGIN, slug, str(user.user_id), resource="plugin")
     result = ps.install_plugin(
-        db, slug, owner_user_id=str(user.user_id),
-        secrets=body.secrets, created_by=str(user.user_id),
+        db,
+        slug,
+        owner_user_id=str(user.user_id),
+        secrets=body.secrets,
+        created_by=str(user.user_id),
     )
     return created_response(data=result)
 
 
 @router.post("/import", status_code=201, summary="导入外部插件（上传 zip）")
-async def import_plugin(
+def import_plugin(
     file: UploadFile = File(..., description="插件包 .zip（native / Claude Code / Codex）"),
     secrets: Optional[str] = Form(None, description="凭据 JSON 字符串"),
     user: UserContext = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
     """上传插件 zip 并导入（私有）。返回 import_report（imported / adapted / dropped）。"""
+    if has_run_capabilities():
+        from features.desktop.local.skills.editor import install_archive
+
+        if _parse_secrets(secrets):
+            raise BadRequestError(message="本机插件凭据请通过连接配置设置，不写入插件包")
+        return created_response(
+            data=install_archive(str(user.user_id), file.file.read(), "plugin")
+        )
     _require_can_import_plugin(str(user.user_id), db)
-    raw = await file.read()
+    raw = file.file.read()
     secret_map = _parse_secrets(secrets)
     result = ps.import_plugin_from_zip(
-        db, raw, owner_user_id=str(user.user_id),
-        secrets=secret_map, created_by=str(user.user_id),
+        db,
+        raw,
+        owner_user_id=str(user.user_id),
+        secrets=secret_map,
+        created_by=str(user.user_id),
     )
     return created_response(data=result)
 
@@ -178,6 +214,15 @@ def uninstall_plugin(
     user: UserContext = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    if install_id.startswith("plugin:local:"):
+        from features.desktop.local.plugins import service as local
+
+        try:
+            current = local.get(str(user.user_id), install_id)
+            result = local.uninstall(str(user.user_id), install_id, current["revision"])
+        except PermissionError as exc:
+            raise ResourceNotFoundError("plugin", install_id) from exc
+        return success_response(data=result)
     result = ps.uninstall_plugin(db, install_id, owner_user_id=str(user.user_id))
     return success_response(data=result)
 
@@ -197,6 +242,12 @@ def set_installed_meta(
 ):
     """展示信息（名称/分类/图标）是界面配置：用户自己导入/安装的私有插件由用户在此
     配置；管理员全局插件走 admin 接口，普通用户不可改。"""
+    if has_run_capabilities() and install_id.startswith("plugin:local:"):
+        from features.desktop.local.plugins.service import set_presentation
+
+        return success_response(
+            data=set_presentation(str(user.user_id), install_id, body.model_dump(exclude_none=True))
+        )
     return success_response(
         data=ps.set_installed_plugin_meta(
             db,
@@ -220,6 +271,12 @@ def set_enabled(
     user: UserContext = Depends(get_current_user),
     db: Session = Depends(get_db),
 ):
+    # 云端同步来的插件登记在本机登记表里，业务库没有行——写用户覆盖既不生效也读不回来。
+    from features.desktop.capabilities import device_catalog
+
+    if device_catalog.set_plugin_enabled(install_id, body.enabled, user_id=str(user.user_id)):
+        return success_response(data={"install_id": install_id, "enabled": body.enabled})
+
     # Each user toggles on their own (writes a per-user override); global plugins can also be
     # enabled/disabled per user without affecting others.
     result = ps.set_plugin_enabled_for_user(

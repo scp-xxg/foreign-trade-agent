@@ -67,31 +67,33 @@ export interface PageConfig {
 // 当前默认的取舍：能力中心从底部菜单提到一级导航（其四类能力做成二级导航）；定时任务从应用中心、
 // 站点从实验室各自拆出来成一级导航；知识库并入我的空间的 Tab、智能体并入能力中心的二级导航，
 // 因此都不再单列；应用中心与项目反向下沉到用户下拉菜单，主导航只留高频入口。
-export const DEFAULT_SIDEBAR_ITEMS = ['ability_center', 'trade_inquiries', 'trade_content', 'automation', 'sites', 'my_space'];
+export const DEFAULT_SIDEBAR_ITEMS = ['ability_center', 'trade_inquiries', 'trade_content', 'trade_collaboration', 'automation', 'sites', 'my_space'];
 export const DEFAULT_MENU_ITEMS = ['settings', 'app_center', 'projects', 'lab'];
 
 export const DEFAULT_PAGE_CONFIG: PageConfig = {
   branding: {
     product_name: 'HugAgentOS',
-    product_subtitle: '外贸产品查询与询盘报价',
+    product_subtitle: '外贸业务，对话即入口',
     logo_url: '/home/header.svg',
     favicon_url: '/icon.png',
     page_title: 'HugAgentOS',
-    hero_title: '外贸询盘，从产品查询到报价',
-    hero_subtitle: '查规格与起订量，算阶梯价与包装费，起草英文询盘回复。',
-    disclaimer: '演示数据：产品、价格和交期均为模拟；报价草案不含运费、税费等未核定费用，实际交易前须人工确认。',
+    hero_title: '用对话完成询盘、上品与跨岗位协同',
+    hero_subtitle: '核验买家、处理报价与产品资料，按岗位分工并人工验收交接。',
+    disclaimer: '真实公开资料保留来源；报价目录为模拟数据。所有回复与上品结果均是待审核草稿，不自动发送或发布。',
   },
   homepage: {
     show_logo: true,
     logo_url: '/icon.png',
     show_suggestions: true,
     suggested_questions: [
-      '查找办公收纳产品，帮我对比规格和起订量。',
+      '基于我的 LYRECO 演示询盘创建跨岗位协同，安排销售、采购、设计、运营、合规的负责人标签、依赖和验收标准。Raspberry Pi 资料仅作独立参考。',
+      '检查我的跨岗位协同：哪些任务被依赖或来源版本变化阻塞，哪些待人工验收？',
+      '核验 LYRECO 法国公司的官网 https://www.lyreco.com/group/ 和公开登记资料，说明已知事实与未核实事项。',
       '查询 DESK-001 的规格、起订量和阶梯价。',
-      'DESK-001，500 件，标准包装，发往西班牙，请报价并起草英文回复。',
-      '对比 DESK-001 采购 500 件和 2000 件的报价。',
-      'DESK-001，1000 件，定制包装，请列明货值和包装费。',
-      '客户询问 DESK-001 但未提供数量，请起草英文澄清邮件。',
+      '创建演示询盘：DESK-001，500 件，标准包装，发往西班牙，计算报价并生成中英文回复草稿。',
+      '列出我的询盘和待跟进事项，不修改已有记录。',
+      '用 Raspberry Pi 5 的公开示例资料和授权照片制作英文上品资料、图片和 FAQ，先列出事实供我确认。',
+      '根据我上传的产品资料和图片整理事实、来源与缺失项，我确认后再生成英文资料包。',
     ],
   },
   navigation: {
@@ -99,6 +101,7 @@ export const DEFAULT_PAGE_CONFIG: PageConfig = {
       ability_center: '能力中心',
       trade_inquiries: '询盘工作台',
       trade_content: '产品内容工作台',
+      trade_collaboration: '跨岗位协同',
       skills: '技能',
       agents: '智能体',
       mcp: '连接器',
@@ -109,7 +112,6 @@ export const DEFAULT_PAGE_CONFIG: PageConfig = {
       settings: '系统设置',
       my_space: '我的空间',
       projects: '项目',
-      project_detail: '项目详情',
       automation: '定时任务',
       sites: '站点',
     },
@@ -117,6 +119,7 @@ export const DEFAULT_PAGE_CONFIG: PageConfig = {
       ability_center: '智能体基础能力管理，包含智能体、技能、连接器与插件',
       trade_inquiries: '核验买家公开资料、处理询盘报价并管理跟进待办。',
       trade_content: '上传产品资料与原图，核对事实，生成英文上品资料、商品素材和客服 FAQ。',
+      trade_collaboration: '当前账号下按角色协调任务，核对依赖、来源版本与人工验收。',
       skills: '启用/停用技能，并查看详细介绍、输入输出与示例。',
       agents: '选择与启用智能体，并查看其职责边界与路由提示。',
       mcp: '管理 MCP连接器服务，并查看其作用范围与可靠性影响。',
@@ -127,7 +130,6 @@ export const DEFAULT_PAGE_CONFIG: PageConfig = {
       settings: '',
       my_space: '',
       projects: '把对话、文件和指令打包成专属工作空间',
-      project_detail: '',
       automation: '按计划自动执行任务，也可随时手动触发；在对话中描述即可快速创建',
       sites: '在对话里描述需求，AI 生成完整网站并一键发布，由平台托管、凭链接即可访问',
     },
@@ -145,8 +147,8 @@ export const DEFAULT_PAGE_CONFIG: PageConfig = {
     menu_items: [...DEFAULT_MENU_ITEMS],
   },
   texts: {
-    input_placeholder: '输入产品名称或 SKU，或粘贴客户询盘…',
-    input_placeholder_agent: '输入产品名称或 SKU，或粘贴客户询盘…',
+    input_placeholder: '粘贴询盘，或上传产品资料和图片，告诉我需要完成什么…',
+    input_placeholder_agent: '粘贴询盘，或上传产品资料和图片，告诉我需要完成什么…',
     search_placeholder: '搜索对话',
     btn_new_chat: '新建对话',
     btn_logout: '退出',
@@ -156,7 +158,7 @@ export const DEFAULT_PAGE_CONFIG: PageConfig = {
     dialog_logout_confirm_title: '确认退出登录？',
     dialog_logout_confirm_content: '退出登录不会丢失任何数据，重新登录后可继续使用。',
     dialog_logout_confirm_ok: '退出登录',
-    recommend_banner_text: '试试产品查询或询盘报价；当前使用模拟产品目录，所有报价仅供演示。',
+    recommend_banner_text: '通过外贸插件在对话中处理业务；工作台用于辅助查看、核对与编辑。',
   },
   defaults: {
     chat_mode: 'fast',
