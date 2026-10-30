@@ -9,6 +9,7 @@ from core.db.models.column_types import INETType, JSONType
 from core.db.models.foreign_trade import ForeignTradeInquiry
 from core.db.models.foreign_trade_content import ForeignTradeContentPack
 from core.db.models.foreign_trade_collaboration import ForeignTradeCollaboration
+from core.db.models.foreign_trade_review import ForeignTradeKnowledgeRule, ForeignTradeReview
 
 from core.db.edition import EDITION_MODEL_EXPORTS
 from core.db.models.chat import ChatCompactionState, ChatMessage, ChatSession
@@ -85,6 +86,8 @@ __all__ = [
     'ForeignTradeInquiry',
     'ForeignTradeContentPack',
     'ForeignTradeCollaboration',
+    'ForeignTradeKnowledgeRule',
+    'ForeignTradeReview',
     'ChatMode',
     'Base',
     'JSONType',

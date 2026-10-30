@@ -104,7 +104,7 @@ assert.equal(useChatStore.getState().store.chats['slow-a'].modeSlug,'mode-a');
 assert.equal(useChatStore.getState().store.chats['slow-a'].thinkingEffort,'high');
 assert.equal(sent.at(-1)?.mode_slug,'mode-a');
 
-// Queuing captures text/capabilities; unsupported attachment/reference fields stay in the draft.
+// Queuing captures text, capabilities and its quote; unsent attachments stay in the draft.
 useChatStore.setState({currentChatId:'queue-owner',sending:true,planMode:false,loopMode:false,queuedMessages:{}});
 const retained = new File(['later'],'later.txt');
 readComposer().setInput('Next turn');
@@ -115,7 +115,8 @@ await actions.send();
 assert.equal(useChatStore.getState().queuedMessages['queue-owner'].content,'Next turn');
 assert.equal(readComposer().input,'');
 assert.deepEqual(readComposer().uploadedFiles,[retained]);
-assert.equal(readComposer().quotedFollowUp?.text,'Quoted question');
+assert.equal(useChatStore.getState().queuedMessages['queue-owner'].invocation?.quote?.text,'Quoted question');
+assert.equal(readComposer().quotedFollowUp,null,'the captured quote belongs to the queued turn, not a future draft');
 assert.equal(readComposer().activePlugin,null);
 console.log('PASS: async send preserves draft owners/configuration/edits, queue consumes only its payload');
 
@@ -146,12 +147,13 @@ globalThis.fetch=async (input,init) => {
   if(String(input).endsWith('/v1/agents/responses')){
     const payload=JSON.parse(String(init?.body));
     assert.equal(payload.plugin_id,'queued-plugin');
+    assert.equal(payload.quoted_follow_up?.text,'Quoted question','queued quote reaches the real response request');
     assert.equal(payload.attachments?.length ?? 0,0);
     return new Response('data: [DONE]\n\n',{headers:{'Content-Type':'text/event-stream'}});
   }
   return Response.json({code:200,data:{}});
 };
-await actions.send('Queued text',{plugin:{id:'queued-plugin',name:'Queued plugin'},skill:null,connector:null,mention:null});
+await actions.send('Queued text',{plugin:{id:'queued-plugin',name:'Queued plugin'},skill:null,connector:null,mention:null,quote:useChatStore.getState().queuedMessages['queue-owner'].invocation?.quote});
 assert.equal(readComposer().input,'Next unsent turn');
 assert.equal(readComposer().activePlugin?.id,'next-plugin');
 assert.equal(readComposer().activeCommand?.command,'/init');

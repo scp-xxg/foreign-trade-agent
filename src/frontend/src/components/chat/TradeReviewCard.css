@@ -1,0 +1,36 @@
+/* Modified by foreign-trade-agent contributors, 2026-10-31. */
+.jx-tradeReviewCard { margin: 16px 0; padding: 20px; border: 1px solid var(--color-border); border-radius: 14px; background: var(--color-bg-container); color: var(--color-text); }
+.jx-tradeReviewHeading, .jx-tradeReviewMeta, .jx-tradeReviewSource, .jx-tradeReviewActions, .jx-tradeReviewField > header, .jx-tradeReviewAnnotation > header { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; }
+.jx-tradeReviewHeading { justify-content: space-between; }
+.jx-tradeReviewMeta { margin-top: 12px; }
+.jx-tradeReviewMuted, .jx-tradeReviewMeta small, .jx-tradeReviewSource small { color: var(--color-text-secondary); font-size: 12px; line-height: 1.65; }
+.jx-tradeReviewSource { padding: 10px 0; overflow-wrap: anywhere; }
+.jx-tradeReviewActions { margin: 12px 0; }
+.jx-tradeReviewLabels, .jx-tradeReviewLegend { display: flex; flex-wrap: wrap; gap: 6px; }
+.jx-tradeReviewDetails section, .jx-tradeReviewComparison { margin-top: 24px; }
+.jx-tradeReviewCard h5 { margin: 0 0 12px; font-size: 14px; }
+.jx-tradeReviewFields, .jx-tradeReviewAnnotations { display: grid; gap: 12px; }
+.jx-tradeReviewField { padding: 12px; border: 1px solid var(--color-border); border-radius: 10px; }
+.jx-tradeReviewField > header { margin-bottom: 8px; font-size: 12px; }
+.jx-tradeReviewField pre { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; font-family: inherit; font-size: 13px; line-height: 1.75; }
+.jx-tradeReviewMark { color: inherit; padding: 1px 0; border-bottom: 2px solid var(--color-primary); background: var(--color-primary-light); }
+.jx-tradeReviewMark--high { border-color: var(--color-error); background: var(--color-error-light); }
+.jx-tradeReviewMark--medium, .jx-tradeReviewMark--low { border-color: var(--color-warning); background: var(--color-warning-light); }
+.jx-tradeReviewAnnotation { border: 1px solid var(--color-border); border-left: 4px solid var(--color-primary); border-radius: 10px; padding: 14px; overflow-wrap: anywhere; }
+.jx-tradeReviewAnnotation--high { border-left-color: var(--color-error); }
+.jx-tradeReviewAnnotation--medium, .jx-tradeReviewAnnotation--low { border-left-color: var(--color-warning); }
+.jx-tradeReviewAnnotation small { color: var(--color-text-secondary); }
+.jx-tradeReviewAnnotation dl { margin: 12px 0; display: grid; gap: 10px; }
+.jx-tradeReviewAnnotation dt { font-size: 12px; font-weight: 600; margin-bottom: 4px; }
+.jx-tradeReviewAnnotation dd { margin: 0; white-space: pre-wrap; }
+.jx-tradeReviewAnnotation blockquote { margin: 0; padding: 8px 12px; border-left: 2px solid var(--color-border); background: var(--color-bg-layout); }
+.jx-tradeReviewEvidence, .jx-tradeReviewPrevious { margin-top: 16px; }
+.jx-tradeReviewEvidence summary, .jx-tradeReviewPrevious summary { cursor: pointer; font-size: 13px; }
+.jx-tradeReviewEvidence article { padding: 12px 0; border-bottom: 1px solid var(--color-border); font-size: 12px; overflow-wrap: anywhere; }
+.jx-tradeReviewEvidence article p { white-space: pre-wrap; }
+.jx-tradeReviewComparison table { width: 100%; border-collapse: collapse; font-size: 12px; margin: 12px 0; }
+.jx-tradeReviewComparison th, .jx-tradeReviewComparison td { text-align: left; padding: 8px; border-bottom: 1px solid var(--color-border); }
+.jx-tradeReviewChangeLists { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; font-size: 12px; }
+.jx-tradeReviewChangeLists ul { padding-left: 18px; }
+.jx-tradeReviewError { color: var(--color-error); font-size: 13px; }
+@media (max-width: 760px) { .jx-tradeReviewCard { padding: 14px; } .jx-tradeReviewChangeLists { grid-template-columns: 1fr; } .jx-tradeReviewComparison th, .jx-tradeReviewComparison td { padding: 6px 3px; } }

@@ -14,7 +14,7 @@ import sys
 from pathlib import Path
 import tempfile
 import unittest
-from unittest.mock import patch
+from unittest.mock import patch, MagicMock
 
 ROOT = Path(__file__).resolve().parents[1]
 spec = importlib.util.spec_from_file_location("trade_team", ROOT / "extensions/foreign_trade/team.py")
@@ -108,12 +108,78 @@ class TeamBootstrapTests(unittest.TestCase):
     def test_installer_receives_home_prompt_and_account(self):
         with patch.object(team, "run") as run:
             home = Path("/tmp/team-home")
-            team.install(home, "alice", team.runtime_env(home), True)
+            team.install(home, "alice", team.runtime_env(home, 3002), True)
             command = [str(value) for value in run.call_args.args[0]]
             self.assertIn("--apply-homepage-copy", command)
             self.assertIn("--apply-assistant-prompt", command)
             self.assertEqual(command[command.index("--app-home") + 1], str(home))
             self.assertEqual(command[command.index("--username") + 1], "alice")
+            self.assertEqual(command[command.index("--port") + 1], "3002")
+
+
+    def test_selected_port_changes_callbacks_without_changing_app_home(self):
+        with tempfile.TemporaryDirectory() as temp:
+            home = Path(temp) / 'existing-public-home'
+            with patch.dict(os.environ, {'PORT':'3999','BACKEND_PORT':'3999','BACKEND_INTERNAL_URL':'http://other.invalid:3999'}):
+                default = team.runtime_env(home)
+                selected = team.runtime_env(home, 3002)
+            self.assertEqual(default['PORT'],'3001')
+            self.assertEqual(selected['PORT'],'3002')
+            self.assertEqual(selected['BACKEND_PORT'],'3002')
+            self.assertEqual(selected['BACKEND_INTERNAL_URL'],'http://127.0.0.1:3002')
+            self.assertEqual(selected['DATABASE_URL'],default['DATABASE_URL'])
+            self.assertEqual(selected['HUGAGENT_HOME'],str(home))
+            self.assertEqual(selected['SANDBOX_RUNNER_URL'],'http://127.0.0.1:8900')
+            self.assertFalse(home.exists())
+
+    def test_custom_port_start_checks_only_selected_backend_and_keeps_mcp_separate(self):
+        with tempfile.TemporaryDirectory() as temp:
+            home = Path(temp); (home / 'data.db').touch()
+            frontend = home / 'frontend'; (frontend / 'dist').mkdir(parents=True)
+            (frontend / 'dist/index.html').write_text('<html></html>')
+            output = io.StringIO()
+            with patch.object(team,'FRONTEND',frontend), patch.object(team,'port_open',return_value=False) as probe, patch.object(team,'run') as run, patch.object(team.os,'execve') as execute, patch.object(team.os,'chdir'):
+                with redirect_stdout(output): team.start(argparse.Namespace(dry_run=False,port=3002),home,team.runtime_env(home,3002))
+            self.assertEqual([call.args[0] for call in probe.call_args_list],[3002,8900,9120])
+            self.assertEqual(run.call_count,1)
+            self.assertEqual(str(run.call_args.args[0][-1]),'start')
+            command = execute.call_args.args[1]; environment = execute.call_args.args[2]
+            self.assertEqual(command[command.index('--port')+1],'3002')
+            self.assertEqual(environment['BACKEND_INTERNAL_URL'],'http://127.0.0.1:3002')
+            self.assertIn('http://127.0.0.1:3002',output.getvalue())
+            self.assertNotIn('http://127.0.0.1:3001',output.getvalue())
+
+    def test_custom_port_refuses_occupied_listener_before_mcp_start(self):
+        with tempfile.TemporaryDirectory() as temp:
+            home = Path(temp); (home / 'data.db').touch()
+            frontend = home / 'frontend'; (frontend / 'dist').mkdir(parents=True)
+            (frontend / 'dist/index.html').write_text('<html></html>')
+            with patch.object(team,'FRONTEND',frontend), patch.object(team,'port_open',return_value=True) as probe, patch.object(team,'run') as run:
+                with self.assertRaisesRegex(RuntimeError,'3002'):
+                    team.start(argparse.Namespace(dry_run=False,port=3002),home,team.runtime_env(home,3002))
+            self.assertEqual([call.args[0] for call in probe.call_args_list],[3002])
+            run.assert_not_called()
+
+    def test_running_check_targets_custom_port(self):
+        response = MagicMock(); response.__enter__.return_value = response
+        response.status = 200; response.read.return_value = b'<html>public fixture</html>'
+        opener = MagicMock(); opener.open.return_value = response
+        with patch('urllib.request.build_opener',return_value=opener), patch.object(team,'run'), redirect_stdout(io.StringIO()):
+            team.check(argparse.Namespace(dry_run=False,running=True,port=3002),team.runtime_env(Path('/tmp/unused-home'),3002))
+        opener.open.assert_called_once_with('http://127.0.0.1:3002/',timeout=5)
+
+    def test_port_dry_run_has_no_runtime_effects(self):
+        with tempfile.TemporaryDirectory() as temp:
+            home = Path(temp) / 'unused-home'; output = io.StringIO()
+            with patch.object(team.subprocess,'run') as run, patch.object(team.os,'execve') as execute, patch.object(team,'port_open') as probe:
+                with redirect_stdout(output):
+                    self.assertEqual(team.main(['start','--port','3002','--app-home',str(home),'--dry-run']),0)
+            run.assert_not_called(); execute.assert_not_called(); probe.assert_not_called()
+            self.assertIn('--port 3002',output.getvalue())
+            self.assertIn('http://127.0.0.1:3002',output.getvalue())
+            self.assertFalse(home.exists())
+            for invalid in ('0','65536','text'):
+                with self.assertRaises(argparse.ArgumentTypeError): team.web_port_number(invalid)
 
 class IsolatedUpgradeTests(unittest.TestCase):
     @staticmethod
@@ -140,6 +206,86 @@ class IsolatedUpgradeTests(unittest.TestCase):
                 self.assertIn('协同', payload['branding']['hero_title'])
                 self.assertFalse(payload['auth']['allow_register'])
                 self.assertIn('trade_collaboration', payload['navigation']['sidebar_items'])
+
+    def test_retired_mcp_flag_default_preserves_rows_schema_and_dependencies(self):
+        from foreign_trade.upgrade import repair_legacy_mcp_default
+        with tempfile.TemporaryDirectory() as temp:
+            database = Path(temp) / 'data.db'
+            with sqlite3.connect(database) as db:
+                db.execute("CREATE TABLE admin_mcp_servers(server_id TEXT PRIMARY KEY, is_stable BOOLEAN NOT NULL, transport TEXT NOT NULL CHECK(transport IN ('stdio','sse')), opaque TEXT, UNIQUE(opaque))")
+                db.execute('CREATE INDEX test_mcp_transport ON admin_mcp_servers(transport)')
+                db.execute('CREATE TABLE mcp_child(parent_id TEXT REFERENCES admin_mcp_servers(server_id))')
+                db.execute('CREATE TABLE mcp_audit(id TEXT)')
+                db.execute('CREATE TRIGGER test_mcp_insert AFTER INSERT ON admin_mcp_servers BEGIN INSERT INTO mcp_audit VALUES(NEW.server_id); END')
+                db.execute('CREATE VIEW mcp_view AS SELECT server_id FROM admin_mcp_servers')
+                db.execute("INSERT INTO admin_mcp_servers(rowid,server_id,is_stable,transport,opaque) VALUES(41,'legacy',1,'stdio','synthetic opaque configuration')")
+                db.execute("INSERT INTO mcp_child VALUES('legacy')")
+                before = db.execute('SELECT rowid,* FROM admin_mcp_servers').fetchall()
+            self.assertEqual(repair_legacy_mcp_default(database), 1)
+            self.assertEqual(repair_legacy_mcp_default(database), 0)
+            with sqlite3.connect(database) as db:
+                db.execute('PRAGMA foreign_keys=ON')
+                self.assertEqual(db.execute('SELECT rowid,* FROM admin_mcp_servers').fetchall(), before)
+                self.assertEqual(db.execute('SELECT * FROM mcp_view').fetchall(), [('legacy',)])
+                self.assertEqual(db.execute('PRAGMA foreign_key_check').fetchall(), [])
+                self.assertEqual(db.execute('SELECT * FROM mcp_audit').fetchall(), [('legacy',)])
+                db.execute("INSERT INTO admin_mcp_servers(server_id,transport,opaque) VALUES('new','stdio','new synthetic configuration')")
+                self.assertEqual(db.execute("SELECT is_stable FROM admin_mcp_servers WHERE server_id='new'").fetchone()[0], 0)
+                self.assertEqual(db.execute('SELECT * FROM mcp_audit ORDER BY id').fetchall(), [('legacy',), ('new',)])
+                with self.assertRaises(sqlite3.IntegrityError):
+                    db.execute("INSERT INTO admin_mcp_servers(server_id,transport) VALUES('bad','unknown')")
+                with self.assertRaises(sqlite3.IntegrityError):
+                    db.execute("INSERT INTO admin_mcp_servers(server_id,transport,opaque) VALUES('duplicate','stdio','synthetic opaque configuration')")
+                self.assertIn('test_mcp_transport', {row[1] for row in db.execute('PRAGMA index_list(admin_mcp_servers)')})
+
+    def test_retired_mcp_repair_failure_rolls_back_original_table(self):
+        from foreign_trade.upgrade import repair_legacy_mcp_default
+        with tempfile.TemporaryDirectory() as temp:
+            database = Path(temp) / 'data.db'
+            with sqlite3.connect(database) as db:
+                db.execute('CREATE TABLE admin_mcp_servers(server_id TEXT PRIMARY KEY,is_stable BOOLEAN NOT NULL)')
+                db.execute("INSERT INTO admin_mcp_servers VALUES('synthetic',1)")
+            real_connect = sqlite3.connect
+            class BrokenConnection(sqlite3.Connection):
+                def execute(self, sql, *args):
+                    if sql.startswith('ALTER TABLE'):
+                        raise sqlite3.OperationalError('synthetic failure after old table drop')
+                    return super().execute(sql, *args)
+            with patch('foreign_trade.upgrade.sqlite3.connect', side_effect=lambda *args, **kw: real_connect(*args, factory=BrokenConnection, **kw)):
+                with self.assertRaises(sqlite3.OperationalError): repair_legacy_mcp_default(database)
+            with real_connect(database) as db:
+                self.assertEqual(db.execute('SELECT * FROM admin_mcp_servers').fetchall(), [('synthetic',1)])
+                self.assertIsNone(next(row[4] for row in db.execute('PRAGMA table_info(admin_mcp_servers)') if row[1]=='is_stable'))
+                self.assertEqual(db.execute("SELECT count(*) FROM sqlite_master WHERE name LIKE '_foreign_trade_mcp_%'").fetchone()[0], 0)
+
+    def test_upgrade_repairs_retired_mcp_flag_before_new_orm_insert_and_restore(self):
+        from sqlalchemy import create_engine
+        from sqlalchemy.orm import Session
+        from core.db.models import AdminMcpServer
+        with tempfile.TemporaryDirectory() as temp:
+            home = Path(temp)
+            self.call_helper(home, '--allow-create')
+            with sqlite3.connect(home / 'data.db') as db:
+                db.execute('DELETE FROM admin_mcp_servers')
+                db.execute('ALTER TABLE admin_mcp_servers ADD COLUMN is_stable BOOLEAN NOT NULL')
+                db.execute("INSERT INTO admin_mcp_servers(server_id,display_name,description,transport,is_stable,is_enabled,sort_order) VALUES('legacy','Synthetic legacy','','stdio',1,1,0)")
+            report = self.call_helper(home)
+            self.assertEqual(report['legacy_mcp_defaults_repaired'], 1)
+            self.assertEqual(stat.S_IMODE(Path(report['backup']).stat().st_mode), 0o600)
+            engine = create_engine('sqlite:///' + str(home / 'data.db'))
+            try:
+                with Session(engine) as db:
+                    db.add(AdminMcpServer(server_id='new-orm', display_name='Synthetic current ORM'))
+                    db.commit()
+            finally:
+                engine.dispose()
+            with sqlite3.connect(home / 'data.db') as db:
+                self.assertEqual(db.execute('SELECT server_id,is_stable FROM admin_mcp_servers ORDER BY server_id').fetchall(), [('legacy',1),('new-orm',0)])
+            restored = self.call_helper(home, '--restore', report['backup'])
+            self.assertEqual(restored['action'], 'restored')
+            with sqlite3.connect(home / 'data.db') as db:
+                self.assertEqual(db.execute('SELECT server_id,is_stable FROM admin_mcp_servers').fetchall(), [('legacy',1)])
+                self.assertIsNone(next(row[4] for row in db.execute('PRAGMA table_info(admin_mcp_servers)') if row[1]=='is_stable'))
 
     def test_legacy_revision_preserves_owned_business_and_restores_snapshot(self):
         with tempfile.TemporaryDirectory() as temp:
@@ -217,7 +363,14 @@ class IsolatedUpgradeTests(unittest.TestCase):
                 after = json.loads(db.execute("SELECT payload FROM content_blocks WHERE id='prompt_versions'").fetchone()[0])
                 preserved = next(v for v in after['versions'] if v['kind']=='system' and v['id']==old_id)
                 self.assertEqual(next(p['content'] for p in preserved['parts'] if p['part_id']=='system/00_role'),'Human-edited synthetic test role')
-                self.assertEqual(db.execute("SELECT count(*) FROM installed_plugins WHERE owner_user_id='test-owner' AND slug='foreign-trade-demo'").fetchone()[0],1)
+                self.assertEqual(db.execute("SELECT count(*) FROM installed_plugins WHERE owner_user_id='test-owner' AND slug='foreign-trade-demo'").fetchone()[0],0)
+                device = db.execute(
+                    "SELECT version,state,payload FROM device_capability_installations "
+                    "WHERE kind='plugin' AND profile_id='local' AND json_extract(payload,'$.owner_user_id')='test-owner'"
+                ).fetchall()
+                self.assertEqual(len(device),1)
+                self.assertEqual(device[0][:2],("0.4.0","ready"))
+                self.assertEqual(len(json.loads(device[0][2])["components"]["skills"]),5)
                 metadata = json.loads(db.execute("SELECT metadata FROM users_shadow WHERE user_id='test-owner'").fetchone()[0])
                 self.assertEqual(metadata,{'role':'super_admin','preserve_marker':'synthetic-account'})
                 self.assertEqual(db.execute('SELECT count(*) FROM local_users').fetchone()[0],0)

@@ -16,6 +16,11 @@ _NUMBERS = re.compile(r"\d+(?:[.,]\d+)*")
 _CJK = re.compile(r"[\u3400-\u9fff]")
 
 
+def contains_cjk(text: str) -> bool:
+    """Detect untranslated Chinese text without rejecting English unit symbols."""
+    return bool(_CJK.search(text))
+
+
 def _numbers(text: str) -> Counter:
     return Counter(_NUMBERS.findall(text))
 
@@ -43,7 +48,7 @@ def validate_translations(candidate: object, facts: list[dict]) -> list[dict]:
         label, value = row.get("label"), row.get("value")
         if not isinstance(label, str) or not isinstance(value, str) or not label.strip() or not value.strip():
             raise ValueError("Empty translation")
-        if len(label) > 160 or len(value) > 1500 or _CJK.search(label + value):
+        if len(label) > 160 or len(value) > 1500 or contains_cjk(label + value):
             raise ValueError("Expected bounded English translation")
         source = facts[idx - 1]["label"] + " " + facts[idx - 1]["value"]
         output = label + " " + value
@@ -115,7 +120,7 @@ async def generate_pack(payload: dict, image_bytes: bytes | None = None, generat
         warnings.insert(0, LOCAL_TEMPLATE_NOTICE)
     else:
         try:
-            name_needs_translation = bool(_CJK.search(name))
+            name_needs_translation = contains_cjk(name)
             model_facts = ([{"label": "Product name", "value": name}] + facts) if name_needs_translation else facts
             translated = validate_translations(await _translate(model_facts), model_facts)
             if name_needs_translation:
@@ -144,7 +149,7 @@ async def generate_pack(payload: dict, image_bytes: bytes | None = None, generat
     ])
     if not image_bytes:
         warnings.append("尚未上传产品图片，本次仅生成文案与 FAQ。上传原图后可重新生成三种排版素材。")
-    english_ready = not _CJK.search(name + " ".join(bullets))
+    english_ready = not contains_cjk(name + " ".join(bullets))
     if image_bytes and not english_ready:
         warnings.append("原文尚未完成英文翻译，英文图片素材暂停生成；请完成译文后重新确认生成。")
     return {"listing": listing, "faq": faq, "translated_facts": translated, "method": method, "generation_mode": generation_mode,

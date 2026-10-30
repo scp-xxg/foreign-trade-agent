@@ -1,5 +1,10 @@
 /** 英文字典（settings 域）：key 为中文原文，value 为英文译文。 */
 export const SETTINGS_DICT: Record<string, string> = {
+  '上下文窗口（token，必填）': 'Context window (tokens, required)',
+  '请填写当前服务支持的上下文窗口，或先自动探测；未探测到时需手工确认。': 'Enter the context window supported by this service, or detect it first. Confirm it manually if detection is unavailable.',
+  '上下文窗口必须为正整数 token。': 'The context window must be a positive integer number of tokens.',
+  '用于请求预算与自动压缩。请按当前服务实际支持的上限填写；可先自动探测，探测不到时必须手工确认，不按模型名称猜测。': 'Used for request budgets and automatic compaction. Enter the actual limit supported by this service. Detect it first or confirm it manually; do not infer the limit from the model name.',
+  '填写当前服务确认的 token 上限': 'Token limit confirmed by this service',
   '切换会关闭当前编辑和预览，请先保存修改。': 'Switching closes current edits and previews. Save your changes first.',
   '切换配置目标？': 'Switch configuration target?',
   '配置目标': 'Configuration target',

@@ -1,5 +1,6 @@
 // Modified by foreign-trade-agent contributors, 2026-10-21; see CHANGES_FOREIGN_TRADE.md.
 import type { ToolCall } from '../types';
+import type { ToolCallResultPayload } from '../api';
 import type { InquiryRecord } from './foreignTradeInquiryApi';
 
 export interface TradeInquiryReceipt {
@@ -72,4 +73,17 @@ export async function readCurrentTradeInquiry(id: string, read: (id: string) => 
 }
 export function canCopyInquiryDraft(record: InquiryRecord, language: 'zh' | 'en'): boolean {
   return !!record.drafts && record.drafts.stale === false && !!record.drafts[language]?.trim();
+}
+
+/** Fetch only the exact historical invocation; never derive a receipt from clipped prose. */
+export async function readHistoricalTradeInquiry(tool: ToolCall, chatId: string, messageId: string,
+  read: (chatId: string, messageId: string, toolId: string) => Promise<ToolCallResultPayload>): Promise<unknown> {
+  if (!chatId || !messageId || !tool.id || tool.status !== 'success' || !isTradeInquiryTool(tool.name)) throw new Error('invalid_inquiry_receipt');
+  const detail = await read(chatId, messageId, tool.id);
+  const complete: ToolCall = { ...tool, output: detail.result, outputTruncated: false, outputLoaded: true };
+  if (detail.tool_id !== tool.id || detail.status !== 'success' || detail.truncated ||
+    (detail.tool_name && detail.tool_name !== tool.name) || !extractTradeInquiryReceipts([complete]).length) {
+    throw new Error('invalid_inquiry_receipt');
+  }
+  return detail.result;
 }

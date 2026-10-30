@@ -55,3 +55,13 @@ are local deployment state and are not distributed.
 - Keep no-model workbench demonstrations separate from model-dependent chat acceptance.
 - Make the quick-check command select explicit unittest suites and the configured Python environment; retain full business regression in CI.
 - Include the deployment and walkthrough guides in the public plugin archive.
+
+## Hackathon readiness and sourced review (2026-10-31)
+
+- Add versioned SQLite rule knowledge and immutable owner-scoped localization reviews for Alibaba RFQ and Amazon US non-media listings, with text annotations, risk labels, source-bound exports and two-round comparison.
+- Upgrade the trade package to 0.4.0 with five skills and eight authenticated native business tools.
+- Repair imported-plugin identity, device-registry skill activation across turns, full-read identity and error projection; preserve strict authorization.
+- Detect failed/incomplete Responses streams, preserve cancellations and avoid duplicate reasoning replay.
+- Tighten per-SKU inquiry extraction, review source/role requirements, and concurrent export checks; retain explicit unknown commercial terms.
+- Support configurable loopback web ports, explicit Chinese build defaults, required chat model context windows, historical inquiry receipts, stable record URLs and English demo CSV downloads.
+- Add scenario scripts and offline regression coverage; actual runtime acceptance is recorded separately.

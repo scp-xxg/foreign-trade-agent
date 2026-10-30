@@ -154,3 +154,31 @@ async def test_read_only_run_never_activates_business_tools(installed):
     plugin_loader.register_load_plugin(collector, {"foreign-trade-demo": target()}, runtime)
     await next(tool for tool in collector if tool.name == "load_plugin")._func(plugin="foreign-trade-demo")
     assert not NAMES.intersection(tool.name for tool in toolkit.tool_groups[0].tools)
+
+
+def test_full_read_instruction_uses_actual_local_revision_path(installed, monkeypatch, tmp_path):
+    from core.llm.tools import foreign_trade_tool
+    from core.capabilities.skills import loader_factory, config
+    captured = []
+    monkeypatch.setattr(foreign_trade_tool, "register_foreign_trade_tools",
+        lambda collector, **kwargs: captured.append(kwargs["require_skill"]) or list(NAMES))
+    plugin = target()
+    sid = "buyer-inquiry-followup-current"
+    plugin.skill_ids = [sid]
+    directory = tmp_path / "skills" / "local" / sid / "abcdef123456"
+    monkeypatch.setattr(bridge, "_enabled_skill_ids", lambda user: {sid})
+    monkeypatch.setattr(loader_factory, "get_skill_loader",
+        lambda: SimpleNamespace(get_skill_dir=lambda name: str(directory) if name == sid else None))
+    monkeypatch.setattr(config, "model_facing_skill_dir", lambda name, path: str(path))
+    bridge.register_trade_plugin_target(ToolCollector(), plugin, user_id="alice", chat_id="chat", loaded_skill_ids=set())
+    with pytest.raises(bridge.TradeSkillRequired) as error:
+        captured[0]("buyer-inquiry-followup")
+    assert str(directory / "SKILL.md") in str(error.value)
+    assert "/workspace/skills/" not in str(error.value)
+
+    monkeypatch.setattr(loader_factory, "get_skill_loader",
+        lambda: SimpleNamespace(get_skill_dir=lambda name: None))
+    with pytest.raises(bridge.TradeSkillRequired) as error:
+        captured[0]("buyer-inquiry-followup")
+    assert "load_plugin" in str(error.value) and "view_text_file" in str(error.value)
+    assert "/workspace/skills/" not in str(error.value)

@@ -57,8 +57,8 @@ def apply_assistant_prompt(db):
     # A content-addressed version preserves every prior prompt, including an
     # operator's edits to a previously installed trade variant.
     digest = hashlib.sha256(json.dumps(parts, ensure_ascii=False, sort_keys=True).encode()).hexdigest()[:12]
-    version_id = "foreign-trade-demo-v3-" + digest
-    if active.get("id", "").startswith("foreign-trade-demo-v3-") and active["parts"] == parts:
+    version_id = "foreign-trade-demo-v4-" + digest
+    if active.get("id", "").startswith("foreign-trade-demo-v4-") and active["parts"] == parts:
         return active["id"]
     existing = prompts.get_version("system", version_id, db=db)
     if existing and existing.get("parts") != parts:
@@ -69,7 +69,7 @@ def apply_assistant_prompt(db):
         prompts.activate_version("system", version_id, db=db)
         return version_id
     prompts.upsert_version(
-        "system", version_id, name="外贸助手 · 询盘、商品资料与岗位协同",
+        "system", version_id, name="外贸助手 · 询盘、商品资料、规则校验与岗位协同",
         description="公开项目外贸演示；保留其他系统片段，仅更新身份、业务事实约束与插件加载步骤。",
         parts=parts, db=db, updated_by="foreign-trade-home-copy",
     )
@@ -77,10 +77,61 @@ def apply_assistant_prompt(db):
     return version_id
 
 
+def install_device_plugin(user_id: str, package_dir: Path | None = None) -> dict:
+    """Install/update the exact user's runtime package through the device lifecycle."""
+    from core.capabilities.plugins.packaging.importer import normalize_plugin_dir
+    from core.capabilities.skills.installation import compute_install_id
+    from features.desktop.capabilities import registry
+    from features.desktop.capabilities.paths import capabilities_enabled
+    from features.desktop.local.plugins import service as lifecycle
+
+    if not user_id or not capabilities_enabled():
+        raise RuntimeError("A configured local capability store and existing account are required.")
+    package_dir = package_dir or HERE / "plugin"
+    normalized = normalize_plugin_dir(package_dir)
+    if normalized.slug != "foreign-trade-demo":
+        raise RuntimeError("Only the public foreign-trade-demo package may be installed.")
+    key = compute_install_id(normalized.slug, user_id)
+    identifier = registry.install_id("plugin", "local", key)
+    existing = registry.get(identifier)
+    if existing and existing.payload.get("owner_user_id") != user_id:
+        raise RuntimeError("The resolved plugin installation belongs to another account.")
+    if existing and existing.state != "removed":
+        previous_revision = existing.resolved_revision
+        result = lifecycle.update(user_id, identifier, str(package_dir), previous_revision)
+        action = "unchanged" if result.get("revision") == previous_revision else "updated"
+    else:
+        result = lifecycle.install(user_id, str(package_dir))
+        action = "installed"
+    if result.get("install_id") != identifier:
+        raise RuntimeError("Plugin update did not return the expected runtime installation.")
+    lifecycle.set_presentation(user_id, identifier, {
+        "display_name": "外贸业务助手（演示）", "category": "办公效率",
+    })
+    current = lifecycle.get(user_id, identifier)
+    components = current.get("components") or {}
+    actual = registry.get(identifier)
+    if (
+        actual is None or not actual.ready or current.get("version") != normalized.version
+        or len(components.get("skills") or []) != len(normalized.skills)
+        or len(components.get("mcp") or []) != len(normalized.mcp)
+    ):
+        raise RuntimeError("Runtime plugin verification failed; inspect the device installation before retrying.")
+    return {
+        **current, "action": action, "name": "外贸业务助手（演示）",
+        "installed_components": [
+            *({"type": "skill", "name": name} for name in components.get("skills") or []),
+            *({"type": "mcp", "name": name} for name in components.get("mcp") or []),
+        ],
+    }
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--app-home", required=True, type=Path, help="Existing public application's data directory")
     parser.add_argument("--username", required=True, help="Existing local account; no account or permission changes")
+    from foreign_trade.team import web_port_number
+    parser.add_argument("--port", type=web_port_number, default=3001, help="Selected public web port")
     parser.add_argument("--legacy-chat-completions", action="store_true", help="Identify this existing unversioned database as a known old Chat Completions installation")
     parser.add_argument("--repair-legacy-filenames", action="store_true", help="Preserve duplicate file metadata using upstream unique names and a recovery journal")
     parser.add_argument("--expected-filename-repairs", type=int, help="Refuse repair when the reviewed count differs")
@@ -93,32 +144,29 @@ def main():
     from foreign_trade.upgrade import prepare_database
     from foreign_trade.team import runtime_env
     upgrade_report = prepare_database(home, legacy_chat_completions=args.legacy_chat_completions, repair_legacy_filenames=args.repair_legacy_filenames, expected_filename_repairs=args.expected_filename_repairs)
-    os.environ.update(runtime_env(home))
+    os.environ.update(runtime_env(home, args.port))
 
     from cli import apply_local_env
-    apply_local_env(3001)
+    apply_local_env(args.port)
     from core.db.engine import SessionLocal
     from core.db.models import UserShadow, ContentBlock
     from sqlalchemy.orm.attributes import flag_modified
     from copy import deepcopy
     from datetime import datetime
-    from core.capabilities.plugins import management as plugin_service
-    from features import register_package_sources, register_resource_owners
+    from features import register_package_sources, register_resource_owners, register_run_capabilities
     register_package_sources()
     register_resource_owners()
+    register_run_capabilities()
 
     with SessionLocal() as db:
         account = db.query(UserShadow.user_id).filter(UserShadow.username == args.username).one_or_none()
         if account is None:
             raise SystemExit("Existing account was not found; no account was created.")
         user_id = account[0]
-        result = plugin_service.import_plugin(
-            db, HERE / "plugin", owner_user_id=user_id, secrets={}, created_by="foreign-trade-local-setup",
-        )
-        meta = plugin_service.set_installed_plugin_meta(
-            db, result["install_id"], owner_user_id=user_id,
-            display_name="外贸业务助手（演示）", category="办公效率",
-        )
+    # Device imports are authoritative in the local runtime. Updating only the
+    # legacy InstalledPlugin table can report v0.4 while the live package is v0.3.
+    result = install_device_plugin(user_id)
+    with SessionLocal() as db:
         # CE hides plugin-contributed shortcut cards. Use its existing homepage
         # suggestions instead. Replacing the full scene copy is an explicit opt-in.
         page = db.query(ContentBlock).filter(ContentBlock.id == "page_config").one_or_none()
@@ -141,9 +189,10 @@ def main():
             apply_assistant_prompt(db)
         report = result["import_report"]
         print(json.dumps({
-            "ok": True, "action": result["action"], "name": meta["name"], "schema_upgrade": upgrade_report,
-            "installed_components": [{"type": x["type"], "name": x["name"]} for x in report["imported"]],
-            "adapted": report["adapted"], "dropped": report["dropped"],
+            "ok": True, "action": result["action"], "name": result["name"], "schema_upgrade": upgrade_report,
+            "install_id": result["install_id"], "version": result["version"], "revision": result["revision"],
+            "enabled": result["enabled"], "installed_components": result["installed_components"],
+            "adapted": report.get("adapted", []), "dropped": report.get("dropped", []),
             "account_permissions_changed": False,
             "homepage_copy_applied": args.apply_homepage_copy,
             "assistant_prompt_applied": args.apply_assistant_prompt,

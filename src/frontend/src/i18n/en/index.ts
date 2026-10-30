@@ -29,12 +29,14 @@ import { FOREIGN_TRADE_DICT } from './foreignTrade';
 import { FOREIGN_TRADE_INQUIRY_DICT } from './foreignTradeInquiry';
 import { FOREIGN_TRADE_CONTENT_DICT } from './foreignTradeContent';
 import { FOREIGN_TRADE_COLLABORATION_DICT } from './foreignTradeCollaboration';
+import { FOREIGN_TRADE_REVIEW_DICT } from './foreignTradeReview';
 
 export const EN_DICT: Record<string, string> = {
   ...FOREIGN_TRADE_DICT,
   ...FOREIGN_TRADE_INQUIRY_DICT,
   ...FOREIGN_TRADE_CONTENT_DICT,
   ...FOREIGN_TRADE_COLLABORATION_DICT,
+  ...FOREIGN_TRADE_REVIEW_DICT,
   ...PERSONAL_AGENT_DICT,
   ...WORKBENCH_DICT,
   ...WORKBENCH_AUTH_DICT,

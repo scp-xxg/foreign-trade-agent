@@ -1,5 +1,6 @@
 // Modified by foreign-trade-agent contributors, 2026-10-21; see CHANGES_FOREIGN_TRADE.md.
 export const FOREIGN_TRADE_CONTENT_DICT: Record<string, string> = {
+  '下载英文事实 CSV': 'Download English facts CSV',
   '生成方式': 'Generation mode',
   'AI翻译与生成': 'AI translation and generation',
   '本地原文模板（不调用模型）': 'Local original-text template (no model call)',

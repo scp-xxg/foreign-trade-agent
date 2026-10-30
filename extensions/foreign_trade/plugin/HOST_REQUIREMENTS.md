@@ -1,4 +1,4 @@
-# Host requirements for foreign-trade-demo 0.3.0
+# Host requirements for foreign-trade-demo 0.4.0
 
 This package targets the public scp-xxg/foreign-trade-agent fork of HugAgentOS.
 Keep the installed plugin slug foreign-trade-demo when upgrading.
@@ -7,16 +7,16 @@ The existing loopback MCP at http://127.0.0.1:9120/mcp still provides exactly
 search_products, get_product and calculate_quote for the synthetic catalog.
 The ZIP includes that legacy standalone quotation runtime.
 
-The package contains four skills: inquiry-quote, buyer-inquiry-followup,
+The package contains five skills: inquiry-quote, buyer-inquiry-followup,
 product-content and cross-role-collaboration. The latter three require this
 fork's seven authenticated native tools: trade_save_inquiry, trade_inquiry,
 trade_calculate_quote, trade_import_product, trade_confirm_product_facts,
-trade_product_content and trade_collaboration. The host must include their
+trade_product_content, trade_collaboration and trade_review. The host must include their
 database services, attachment checks, authenticated APIs and result cards.
 These tools are injected only for a visible, active plugin in an eligible
 writable conversation and are bound to its authenticated user. Required skills
 must be enabled and read before business writes. They are NOT HTTP MCP tools
-on port 9120; the three catalog MCP tools are separate from the seven native tools.
+on port 9120; the three catalog MCP tools are separate from the eight native tools.
 Do not expose them by accepting a user_id supplied by a model or by embedding
 database credentials, browser sessions or per-user tokens in this package.
 
@@ -66,3 +66,5 @@ Keep the original HugAgentOS attribution and license. Public buyer/company
 evidence, synthetic quote data and licensed product photographs have different
 sources and must remain clearly identified. Nothing in this package sends email,
 publishes product listings or executes purchases/payments.
+
+Version 0.4 additionally requires owner-scoped ForeignTradeReview and versioned ForeignTradeKnowledgeRule tables, the authenticated review API, the trade_review native adapter, and revision/source-checked report cards. Importing only this ZIP into an unmodified upstream host does not install these backend/frontend features.

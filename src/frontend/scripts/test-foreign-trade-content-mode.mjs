@@ -10,14 +10,14 @@ await build({ entryPoints: ['src/utils/foreignTradeContentApi.ts'], outfile: out
     builder.onResolve({ filter: /^\.\.\/api$/ }, args => args.importer.endsWith('foreignTradeContentApi.ts') ? { path: 'api', namespace: 'capture' } : undefined);
     builder.onLoad({ filter: /.*/, namespace: 'capture' }, () => ({ contents: `
       export async function apiRequest(path, options) { globalThis.__tradeContentRequests.push({path, ...options}); return {data:{pack_id:'pack_test'}}; }
-      export function authFetch() { throw new Error('Unexpected binary/network call'); }
+      export async function authFetch(path) { if (!globalThis.__allowDemoDownload) throw new Error('Unexpected binary/network call'); globalThis.__tradeBinaryRequests.push(path); return new Response('label,value,source_url\\n', {headers:{'Content-Type':'text/csv','Content-Disposition':'attachment; filename=product_facts_en.csv'}}); }
       export function getApiUrl() { return '/api'; }
     ` }));
   } }],
 });
 globalThis.__tradeContentRequests = [];
 try {
-  const { generateContentPack } = await import(pathToFileURL(output).href);
+  const { generateContentPack, downloadContentDemo } = await import(pathToFileURL(output).href);
   await generateContentPack('pack_test', 7);
   await generateContentPack('pack_test', 8, 'template');
   await generateContentPack('pack_test', 9, 'ai');
@@ -31,5 +31,12 @@ try {
   assert.deepEqual(JSON.parse(defaultAi.body), { revision: 7, confirmed: true, generation_mode: 'ai' });
   assert.deepEqual(JSON.parse(local.body), { revision: 8, confirmed: true, generation_mode: 'template' });
   assert.deepEqual(JSON.parse(explicitAi.body), { revision: 9, confirmed: true, generation_mode: 'ai' });
+  globalThis.__allowDemoDownload = true; globalThis.__tradeBinaryRequests = [];
+  let downloadedName = '';
+  globalThis.document = { body: { appendChild() {} }, createElement: () => ({ href: '', download: '', click() { downloadedName = this.download; }, remove() {} }) };
+  globalThis.window = { setTimeout(callback) { callback(); return 0; } };
+  await downloadContentDemo('facts-en');
+  assert.deepEqual(globalThis.__tradeBinaryRequests, ['/api/v1/foreign-trade/content-packs/demo/facts-en']);
+  assert.equal(downloadedName, 'product_facts_en.csv');
   console.log('foreign-trade content generation modes: default AI, explicit template/AI and confirmation/version request fields PASS');
-} finally { delete globalThis.__tradeContentRequests; }
+} finally { delete globalThis.__tradeContentRequests; delete globalThis.__allowDemoDownload; delete globalThis.__tradeBinaryRequests; delete globalThis.document; delete globalThis.window; }

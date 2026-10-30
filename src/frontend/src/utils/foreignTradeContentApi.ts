@@ -10,7 +10,7 @@ export interface ContentPackInput {
 export type ContentGenerationMode = 'ai' | 'template';
 export type ContentAssetKind = 'square' | 'landscape' | 'spec';
 export type ContentDownloadKind = ContentAssetKind | 'zip' | 'listing' | 'faq';
-export type DemoFileKind = 'txt' | 'csv' | 'photo';
+export type DemoFileKind = 'txt' | 'csv' | 'photo' | 'facts-en';
 export interface ContentPackOutputs {
   listing: { title: string; bullets: string[]; description: string };
   faq: { question: string; answer: string; source_refs: number[] }[];

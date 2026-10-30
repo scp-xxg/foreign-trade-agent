@@ -1,9 +1,11 @@
 // Modified by foreign-trade-agent contributors, 2026-10-21; see CHANGES_FOREIGN_TRADE.md.
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Button, Checkbox, Empty, Input, InputNumber, Select, Tag } from 'antd';
 import { CheckCircleOutlined, CopyOutlined, GlobalOutlined, PlusOutlined, ReloadOutlined, SearchOutlined } from '@ant-design/icons';
 import { t } from '../../i18n';
 import { useRouteSubs } from '../../routing/usePanel';
+import { navigateTo, panelFromPath, pathForPanel } from '../../routing/navigation';
+import { canApplyRecordRead, canReplaceRecord, shouldPreserveRecordDraft } from '../../utils/foreignTradeRecordView';
 import { TradeQuoteCard } from '../chat/TradeQuoteCard';
 import { extractTradeQuotes } from '../../utils/foreignTradeQuote';
 import { ApiResponseError } from '../../utils/apiError';
@@ -88,19 +90,51 @@ export function InquiryWorkspace() {
   const locked = !!busy;
   const updateForm = (patch: Partial<InquiryInput>) => setForm((current) => ({ ...current, ...patch }));
   const updateBuyer = (key: keyof InquiryInput['buyer'], value: string) => setForm((current) => ({ ...current, buyer: { ...current.buyer, [key]: value } }));
+  const view = useRef({ record: null as InquiryRecord | null, path: pathForPanel('trade_inquiries', routeId), read: 0, mounted: true });
+  const dirtyRef = useRef(dirty); dirtyRef.current = dirty;
+  const busyRef = useRef(busy); busyRef.current = busy;
+  useEffect(() => { view.current.mounted = true; return () => { view.current.mounted = false; view.current.read++; }; }, []);
   const accept = (next: InquiryRecord) => {
+    if (!view.current.mounted) return next;
+    const previous = view.current.record;
+    if (!canReplaceRecord({ id: next.id, revision: next.revision }, previous ? { id: previous.id, revision: previous.revision } : null)) {
+      throw new Error(t('记录版本已变化，请刷新后重试。'));
+    }
+    view.current.record = next; view.current.read++;
+
     setRecord(next); setForm(inputFrom(next)); setInterpretation(null);
     setRecords((current) => [next, ...current.filter((item) => item.id !== next.id)].sort((a, b) => b.updated_at.localeCompare(a.updated_at)));
+    const nextPath = pathForPanel('trade_inquiries', next.id);
+    view.current.path = nextPath;
+    if (panelFromPath() === 'trade_inquiries') navigateTo(nextPath);
     return next;
   };
   useEffect(() => {
-    let active = true; setBusy('loading'); setRecord(null); setForm(blankInquiry()); setInterpretation(null);
+    const path = pathForPanel('trade_inquiries', routeId);
+    if (shouldPreserveRecordDraft(view.current.path, path, dirtyRef.current, busyRef.current)) {
+      setError(t('当前记录有未保存修改或操作正在进行，请完成后再切换。'));
+      navigateTo(view.current.path, { replace: true });
+      return;
+    }
+    view.current.path = path;
+    // A successful save already installed this record; URL synchronization must
+    // not clear the form or launch a stale read over a newer mutation response.
+    if (routeId && view.current.record?.id === routeId) return;
+    const request = ++view.current.read;
+    let active = true; view.current.record = null;
+    setBusy('loading'); setError(''); setRecord(null); setForm(blankInquiry()); setInterpretation(null);
     Promise.all([listInquiries(), routeId ? getInquiry(routeId) : Promise.resolve(null)]).then(([items, selected]) => {
-      if (!active) return;
+      if (!active || request !== view.current.read || dirtyRef.current) return;
       setRecords(items);
       const initial = selected || items[0];
-      if (initial) { setRecord(initial); setForm(inputFrom(initial)); }
-    }).catch((err) => { if (active) setError(errorText(err)); }).finally(() => { if (active) setBusy(''); });
+      const current = view.current.record;
+      if (initial && canApplyRecordRead(request, view.current.read, dirtyRef.current,
+        { id: initial.id, revision: initial.revision }, current ? { id: current.id, revision: current.revision } : null, routeId)) {
+        accept(initial);
+      }
+      setBusy('');
+    }).catch((err) => { if (active && request === view.current.read) setError(errorText(err)); })
+      .finally(() => { if (active && request === view.current.read) setBusy(''); });
     return () => { active = false; };
   }, [routeId]);
   async function run(name: string, task: () => Promise<void>) {
@@ -124,6 +158,7 @@ export function InquiryWorkspace() {
     });
   }
   function newInquiry(sample = false) {
+    view.current.record = null; view.current.read++;
     setRecord(null); setForm(sample ? sampleInquiry() : blankInquiry()); setProducts(null); setQuery('');
     setError(''); setNotice(''); setDueAt(''); setFollowupTitle(''); setInterpretation(null);
   }

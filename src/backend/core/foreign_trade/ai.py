@@ -21,7 +21,7 @@ def _quantities(text: str) -> list:
     result = []
     for match in _QTY.finditer(text):
         prefix = text[max(0, match.start() - 45):match.start()]
-        if re.search(r"[-–~]\s*$|\d[\d,]*\s*(?:or|and|to|至|到|或)\s*$|\b(?:up to|at least|at most|more than|less than)\s*$|(?:最多|至少|至多|不少于|不超过)\s*$", prefix, re.I):
+        if re.search(r"[-–~]\s*$|(?<![\w-])\d[\d,]*\s*(?:or|and|to|至|到|或)\s*$|\b(?:up to|at least|at most|more than|less than)\s*$|(?:最多|至少|至多|不少于|不超过)\s*$", prefix, re.I):
             continue
         result.append(match)
     return result
@@ -37,45 +37,118 @@ def _positive_pack(text: str, custom: bool) -> bool:
 def _production_days(text: str) -> list:
     return list(re.finditer(r"(?:production(?:\s+lead\s+time)?|生产(?:周期|时间|天数)?)\s*(?:of|within|:|：|为)?\s*(\d+)\s*(?:days?|天)", text, re.I))
 
-def _country(text: str) -> str | None:
-    found, directed = [], []
+def _destination_mentions(text: str) -> list[tuple[str, str]]:
+    """Require destination/shipping context; a company's country is not a destination."""
+    directed = []
     for variants in _COUNTRIES:
-        if any(re.search(r"(?<!\w)" + re.escape(v) + r"(?!\w)", text, re.I) if v.isascii() else v in text for v in variants):
-            found.append(variants[0])
         for value in variants:
-            if re.search(r"(?:ship\s+to|deliver\s+to|delivery\s+to|destination|发往|目的国|收货国)\s*[:：]?\s*" + re.escape(value) + r"(?!\w)", text, re.I):
-                directed.append(variants[0])
-    if len(set(directed)) == 1:
-        return directed[0]
-    return found[0] if len(found) == 1 else None
+            pattern = (r"(?:ship(?:ping)?\s+to|deliver(?:y)?\s+to|destination(?:\s+country)?(?:\s+is)?|"
+                       r"发往|目的国|收货国)\s*[:：]?\s*" + re.escape(value) + r"(?!\w)")
+            for match in re.finditer(pattern, text, re.I):
+                prefix = text[max(0, match.start() - 25):match.start()]
+                if not re.search(r"(?:\b(?:no|not|never)\b|不要|不可|不).{0,12}$", prefix, re.I):
+                    directed.append((variants[0], match.group()))
+    return directed
+
+
+def _country(text: str) -> str | None:
+    countries = {country for country, _ in _destination_mentions(text)}
+    return next(iter(countries)) if len(countries) == 1 else None
+
+
+def _mentions_country(text: str, country: str) -> bool:
+    variants = next((values for values in _COUNTRIES if values[0] == country), ())
+    return any(re.search(r"(?<!\w)" + re.escape(value) + r"(?!\w)", text, re.I)
+               if value.isascii() else value in text for value in variants)
+
+
+_LIST_JOIN = re.compile(r"\s*(?:(?:and|or|plus)\s*|[,/&、及和或]\s*)*", re.I)
+
+
+def _sku_occurrences(text: str, skus: list[str]) -> list[tuple[int, int, str]]:
+    return sorted((match.start(), match.end(), sku) for sku in skus
+                  for match in re.finditer(r"(?<![\w-])" + re.escape(sku) + r"(?![\w-])", text, re.I))
+
+
+def _grouped_sku_positions(text: str, occurrences) -> set[int]:
+    grouped = set()
+    for left, right in zip(occurrences, occurrences[1:]):
+        if _LIST_JOIN.fullmatch(text[left[1]:right[0]]):
+            grouped.update((left[0], right[0]))
+    return grouped
+
+
+def _quantity_for_sku(text: str, sku: str, skus: list[str]) -> tuple[int, str] | None:
+    """Accept a local SKU/quantity pair, never a number taken from another line."""
+    occurrences = _sku_occurrences(text, skus)
+    grouped = _grouped_sku_positions(text, occurrences)
+    valid = {match.start(): match for match in _quantities(text)}
+    all_quantities = list(_QTY.finditer(text))
+    events = sorted([(start, end, "sku", value) for start, end, value in occurrences] +
+                    [(match.start(), match.end(), "quantity", match) for match in all_quantities])
+    paired = []
+    for index, event in enumerate(events):
+        start, end, kind, value = event
+        if kind != "sku" or value != sku or start in grouped:
+            continue
+        for neighbour_index in (index - 1, index + 1):
+            if not 0 <= neighbour_index < len(events):
+                continue
+            qstart, qend, qkind, match = events[neighbour_index]
+            if qkind != "quantity" or qstart not in valid:
+                continue
+            # A list of alternative quantities is not one confirmed quantity.
+            if any(0 <= other < len(events) and events[other][2] == "quantity" and
+                   _LIST_JOIN.fullmatch(text[min(qend, events[other][1]):max(qstart, events[other][0])])
+                   for other in (neighbour_index - 1, neighbour_index + 1)):
+                continue
+            if neighbour_index > index:
+                gap_ok = re.fullmatch(r"[ \t,:：=()\[\]-]*(?:(?:qty|quantity|采购数量|数量)[ \t]*[:：=]?[ \t]*)?",
+                                      text[end:qstart], re.I)
+            else:
+                gap_ok = re.fullmatch(r"[ \t,:：=()\[\]-]*(?:(?:of|for)[ \t]+)?", text[qend:start], re.I)
+            if gap_ok:
+                quantity = int(match.group(1).replace(",", ""))
+                if 0 < quantity <= 1_000_000:
+                    paired.append((quantity, text[min(start, qstart):max(end, qend)]))
+    return paired[0] if paired and len({quantity for quantity, _ in paired}) == 1 else None
+
+
+def _pack_for_sku(text: str, sku: str, custom: bool, skus: list[str]) -> str | None:
+    present = [value for value in skus if _sku_in(value, text)]
+    if len(present) == 1:
+        scopes = [text]
+    else:
+        # Multi-product packaging needs a one-product clause, not a global keyword.
+        scopes = [part for part in re.split(r"[;\n。]|\.(?:\s|$)", text)
+                  if [value for value in skus if _sku_in(value, part)] == [sku]]
+    matches = [scope for scope in scopes if _positive_pack(scope, custom) and not _positive_pack(scope, not custom)]
+    conflicting = any(_positive_pack(scope, not custom) for scope in scopes)
+    if not matches or conflicting:
+        return None
+    return _PACK["custom" if custom else "standard"].search(matches[0]).group()
 
 def rule_suggestions(raw: str, products: list[dict]) -> dict:
     items, evidence, warnings = [], [], []
     found = [p["sku"] for p in products if _sku_in(p["sku"], raw)]
-    quantities = _quantities(raw)
     for i, sku in enumerate(found):
         item = {"sku": sku}
         evidence.append({"field": f"items[{i}].sku", "quote": re.search(re.escape(sku), raw, re.I).group()})
-        if len(found) == 1 and len(quantities) == 1:
-            value = int(quantities[0].group(1).replace(",", ""))
-            if 0 < value <= 1_000_000:
-                item["quantity"] = value
-                evidence.append({"field": f"items[{i}].quantity", "quote": quantities[0].group()})
-        matches = [(key, pattern.search(raw)) for key, pattern in _PACK.items() if pattern.search(raw)]
-        if len(found) == 1 and len(matches) == 1:
-            key, match = matches[0]
-            if _positive_pack(raw, key == "custom"):
-                item["custom_packaging"] = key == "custom"
-                evidence.append({"field": f"items[{i}].custom_packaging", "quote": match.group()})
+        quantity = _quantity_for_sku(raw, sku, [p["sku"] for p in products])
+        if quantity:
+            item["quantity"] = quantity[0]
+            evidence.append({"field": f"items[{i}].quantity", "quote": quantity[1]})
+        for custom in (False, True):
+            packaging = _pack_for_sku(raw, sku, custom, [p["sku"] for p in products])
+            if packaging:
+                item["custom_packaging"] = custom
+                evidence.append({"field": f"items[{i}].custom_packaging", "quote": packaging})
         items.append(item)
     suggestions: dict[str, Any] = {"items": items}
     country = _country(raw)
     if country:
         suggestions["destination_country"] = country
-        variants = next(v for v in _COUNTRIES if v[0] == country)
-        hit = next((m for v in variants for m in re.finditer(re.escape(v), raw, re.I)), None)
-        if hit:
-            evidence.append({"field": "destination_country", "quote": hit.group()})
+        evidence.append({"field": "destination_country", "quote": next(quote for value, quote in _destination_mentions(raw) if value == country)})
     leads = _production_days(raw)
     lead = leads[0] if len(leads) == 1 else None
     if lead:
@@ -83,8 +156,10 @@ def rule_suggestions(raw: str, products: list[dict]) -> dict:
         evidence.append({"field": "requested_lead_days", "quote": lead.group()})
     if not found:
         warnings.append("未识别明确的目录 SKU，请手工选择产品。")
-    if len(found) > 1 or len(quantities) > 1:
-        warnings.append("存在多个产品或数量，基础提取不自动分配，请逐项核对。")
+    if any("quantity" not in item for item in items) and _QTY.search(raw):
+        warnings.append("部分产品数量与 SKU 无法从原文唯一对应，已留空；请逐项人工确认。")
+    if any("custom_packaging" not in item for item in items) and any(pattern.search(raw) for pattern in _PACK.values()):
+        warnings.append("部分产品包装无法从原文唯一归属，已留空；请逐项人工确认。")
     warnings.append("提取结果仅为建议，采用后仍须确认并保存；到货日期不等于生产天数。")
     return {"method": "rules", "suggestions": suggestions, "evidence": evidence, "warnings": warnings}
 
@@ -112,17 +187,18 @@ def validate_model_suggestions(candidate: Any, raw: str, products: list[dict]) -
         checked, out_index = {"sku": sku}, len(accepted["items"])
         used.append({"field": f"items[{out_index}].sku", "quote": quote})
         qty, quote = item.get("quantity"), quotes.get(f"items[{index}].quantity", "")
-        if type(qty) is int and 0 < qty <= 1_000_000 and any(int(m.group(1).replace(",", "")) == qty for m in _quantities(quote)) and any(int(m.group(1).replace(",", "")) == qty for m in _quantities(raw)):
+        quantity = _quantity_for_sku(raw, sku, list(known))
+        if type(qty) is int and quantity and quantity[0] == qty and any(int(m.group(1).replace(",", "")) == qty for m in _quantities(quote)):
             checked["quantity"] = qty
-            used.append({"field": f"items[{out_index}].quantity", "quote": quote})
+            used.append({"field": f"items[{out_index}].quantity", "quote": quantity[1]})
         pack, quote = item.get("custom_packaging"), quotes.get(f"items[{index}].custom_packaging", "")
-        if type(pack) is bool and _positive_pack(quote, pack) and _positive_pack(raw, pack):
+        if type(pack) is bool and _positive_pack(quote, pack) and _pack_for_sku(raw, sku, pack, list(known)):
             checked["custom_packaging"] = pack
             used.append({"field": f"items[{out_index}].custom_packaging", "quote": quote})
         accepted["items"].append(checked)
         seen.add(sku)
     country, quote = source.get("destination_country"), quotes.get("destination_country", "")
-    if isinstance(country, str) and quote and 0 < len(country) <= 120 and _country(raw) == country and (country.casefold() in quote.casefold() or _country(quote) == country):
+    if isinstance(country, str) and quote and 0 < len(country) <= 120 and _country(raw) == country and _mentions_country(quote, country):
         accepted["destination_country"] = country
         used.append({"field": "destination_country", "quote": quote})
     lead, quote = source.get("requested_lead_days"), quotes.get("requested_lead_days", "")
@@ -131,8 +207,12 @@ def validate_model_suggestions(candidate: Any, raw: str, products: list[dict]) -
         used.append({"field": "requested_lead_days", "quote": quote})
     if not used:
         raise ValueError("No grounded fields")
-    return {"method": "ai", "suggestions": accepted, "evidence": used,
-            "warnings": ["AI 建议已核对原文摘录；请确认数量、包装和目的国后保存，尚未修改询盘。"]}
+    warnings = ["AI 建议已核对原文摘录；请确认数量、包装和目的国后保存，尚未修改询盘。"]
+    if any("quantity" not in item for item in accepted["items"]) and _QTY.search(raw):
+        warnings.insert(0, "部分产品数量与 SKU 无法从原文唯一对应，已留空；请逐项人工确认。")
+    if any("custom_packaging" not in item for item in accepted["items"]) and any(pattern.search(raw) for pattern in _PACK.values()):
+        warnings.insert(0, "部分产品包装无法从原文唯一归属，已留空；请逐项人工确认。")
+    return {"method": "ai", "suggestions": accepted, "evidence": used, "warnings": warnings}
 
 async def _model_json(raw: str, products: list[dict]) -> Any:
     from agentscope.message import Msg, TextBlock

@@ -184,7 +184,7 @@ async def stream_direct(turn: DirectTurn):
                 # curated detail used by the capability center; affects
                 # only the SSE payload sent to the frontend — the agent's
                 # own memory still holds the full content
-                if is_skill_result:
+                if is_skill_result and payload.get("status") == "success":
                     _sid = turn.skill_id_by_tool_id.get(
                         tool_id, ""
                     ) or skills._extract_skill_id_from_path(str(tool_content))

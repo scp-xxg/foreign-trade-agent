@@ -117,6 +117,41 @@ def _local_sticky_selection(
     return selected
 
 
+def _restore_local_device_plugins(tokens, *, user_id, result):
+    """Restore saved imported packages from the authoritative device index."""
+    from core.harness.registry import device_catalog
+    from core.harness.registry.run_capabilities import cloud_plugin_selection
+    from core.capabilities.identity_rules import LOCAL_PROFILE
+    from core.harness.capability_errors import CapabilityError
+
+    visible = {
+        row.install_id: row
+        for row in device_catalog.installations("plugin", user_id=user_id)
+        if row.profile_id == LOCAL_PROFILE
+        and row.payload.get("owner_user_id") in (None, "", user_id)
+    }
+    for token in tokens:
+        row = visible.get(token)
+        if row is None:
+            continue
+        if not row.ready or not row.enabled or not (row.payload.get("user_enabled") or {}).get(user_id, True):
+            result.unavailable_ids.append(token)
+            continue
+        try:
+            # Despite its legacy name, this port resolves exact local imports
+            # too, applying current ownership and child ready/enabled gates.
+            selection = cloud_plugin_selection(row.install_id, user_id)
+        except (CapabilityError, OSError, ValueError):
+            selection = None
+        if not selection or selection.get("install_id") != row.install_id:
+            result.unavailable_ids.append(token)
+            continue
+        result.install_ids.append(row.install_id)
+        result.slugs.append(row.key)
+        result.skill_ids.extend(selection.get("skills") or [])
+        result.mcp_ids.extend(selection.get("mcp") or [])
+
+
 def resolve_sticky_plugin_capabilities(
     *,
     user_id: str,
@@ -135,6 +170,8 @@ def resolve_sticky_plugin_capabilities(
     result = plugin_runtime_models.StickyPluginCapabilities()
     if not tokens or not user_id:
         return result
+
+    _restore_local_device_plugins(tokens, user_id=user_id, result=result)
 
     # Legacy unscoped tokens remain local-only. New cloud activations are saved
     # with their canonical profile so an account switch cannot retarget a slug.

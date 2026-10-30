@@ -193,6 +193,74 @@ async def test_pi_cannot_be_bound_to_desk_and_external_sources_are_private(env):
         assert caught.value.status == 404
 
 
+async def reference_content(db, *, product_name="Raspberry Pi 5", label="USB", value="2 USB 3.0 ports"):
+    from test_product_content_generation import photo
+    svc = ContentPackService(db)
+    pack = svc.create("alice", "Independent reference fixture")
+    pack = svc.update("alice", pack["pack_id"], pack["revision"], {
+        "product_name": product_name, "model": "Raspberry Pi 5",
+        "facts": [{"label": label, "value": value, "source_url": "https://example.test/spec"}],
+        "image_credit": "Original test image"})
+    pack = svc.upload("alice", pack["pack_id"], pack["revision"], "reference.png", photo())
+    return await svc.generate("alice", pack["pack_id"], pack["revision"], True, "template")
+
+
+@pytest.mark.asyncio
+async def test_independent_reference_cannot_complete_order_deliverables_and_can_be_replaced(env):
+    sessions, _ = env
+    with sessions() as db:
+        svc = CollaborationService(db)
+        pack = await reference_content(db)
+        assert len(pack["outputs"]["assets"]) == 3
+        case = await create_case(db, content_pack_id=pack["pack_id"], content_relationship="independent_reference")
+        for task_id in ("sales_requirements", "procurement_quote"):
+            case = svc.update_task("alice", case["collaboration_id"], case["revision"], task_id,
+                                   {"status": "in_review", "result_note": "Checked the actual order source"})
+            case = svc.review("alice", case["collaboration_id"], case["revision"], task_id, True, "Confirmed current order evidence")
+        case = svc.update_task("alice", case["collaboration_id"], case["revision"], "design_assets",
+                               {"status": "in_review", "result_note": "Reference images exist but are not the order product"})
+        with pytest.raises(CollaborationError, match="独立参考资料不能作为本订单交付") as caught:
+            svc.review("alice", case["collaboration_id"], case["revision"], "design_assets", True, "Attempted reference acceptance")
+        assert caught.value.status == 409
+        assert all(task["blocked"] for task in case["tasks"] if "content_pack" in task["source_keys"])
+        # Records accepted by an older release also lose their effective ready state.
+        old = svc._load("alice", case["collaboration_id"], case["revision"])
+        for task in old["tasks"]:
+            task.update(status="done", review=deepcopy(old["tasks"][0]["review"]))
+        case = svc._save("alice", case["collaboration_id"], case["revision"], old, "legacy_test_fixture")
+        assert not case["workflow_status"]["ready_for_handoff"]
+        with pytest.raises(CollaborationError) as caught:
+            svc.handoff("alice", case["collaboration_id"], case["revision"], "json")
+        assert caught.value.status == 409
+        # The supported recovery is a matching catalog-bound transaction pack,
+        # followed by fresh acceptance, not deleting unresolved facts or dependencies.
+        replacement = await prepare_outputs(db, await create_case(db))
+        case = svc.link_content("alice", case["collaboration_id"], case["revision"], replacement["content_pack_id"], "transaction")
+        assert not case["workflow_status"]["ready_for_handoff"]
+        case = accept_all(db, case)
+        assert case["workflow_status"]["ready_for_handoff"]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("product_name,label,value,needs_translation", [
+    ("Raspberry Pi 5", "Dimensions", "24 × 15 × 12 cm; 0–40 °C; 5 µm", False),
+    ("树莓派 5", "Dimensions", "24 x 15 x 12 cm", True),
+    ("Raspberry Pi 5", "尺寸", "24 x 15 x 12 cm", True),
+    ("Raspberry Pi 5", "Material", "聚丙烯", True),
+])
+async def test_collaboration_uses_the_same_chinese_text_gate_as_generator(env, product_name, label, value, needs_translation):
+    sessions, _ = env
+    with sessions() as db:
+        pack = await reference_content(db, product_name=product_name, label=label, value=value)
+        case = await create_case(db, content_pack_id=pack["pack_id"], content_relationship="independent_reference")
+        operations = next(task for task in case["tasks"] if task["id"] == "operations_content")
+        assert bool(pack["outputs"]["assets"]) is not needs_translation
+        translation_warning = any("未完成英文翻译" in message for message in operations["blockers"])
+        assert translation_warning is needs_translation
+        # Independent-reference blocking still applies regardless of language.
+        assert any("独立参考资料不能" in message for message in operations["blockers"])
+
+
 @pytest.mark.asyncio
 async def test_api_contract_and_stale_download(env):
     sessions, _ = env

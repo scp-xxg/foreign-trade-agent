@@ -276,6 +276,39 @@ def api(context):
     with TestClient(app) as client: yield client, app
 
 
+@pytest.mark.parametrize("kind,filename,mime", [
+    ("facts-en", "product_facts_en.csv", "text/csv"),
+    ("csv", "product_facts.csv", "text/csv"),
+    ("txt", "product_facts.txt", "text/plain"),
+    ("photo", "raspberry-pi-5-original.jpg", "image/jpeg"),
+])
+def test_demo_downloads_return_the_exact_public_fixture(api, kind, filename, mime):
+    from pathlib import Path
+    client, _ = api
+    response = client.get("/api/v1/foreign-trade/content-packs/demo/" + kind)
+    assert response.status_code == 200
+    assert response.headers["content-type"].split(";")[0] == mime
+    assert response.headers["content-disposition"] == "attachment; filename*=UTF-8''" + filename
+    expected = Path(__file__).resolve().parents[1] / "extensions/foreign_trade/demo_product" / filename
+    assert response.content == expected.read_bytes()
+    if kind == "facts-en":
+        import csv
+        from io import StringIO
+        facts = list(csv.DictReader(StringIO(response.content.decode("utf-8"))))
+        assert len(facts) == 8 and all(fact["label"] and fact["value"] and fact["source_url"] and fact["verified_at"] for fact in facts)
+        assert response.headers["cache-control"] == "no-store"
+        assert response.headers["x-content-type-options"] == "nosniff"
+
+
+def test_english_demo_download_still_requires_the_authenticated_dependency(api):
+    from fastapi import HTTPException
+    client, app = api
+    def deny():
+        raise HTTPException(401, "Authentication required")
+    app.dependency_overrides[routes.get_current_user] = deny
+    assert client.get("/api/v1/foreign-trade/content-packs/demo/facts-en").status_code == 401
+
+
 def test_api_upload_confirm_generate_download_contract(api, monkeypatch):
     client, app = api
     monkeypatch.setattr(generation, "generate_pack", AsyncMock(return_value=fake_output()))
@@ -347,6 +380,48 @@ def test_image_export_failure_is_explicit_422(context, monkeypatch):
     with pytest.raises(content.ContentPackError) as caught:
         svc.download("alice", record["pack_id"], "square")
     assert caught.value.status == 422
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("kind", ["listing", "faq", "zip", "square"])
+async def test_download_rejects_edits_committed_while_export_is_rendered(context, monkeypatch, kind):
+    svc, _, engine = context
+    record = confirmed_pack(svc)
+    record = svc.upload("alice", record["pack_id"], record["revision"], "image.png", png_bytes())
+    record = await svc.generate("alice", record["pack_id"], record["revision"], True, "template")
+    requested_revision = record["revision"]
+    original = generation.export_pack
+    def render_then_edit(*args):
+        exported = original(*args)
+        with Session(engine) as writer:
+            content.ContentPackService(writer).update("alice", record["pack_id"], requested_revision,
+                                                       {"product_name": "Changed while downloading"})
+        return exported
+    monkeypatch.setattr(generation, "export_pack", render_then_edit)
+    with pytest.raises(content.ContentPackError) as caught:
+        svc.download("alice", record["pack_id"], kind, requested_revision)
+    assert caught.value.status == 409
+    latest = svc.get("alice", record["pack_id"])
+    assert latest["revision"] == requested_revision + 1 and latest["outputs"] is None
+
+
+@pytest.mark.asyncio
+async def test_download_rechecks_text_source_bytes_after_rendering(context, monkeypatch):
+    svc, storage, _ = context
+    record = confirmed_pack(svc)
+    record = svc.upload("alice", record["pack_id"], record["revision"], "source.txt", b"Confirmed input")
+    record = await svc.generate("alice", record["pack_id"], record["revision"], True, "template")
+    artifact = svc.db.query(Artifact).filter_by(artifact_id=record["documents"][0]["file_id"]).one()
+    key = artifact.storage_key
+    original = generation.export_pack
+    def render_then_change_source(*args):
+        result = original(*args)
+        storage.files[key] = b"Changed outside the product workspace"
+        return result
+    monkeypatch.setattr(generation, "export_pack", render_then_change_source)
+    with pytest.raises(content.ContentPackError) as caught:
+        svc.download("alice", record["pack_id"], "zip", record["revision"])
+    assert caught.value.status == 409
 
 
 def test_pdf_extracts_actual_text_with_page_separation():

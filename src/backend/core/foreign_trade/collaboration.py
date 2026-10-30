@@ -12,6 +12,7 @@ from uuid import uuid4
 from core.db.models.foreign_trade_collaboration import ForeignTradeCollaboration
 from core.files.storage import get_storage
 from core.foreign_trade.content import ContentPackError, ContentPackService
+from core.foreign_trade.content_generation import contains_cjk
 from core.foreign_trade.inquiry import InquiryError, InquiryService, now_iso
 
 
@@ -171,6 +172,8 @@ class CollaborationService:
             if "content_pack" in task["source_keys"]:
                 if not pack:
                     blockers.append("尚未关联产品资料包")
+                elif record["content_relationship"] != "transaction":
+                    blockers.append("独立参考资料不能作为本订单交付；请关联同一 SKU 的交易资料包，或从单一 DESK-001 询盘新建协同并留空资料包以自动准备")
                 elif record["content_relationship"] == "transaction" and not self._binding_valid(inquiry, pack):
                     blockers.append("资料包与询盘模拟产品不一致，不能作为本交易规格或报价依据")
                 elif not pack.get("outputs"):
@@ -184,7 +187,8 @@ class CollaborationService:
                 output = pack["outputs"]
                 if not output.get("listing") or not output.get("faq"):
                     blockers.append("当前版本缺少商品文案或 FAQ")
-                if output.get("method") == "template" and any(any(ord(c) > 127 for c in f["value"]) for f in pack.get("facts", [])):
+                listing = output.get("listing") or {}
+                if output.get("method") == "template" and contains_cjk(str(listing.get("title", "")) + " ".join(listing.get("bullets", []))):
                     blockers.append("基础模板未完成英文翻译，需核对后重新生成")
             task["blockers"] = list(dict.fromkeys(blockers))
             task["blocked"] = bool(blockers)

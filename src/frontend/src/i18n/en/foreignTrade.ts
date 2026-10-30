@@ -1,5 +1,7 @@
 /** English copy for the public foreign-trade quotation export. */
 export const FOREIGN_TRADE_DICT: Record<string, string> = {
+  '当前记录有未保存修改或操作正在进行，请完成后再切换。': 'This record has unsaved changes or an operation in progress. Finish it before switching records.',
+  '记录版本已变化，请刷新后重试。': 'The record version changed. Refresh and retry.',
   '外贸业务，对话即入口': 'Foreign trade, through conversation',
   '用对话完成询盘处理与产品上品': 'Handle inquiries and product content in chat',
   '核验买家、处理询盘与跟进；上传资料，制作英文文案、商品素材和 FAQ。': 'Review buyer sources, handle inquiries and follow-ups; turn uploaded materials into English listings, images and FAQ.',

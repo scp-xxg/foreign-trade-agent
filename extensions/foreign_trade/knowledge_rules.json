@@ -1,0 +1,112 @@
+{
+  "schema_version": 1,
+  "knowledge_version": "2026-10-31.1",
+  "rules": [
+    {
+      "rule_id": "amazon.title_length", "rule_version": "2026-07-27-us-non-media", "status": "active",
+      "category": "platform_rules", "channels": ["amazon_listing"], "title": "Amazon 美国非媒体标题长度",
+      "summary": "当前美国非媒体基线将标题上限设为75个字符；本项目按Unicode字符检查。",
+      "source_url": "https://sellercentral.amazon.com/seller-forums/discussions/t/ac660707-60c7-43e3-a3fd-420d7321cc4e",
+      "source_publisher": "Amazon official staff announcement", "verified_at": "2026-10-31", "effective_from": "2026-07-27",
+      "scope_note": "仅按美国非媒体类目基线检查。类别、站点和逐步rollout须人工确认；不保证全平台合规。帮助中心正文未取得，不作为已下载正文证据。",
+      "max_chars": 75
+    },
+    {
+      "rule_id": "amazon.item_highlights_length", "rule_version": "2026-07-27-us-non-media", "status": "active",
+      "category": "platform_rules", "channels": ["amazon_listing"], "title": "Amazon Item Highlights 长度",
+      "summary": "新增Item Highlights字段的基线上限为125个字符。它与bullets分别检查。",
+      "source_url": "https://sellercentral.amazon.com/seller-forums/discussions/t/ac660707-60c7-43e3-a3fd-420d7321cc4e",
+      "source_publisher": "Amazon official staff announcement", "verified_at": "2026-10-31", "effective_from": "2026-07-27",
+      "scope_note": "仅美国非媒体基线；实际类目、字段开放情况与逐步rollout须人工确认。", "max_chars": 125
+    },
+    {
+      "rule_id": "amazon.combined_length", "rule_version": "2026-07-27-us-non-media", "status": "active",
+      "category": "platform_rules", "channels": ["amazon_listing"], "title": "Amazon 两字段合计长度",
+      "summary": "标题与Item Highlights的基线总额度为200个字符。",
+      "source_url": "https://sellercentral.amazon.com/seller-forums/discussions/t/ac660707-60c7-43e3-a3fd-420d7321cc4e",
+      "source_publisher": "Amazon official staff announcement", "verified_at": "2026-10-31", "effective_from": "2026-07-27",
+      "scope_note": "仅美国非媒体基线；分别满足75和125上限后仍展示合计检查，不推广到未经核实的站点或特殊类目。", "max_chars": 200
+    },
+    {
+      "rule_id": "amazon.title_characters", "rule_version": "2025-01-21-baseline", "status": "active",
+      "category": "platform_rules", "channels": ["amazon_listing"], "title": "Amazon 标题字符基线",
+      "summary": "2025公告限制标题中的! $ ? _ { } ^ ¬ ¦，品牌名称内的字符有例外。",
+      "source_url": "https://sellercentral.amazon.com/seller-forums/discussions/t/b2b15728-0d43-453e-974f-59eb63f73059",
+      "source_publisher": "Amazon News_Amazon", "verified_at": "2026-10-31", "effective_from": "2025-01-21",
+      "scope_note": "作为有来源的2025标题字符基线保留；品牌字符例外、当前类目和站点规则须人工确认，不作为全平台合规结论。",
+      "forbidden_characters": "!$?_{}^¬¦"
+    },
+    {
+      "rule_id": "amazon.title_repetition", "rule_version": "2025-01-21-baseline", "status": "active",
+      "category": "platform_rules", "channels": ["amazon_listing"], "title": "Amazon 标题重复词基线",
+      "summary": "2025公告要求同一词不超过两次，冠词、介词及连词有例外。",
+      "source_url": "https://sellercentral.amazon.com/seller-forums/discussions/t/b2b15728-0d43-453e-974f-59eb63f73059",
+      "source_publisher": "Amazon News_Amazon", "verified_at": "2026-10-31", "effective_from": "2025-01-21",
+      "scope_note": "本项目提供英语/西语基础分词提示；词性、品牌及当前类目/站点例外须人工复核。", "max_word_occurrences": 2
+    },
+    {
+      "rule_id": "amazon.scope_confirmation", "rule_version": "2026-07-27-rollout", "status": "active",
+      "category": "platform_rules", "channels": ["amazon_listing"], "title": "Amazon 范围及实施状态复核",
+      "summary": "官方员工说明采用逐步实施；本项目只自动检查美国非媒体基线，其他范围留待人工确认。",
+      "source_url": "https://sellercentral.amazon.com/seller-forums/discussions/t/878dffcd-ed3f-4570-88c8-497e547e825a",
+      "source_publisher": "Amazon TaylorR_Amazon", "verified_at": "2026-10-31", "effective_from": "2026-07-27",
+      "scope_note": "媒体类目、其他国家/站点及实际rollout状态不在自动合规保证范围内。"
+    },
+    {
+      "rule_id": "amazon.title_length_200_historical", "rule_version": "2025-01-21-superseded", "status": "superseded",
+      "category": "platform_rules", "channels": ["amazon_listing"], "title": "历史标题200字符基线（已替代）",
+      "summary": "2025多数类目标题200字符要求仅作历史知识保存；不用于当前美国非媒体标题审核。",
+      "source_url": "https://sellercentral.amazon.com/seller-forums/discussions/t/b2b15728-0d43-453e-974f-59eb63f73059",
+      "source_publisher": "Amazon News_Amazon", "verified_at": "2026-10-31", "effective_from": "2025-01-21",
+      "scope_note": "已被本项目当前美国非媒体75字符基线替代；禁止把历史200字符上限用于当前判断。", "max_chars": 200
+    },
+    {
+      "rule_id": "alibaba.rfq_alignment", "rule_version": "official-practice-2026-10-31", "status": "active",
+      "category": "platform_rules", "channels": ["alibaba_rfq"], "title": "Alibaba RFQ 需求匹配",
+      "summary": "报价应回应买家的规格、采购数量及时间要求，并说明尚未确认条件。",
+      "source_url": "https://seller.alibaba.com/rfq", "source_publisher": "Alibaba.com seller RFQ guidance",
+      "verified_at": "2026-10-31", "effective_from": "",
+      "scope_note": "官方实践指引，不作为强制平台禁令或法律结论。本项目自动核对SKU、数量、包装及可识别时间；其他自由文本规格与实际供货承诺由业务人员确认。"
+    },
+    {
+      "rule_id": "quote.amount_consistency", "rule_version": "project-2026-10-31.1", "status": "active",
+      "category": "quotation_terms", "channels": ["alibaba_rfq", "amazon_listing"], "title": "金额与当前报价一致",
+      "summary": "明确声明的金额和币种应与当前保存报价对应；无当前报价的售价声明留待确认。",
+      "source_url": "https://github.com/scp-xxg/foreign-trade-agent/blob/main/src/backend/core/foreign_trade/review.py",
+      "source_publisher": "foreign-trade-agent deterministic policy", "verified_at": "2026-10-31", "effective_from": "",
+      "scope_note": "项目确定性一致性检查，不计算真实报价、不补造价格，也不判定合同法律效力。"
+    },
+    {
+      "rule_id": "quote.unknown_freight_tax", "rule_version": "project-2026-10-31.1", "status": "active",
+      "category": "quotation_terms", "channels": ["alibaba_rfq", "amazon_listing"], "title": "未知运费税费不能承诺免费或包含",
+      "summary": "没有已确认费用依据时，免费运输、含税或零运费等声明须纠正为待确认。",
+      "source_url": "https://github.com/scp-xxg/foreign-trade-agent/blob/main/src/backend/core/foreign_trade/review.py",
+      "source_publisher": "foreign-trade-agent deterministic policy", "verified_at": "2026-10-31", "effective_from": "",
+      "scope_note": "仅核对当前来源与草稿；不推定真实费用，不生成税务或法律意见。"
+    },
+    {
+      "rule_id": "quote.commercial_terms", "rule_version": "project-2026-10-31.1", "status": "active",
+      "category": "quotation_terms", "channels": ["alibaba_rfq", "amazon_listing"], "title": "付款、有效期与贸易术语待确认",
+      "summary": "未明确提供的付款条件、报价有效期及Incoterm，不自动变成对外承诺。",
+      "source_url": "https://github.com/scp-xxg/foreign-trade-agent/blob/main/src/backend/core/foreign_trade/review.py",
+      "source_publisher": "foreign-trade-agent deterministic policy", "verified_at": "2026-10-31", "effective_from": "",
+      "scope_note": "项目审核提示；保留未知项，不以检查完成替代商务批准或法律审查。"
+    },
+    {
+      "rule_id": "quote.unsubstantiated_claims", "rule_version": "project-2026-10-31.1", "status": "active",
+      "category": "quotation_terms", "channels": ["alibaba_rfq", "amazon_listing"], "title": "认证和授权声明须有依据",
+      "summary": "草稿中的认证、官方经销或授权声明若未见相符的确认事实，标为未获依据并要求人工补证。",
+      "source_url": "https://github.com/scp-xxg/foreign-trade-agent/blob/main/src/backend/core/foreign_trade/review.py",
+      "source_publisher": "foreign-trade-agent deterministic policy", "verified_at": "2026-10-31", "effective_from": "",
+      "scope_note": "未获依据不等于已认定虚假或违法；不伪造认证、授权、品牌例外或法律结论。"
+    },
+    {
+      "rule_id": "quote.simulation_disclosure", "rule_version": "project-2026-10-31.1", "status": "active",
+      "category": "quotation_terms", "channels": ["alibaba_rfq", "amazon_listing"], "title": "模拟报价与商品须明确标注",
+      "summary": "引用本项目虚构目录时，草稿应保留演示/模拟说明，不能表述为真实供货承诺。",
+      "source_url": "https://github.com/scp-xxg/foreign-trade-agent/blob/main/src/backend/core/foreign_trade/review.py",
+      "source_publisher": "foreign-trade-agent deterministic policy", "verified_at": "2026-10-31", "effective_from": "",
+      "scope_note": "仅适用于本项目模拟目录；真实Pi公开事实不得与DESK模拟价格混用。"
+    }
+  ]
+}

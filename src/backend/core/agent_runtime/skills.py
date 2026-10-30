@@ -23,6 +23,12 @@ def _extract_skill_id_from_path(path: str) -> str:
     if not parts:
         return ""
     if parts[-1].upper() == "SKILL.MD" and len(parts) >= 2:
+        # Device stores use skills/<profile>/<canonical id>/<revision>/SKILL.md.
+        # This is display identity only; actual reads are checked against the
+        # run-bound loader and must never authorize an old revision by shape.
+        import re
+        if len(parts) >= 5 and parts[-5] == "skills" and re.fullmatch(r"[0-9a-f]{12,64}", parts[-2]):
+            return parts[-3]
         return parts[-2]
     base = os.path.basename(norm)
     if base.upper() == "SKILL.MD" and len(parts) >= 2:

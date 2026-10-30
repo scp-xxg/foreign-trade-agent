@@ -79,7 +79,9 @@ jobs:
             src/backend/tests/orchestration/test_user_question_passthrough.py src/backend/tests/orchestration/test_chat_run_cancel_persistence.py \
             src/backend/tests/test_plugin_progressive_loading.py src/backend/tests/llm/test_local_plugin_sticky_ids.py \
             src/backend/tests/llm/test_tool_call_response_ids.py src/backend/tests/llm/test_chat_model_text_content.py \
-            src/backend/tests/llm/test_project_environment_factory.py src/backend/tests/llm/test_mcp_factory_e2e.py -q
+            src/backend/tests/llm/test_project_environment_factory.py src/backend/tests/llm/test_mcp_factory_e2e.py \
+            src/backend/tests/llm/test_responses_stream_integrity.py \
+            src/backend/tests/features/desktop/capabilities/test_trade_import_native_tools.py -q
 
   quote-and-web:
     name: Quote engine, bilingual exports, and CE web build
@@ -130,6 +132,18 @@ jobs:
       - name: Test collaboration review and handoff download guards
         working-directory: src/frontend
         run: npm run test:foreign-trade-collaboration
+
+      - name: Test sourced rule-review cards and immutable downloads
+        working-directory: src/frontend
+        run: npm run test:foreign-trade-review
+
+      - name: Test language defaults, context limits, generation modes and record views
+        working-directory: src/frontend
+        run: |
+          npm run test:default-language
+          npm run test:model-context-length
+          npm run test:foreign-trade-content-mode
+          npm run test:foreign-trade-record-view
 
       - name: Build the public CE web app
         working-directory: src/frontend

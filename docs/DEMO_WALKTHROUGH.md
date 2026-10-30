@@ -6,7 +6,7 @@
 
 ## 演示前准备
 
-1. 从公开仓库取得最新 `main`，按 [TEAM_SETUP.md](TEAM_SETUP.md) 安装或升级自己的实例、启动并登录。已有实例保留自己的账号和数据目录，不复制他人的数据库或模型配置。
+1. 从公开仓库取得最新 `main`，按 [TEAM_SETUP.md](TEAM_SETUP.md) 安装或升级自己的实例、启动并登录。已有实例保留自己的账号和数据目录，不复制他人的数据库或模型配置。网页地址以启动输出为准：默认是 `http://127.0.0.1:3001`；3001 属于其他容器或服务时保持它不动，用 `team.py start --app-home 原数据目录 --port 3002` 启动本项目，再打开 `http://127.0.0.1:3002`。对应的 `check --running` 也须传同一 `--port 3002`，完整命令见部署指南。
 2. 确认三个工作台入口可用：**询盘工作台**、产品内容入口（页面标题为 **商品资料工作台**）、**跨岗位协同**。插件版本为 0.3.0，包含四个技能、七个原生业务工具和三个独立目录 MCP 工具。
 3. 准备下列仓库文件。浏览器在 Windows、源码在 WSL 时，可用 `wslpath -w "$PWD/extensions/foreign_trade/demo_product/product_facts_en.csv"` 查看文件选择器可用的路径；不要把路径当成已上传的聊天附件。
 
@@ -107,7 +107,7 @@ Photo: SimonWaldherr, Raspberry Pi 5.jpg (CC BY 4.0). Layout and text added; ori
 - `extensions/foreign_trade/demo_product/product_facts_en.csv`
 - `extensions/foreign_trade/demo_product/raspberry-pi-5-original.jpg`
 
-页面应显示两份已上传资料和原图预览。**下载示例事实 CSV** 提供的是原双语示例，导入时可能优先取中文列；本次无模型英语路线请使用仓库的 `product_facts_en.csv`。**下载授权原图** 可作为取得许可图片的另一入口，但仍须从 **选择文件上传** 导入自己的资料包。
+页面应显示两份已上传资料和原图预览。无模型英语路线可直接使用工作台的 **下载英文事实 CSV**，取得 `product_facts_en.csv` 后再从 **选择文件上传** 导入；也可使用上表中的同名仓库文件。原 **下载示例事实 CSV** 仍提供双语示例，导入时可能优先取中文列。**下载授权原图** 可作为取得许可图片的另一入口，但仍须实际上传到自己的资料包。
 
 ### 确认并生成
 

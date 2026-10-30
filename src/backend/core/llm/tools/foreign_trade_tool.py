@@ -562,4 +562,9 @@ def register_foreign_trade_tools(toolkit, *, user_id: str, chat_id: str | None, 
         toolkit, user_id=actor, chat_id=chat_id, install_id=installation,
         require_skill=require_skill,
     )
-    return [tool.__name__ for tool in tools] + collaboration
+    from core.llm.tools.foreign_trade_review_tool import register_review_tools
+    reviews = register_review_tools(
+        toolkit, user_id=actor, chat_id=chat_id, install_id=installation,
+        require_skill=require_skill,
+    )
+    return [tool.__name__ for tool in tools] + collaboration + reviews

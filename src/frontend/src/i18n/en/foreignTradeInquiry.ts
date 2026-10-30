@@ -1,5 +1,9 @@
 // Modified by foreign-trade-agent contributors, 2026-10-21; see CHANGES_FOREIGN_TRADE.md.
 export const FOREIGN_TRADE_INQUIRY_DICT: Record<string, string> = {
+  '完整询盘回执不可用，请让助手重新读取当前询盘。': 'Full inquiry receipt unavailable. Ask the assistant to read the current inquiry.',
+  '历史询盘记录': 'Historical inquiry record',
+  '历史回执已精简，加载完整工具记录后查看询盘状态。': 'This history receipt is abbreviated. Load the complete tool result to view inquiry status.',
+  '加载完整询盘回执': 'Load full inquiry receipt',
   'Lyreco 公开资料核验 · 演示询盘': 'Lyreco public information · Demo inquiry',
   '待跟进': 'Follow-up pending',
   '已核验': 'Verified',

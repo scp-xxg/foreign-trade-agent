@@ -406,11 +406,29 @@ class ContentPackService:
         if kind in {"square", "landscape", "spec"} and image is None:
             raise ContentPackError(422, "未上传产品原图，无法导出图片素材")
         try:
-            return export_pack(record, kind, image)
+            result = export_pack(record, kind, image)
         except ContentPackError:
             raise
         except ValueError:
             raise ContentPackError(422, "当前资料无法导出所选格式") from None
+        def current_snapshot():
+            # Rendering can race an edit in another page. Do not replace the
+            # requested snapshot with a newer generation or export stale data.
+            self.db.expire_all()
+            current = self.get(user_id, pack_id)
+            if current["revision"] != record["revision"] or not current.get("outputs"):
+                raise ContentPackError(409, "资料包在导出期间已更新，请从当前版本重新下载")
+            return current
+        current = current_snapshot()
+        # All uploaded sources are included in the provenance of this pack,
+        # including text documents and images not used as the final background.
+        try:
+            for document in current.get("documents", []):
+                self.read_file(user_id, pack_id, document["file_id"])
+        except ContentPackError:
+            raise ContentPackError(409, "原始资料在导出期间已变化或不可访问，请重新核对资料后下载") from None
+        current_snapshot()
+        return result
 
 
 def demo_file(kind: str) -> tuple[bytes, str, str]:
