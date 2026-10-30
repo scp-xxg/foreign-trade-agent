@@ -181,4 +181,32 @@ def test_full_read_instruction_uses_actual_local_revision_path(installed, monkey
     with pytest.raises(bridge.TradeSkillRequired) as error:
         captured[0]("buyer-inquiry-followup")
     assert "load_plugin" in str(error.value) and "view_text_file" in str(error.value)
+    assert "buyer-inquiry-followup" in str(error.value)
+    assert sid in str(error.value)
+    assert "product-content" not in str(error.value)
+    assert "localization-review" not in str(error.value)
     assert "/workspace/skills/" not in str(error.value)
+
+
+def test_product_full_read_fallback_names_its_own_component_not_review(installed, monkeypatch):
+    from core.llm.tools import foreign_trade_tool
+    from core.capabilities.skills import loader_factory
+    captured = []
+    monkeypatch.setattr(foreign_trade_tool, "register_foreign_trade_tools",
+        lambda collector, **kwargs: captured.append(kwargs["require_skill"]) or list(NAMES))
+    plugin = target()
+    product_id, review_id = "product-content-d9cdd9", "localization-review-d9cdd9"
+    plugin.skill_ids = [review_id, product_id]
+    monkeypatch.setattr(bridge, "_enabled_skill_ids", lambda user: {product_id, review_id})
+    monkeypatch.setattr(loader_factory, "get_skill_loader",
+        lambda: SimpleNamespace(get_skill_dir=lambda name: None))
+    bridge.register_trade_plugin_target(
+        ToolCollector(), plugin, user_id="alice", chat_id="chat", loaded_skill_ids={review_id}
+    )
+    with pytest.raises(bridge.TradeSkillRequired) as error:
+        captured[0]("product-content")
+    message = str(error.value)
+    assert "业务技能 product-content" in message
+    assert product_id in message
+    assert review_id not in message and "localization-review" not in message
+    assert "load_plugin" in message and "view_text_file" in message

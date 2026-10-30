@@ -53,6 +53,32 @@ for (const planMode of [false, true]) {
 }
 console.log('PASS: actual composer selection and regular/plan send preserve local attachments and message ownership');
 
+// A text-only model can still import an uploaded picture through an authorized tool.
+// Its send payload needs the server-issued identity, never browser pixels/base64.
+const { useModelCapabilitiesStore } = await import('../src/stores/modelCapabilitiesStore');
+useModelCapabilitiesStore.setState({ capabilities: {
+  supports_reasoning_effort: false, user_model_switch_enabled: false,
+  user_selectable_models: [], can_read_image: false, vision_bridge_enabled: false,
+} });
+for (const planMode of [false, true]) {
+  const chatId = planMode ? 'plan-image-no-vision' : 'chat-image-no-vision';
+  useChatStore.setState({ currentChatId: chatId, planMode, loopMode: false, sending: false, currentPlanId: null });
+  useChatStore.getState().setChatRunTarget(chatId, 'local');
+  readComposer().setInput('Import this authorized product image; do not infer its specifications.');
+  const file = new File(['attachment bytes'], 'product-photo.jpg', { type: 'image/jpeg' });
+  actions.handleFileSelect({ target: { files: [file] } } as unknown as React.ChangeEvent<HTMLInputElement>, { current: null });
+  const count = sent.length;
+  await actions.send();
+  assert.equal(sent.length, count + 1);
+  const attachment = sent.at(-1)!.attachments[0];
+  assert.deepEqual(Object.keys(attachment).sort(), ['file_id', 'mime_type', 'name']);
+  assert.equal(attachment.name, 'product-photo.jpg');
+  assert.equal(attachment.mime_type, 'image/jpeg');
+  assert.equal(files.get(attachment.file_id), 'attachment bytes');
+  assert.equal(JSON.stringify(sent.at(-1)).includes('base64'), false);
+}
+console.log('PASS: non-vision image sends retain the upload identity for tool import without pixels');
+
 const successfulFetch = globalThis.fetch;
 const errors: unknown[] = [];
 const originalError = message.error;

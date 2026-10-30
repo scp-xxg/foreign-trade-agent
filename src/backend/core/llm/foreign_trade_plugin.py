@@ -182,11 +182,15 @@ def register_trade_plugin_target(collector, target, *, user_id: str, chat_id: st
                 path = model_facing_skill_dir(matches[0], directory) + "/SKILL.md" if directory else None
             except Exception:
                 path = None
+            required = "业务技能 " + name + "（当前技能 ID：" + matches[0] + "）"
             if path:
-                hint = "用 view_text_file(file_path=" + json.dumps(path, ensure_ascii=False) + ") 完整读取当前技能"
+                hint = "用 view_text_file(file_path=" + json.dumps(path, ensure_ascii=False) + ") 完整读取" + required
             else:
-                hint = "调用 load_plugin 取得当前技能路径，再用 view_text_file 完整读取该技能"
-            raise TradeSkillRequired("必须先" + hint + "，再重试业务操作；本次未执行。")
+                hint = (
+                    "为" + required + "取得当前 SKILL.md 路径（可调用 load_plugin 加载插件 "
+                    + str(target.slug) + "），再用 view_text_file 完整读取该指定技能"
+                )
+            raise TradeSkillRequired("必须先" + hint + "，不能以读取其他技能代替；再重试业务操作，本次未执行。")
     from core.llm.tools.foreign_trade_tool import register_foreign_trade_tools
     return register_foreign_trade_tools(collector, user_id=user_id, chat_id=chat_id,
                                        install_id=target.install_id, require_skill=require_skill)

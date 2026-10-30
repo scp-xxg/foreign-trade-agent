@@ -81,6 +81,8 @@ jobs:
             src/backend/tests/llm/test_tool_call_response_ids.py src/backend/tests/llm/test_chat_model_text_content.py \
             src/backend/tests/llm/test_project_environment_factory.py src/backend/tests/llm/test_mcp_factory_e2e.py \
             src/backend/tests/llm/test_responses_stream_integrity.py \
+            tests/test_image_attachment_context.py \
+            src/backend/tests/llm/test_file_context_preview.py src/backend/tests/llm/test_file_context_offloads_blocking_parse.py \
             src/backend/tests/features/desktop/capabilities/test_trade_import_native_tools.py -q
 
   quote-and-web:
@@ -144,6 +146,12 @@ jobs:
           npm run test:model-context-length
           npm run test:foreign-trade-content-mode
           npm run test:foreign-trade-record-view
+
+      - name: Test attachment routing and non-vision image references
+        working-directory: src/frontend
+        run: |
+          npm run test:attachment-routing
+          npm run test:attachment-send
 
       - name: Build the public CE web app
         working-directory: src/frontend
