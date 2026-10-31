@@ -67,6 +67,9 @@ def reindex_document(
     if not document or document.kb_id != kb_id:
         raise ResourceNotFoundError(resource_type="kb_document", resource_id=document_id)
 
+    from features.knowledge.runtime import require_indexing_ready
+    require_indexing_ready(index_modes_of(kb_space), (request.chunk_method if request else None) or kb_space.chunk_method or "structured")
+
     db.query(KBChunk).filter(KBChunk.document_id == document_id, KBChunk.kb_id == kb_id).delete()
     document.indexing_status = "processing"
     db.commit()

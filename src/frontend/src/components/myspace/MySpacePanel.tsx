@@ -1,4 +1,6 @@
 import { Suspense, useEffect } from 'react';
+import { Navigate, useLocation } from 'react-router';
+import { useLocalPrivateKnowledge } from '../../hooks/useLocalPrivateKnowledge';
 import { useKbTab, useMySpaceTab } from '../../routing/subPages';
 import { useMySpaceStore } from '../../stores/mySpaceStore';
 import { useEditionStore } from '../../stores';
@@ -16,6 +18,17 @@ import { MySpaceSearchModal } from './MySpaceSearchModal';
 import { TABS } from './mySpaceNavigation';
 
 export function MySpacePanel() {
+  const localPrivate = useLocalPrivateKnowledge();
+  return localPrivate ? <LocalPrivateKnowledgePanel /> : <StandardMySpacePanel />;
+}
+function LocalPrivateKnowledgePanel() {
+  const location = useLocation();
+  const syncTab = useMySpaceStore(state => state.syncTab);
+  useEffect(() => { syncTab('kb'); }, [syncTab]);
+  if (location.pathname !== '/my-space/kb/private') return <Navigate to="/my-space/kb/private" replace />;
+  return <div className="jx-mySpace"><div className="jx-mySpace-shell"><div className="jx-mySpace-body"><CatalogPanel /></div></div></div>;
+}
+function StandardMySpacePanel() {
   const tab = useMySpaceTab();
   const kb = useKbTab();
   const { assetScope, setAssetScope, setTab, syncTab } = useMySpaceStore();

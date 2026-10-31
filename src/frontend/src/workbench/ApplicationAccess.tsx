@@ -18,13 +18,14 @@ export function ApplicationAccess({id, children}: {id: string; children: ReactNo
   }
   const item = catalog.items.find(i => i.applicationKey === 'builtin:' + id);
   const authoritative = catalog.items.length > 0 && !catalog.error;
+  if (id === 'my_space' && catalog.loading && !item) return <p role="status">{t('正在加载应用目录…')}</p>;
   const denied = ((id === 'automation' && Array.isArray(auth?.allowed_apps) && !auth.allowed_apps.includes(id))
     || (['lab', 'sites'].includes(id) && auth?.lab_enabled === false)
     );
   if (denied || (authoritative && !item)) {
     return <p role="alert">{t('应用不存在或你没有访问权限')}</p>;
   }
-  if ((id === 'my_space' && localOnly) || item?.availability.available === false) {
+  if ((id === 'my_space' && localOnly && !item?.localPrivateKnowledgeOnly) || item?.availability.available === false) {
     return <p role="alert">{t('当前环境不支持此应用')}</p>;
   }
   if (catalog.error && id === 'automation') return <p role="alert">{t(catalog.error)}

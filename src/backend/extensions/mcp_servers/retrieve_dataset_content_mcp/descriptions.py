@@ -2,7 +2,7 @@
 
 _BASE_TOOL_DESCRIPTION = """公有知识库检索：严格按平台选择的知识库后端检索。
 自建模式只检索当前用户有权访问的本地公有/共享库；外部模式只检索所选 Dify、FastGPT 或 WeKnora 数据集。
-两类来源不合并，也不会在空结果或失败时互相兜底。个人私有文档使用 retrieve_local_kb。
+两类来源不合并，也不会在空结果或失败时互相兜底。个人私有文档先看索引类型：rag 使用 retrieve_local_kb；仅 wiki 使用 wiki_locate → wiki_fetch_source。
 
 引用规则：引用返回内容时必须把条目自带的 `cite_id`（如 `e7`）原样写成 `[锚文本](cite:e7)` 标记，禁止自行编号。
 
@@ -23,7 +23,7 @@ Args:
 
 调用决策:
 - 优先级高：政策/报告/规划类原文检索第一优先级。要"结构化数字"走指标类能力，要文段走我。
-- 公有/共享资料用我，后端由平台配置决定；个人私有文档使用 retrieve_local_kb。
+- 公有/共享资料用我，后端由平台配置决定；个人私有文档先看索引类型：rag 使用 retrieve_local_kb；仅 wiki 使用 wiki_locate → wiki_fetch_source。
 - 内部制度和业务记录优先对应内部权威来源；公开资料、最新信息和技术调研可直接使用 internet_search，并按需抓取原文核验。
 """
 
@@ -35,13 +35,13 @@ _LIST_DATASETS_DESCRIPTION = """列出当前可用的所有知识库（公有 + 
 Returns:
     dict: {"public_datasets": [...], "private_datasets": [...], "total": N}
     public_datasets 使用 retrieve_dataset_content，按平台配置只搜索本地公有库或所选外部后端。
-    private_datasets 使用 retrieve_local_kb。
+    先检查 index_modes/capabilities：仅 wiki 的库用 wiki_locate → wiki_fetch_source；包含 rag 的私有库才可使用 retrieve_local_kb。
     private_datasets 仅含当前用户自己的私有库；问"有几个公有库"以 public_datasets 为准，
     不要把本地公有库当私有库。
 """
 
 
-_BASE_LOCAL_KB_TOOL_DESCRIPTION = """检索当前用户上传的个人私有知识库。
+_BASE_LOCAL_KB_TOOL_DESCRIPTION = """对已启用 rag 向量索引的私有知识库做检索。仅 wiki 的库不可使用本工具，应使用 wiki_locate → wiki_fetch_source。
 公有/共享资料必须使用 retrieve_dataset_content，由平台配置决定来源；不要使用本工具作为公有检索的替代或兜底。
 
 引用规则：引用返回内容时必须把条目自带的 `cite_id`（如 `e7`）原样写成 `[锚文本](cite:e7)` 标记，禁止自行编号。
@@ -84,6 +84,7 @@ Returns:
 
 _WIKI_LOCATE_DESCRIPTION = """【第①步·定位】在知识库的**概念地图**上定位问题落在哪些概念/实体上。
 
+query 使用简短关键词或以 | 分隔多个词，不要把整段问题拼成一个短语。
 按关键词命中概念/实体页，返回标题、摘要和关系数量——**不返回长正文**，只告诉你"该看哪里"。
 三步用法：① wiki_locate 定位 → ② 需要全貌时 wiki_expand 展开 → ③ **必须** wiki_fetch_source
 取回原文再作答。⚠️ summary 是模型二次加工的概述，不能直接当答案，一律以取回的原文为准。

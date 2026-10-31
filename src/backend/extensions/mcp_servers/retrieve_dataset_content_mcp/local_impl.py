@@ -223,6 +223,16 @@ def retrieve_local_kb(
     if private_ids and not user_id:
         return [{"error": "未能获取当前用户 ID"}]
 
+    # Wiki-only libraries have source chunks but deliberately no vectors.
+    from core.db.engine import SessionLocal
+    from features.knowledge.wiki.config import wiki_enabled_kb_ids_map
+    with SessionLocal() as _db:
+        modes = wiki_enabled_kb_ids_map(_db, search_kb_ids)
+    if modes and all(modes.get(k) == ["wiki"] for k in search_kb_ids):
+        return {"items": [], "error": {"code": "wiki_index_only",
+            "message": "所选知识库仅有 Wiki 索引。请用 wiki_locate 以短关键词（可用 | 分隔）定位，再用 wiki_fetch_source 取回原文；不要重试向量检索。"},
+            "kb_ids": search_kb_ids, "recommended_tools": ["wiki_locate", "wiki_fetch_source"]}
+
     # ── Embed query ──────────────────────────────────────────────────────────
     try:
         from core.models.embedding import embed_text

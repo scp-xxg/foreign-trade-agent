@@ -1,5 +1,7 @@
 /** 英文字典（catalog 域）：key 为中文原文，value 为英文译文。 */
 export const CATALOG_DICT: Record<string, string> = {
+  '尚未配置知识库所需模型，请先在模型服务中配置对话模型或 embedding。': 'Configure a chat model or embedding model in Model Services before creating an indexed knowledge base.',
+  '尚未配置向量模型，可使用 Wiki 索引；语义检索需要在模型服务中配置 embedding。': 'No embedding model is configured. Wiki indexing is available; configure embedding in Model Services for semantic retrieval.',
   '账号连接位置': 'Account connection location',
   '本机服务尚未就绪，请稍候重试。': 'The local service is not ready. Please try again shortly.',
   '技能标识已存在，未覆盖原技能': 'Skill ID already exists; the original was not overwritten',
