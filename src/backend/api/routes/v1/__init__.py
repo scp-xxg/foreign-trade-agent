@@ -63,6 +63,7 @@ CE_ROUTERS: tuple[tuple[str, str], ...] = (
     ("features.marketplace.api.marketplace", "router"),
     ("features.marketplace.api.mcp_marketplace", "router"),
     ("features.marketplace.api.agent_marketplace", "router"),
+    ("features.marketplace.api.agent_marketplace_admin", "router"),
     ("features.workbench.api.plugin_ui", "router"),
     ("plugin_resources", "router"),
     ("plugins", "router"),

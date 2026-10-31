@@ -1,0 +1,23 @@
+services:
+  foreign-trade-dev:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.mac-dev
+    container_name: foreign-trade-agent-mac-dev
+    working_dir: /workspace
+    environment:
+      NODE_OPTIONS: --max-old-space-size=4096
+      HUGAGENT_BIND_HOST: 0.0.0.0
+    stdin_open: true
+    tty: true
+    volumes:
+      - .:/workspace
+      - foreign_trade_app_home:/root/.foreign-trade-agent
+    ports:
+      - "3001:3001"
+      - "8900:8900"
+      - "9120:9120"
+    command: ["bash", "-lc", "sleep infinity"]
+
+volumes:
+  foreign_trade_app_home:
