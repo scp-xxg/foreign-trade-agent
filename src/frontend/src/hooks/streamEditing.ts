@@ -156,6 +156,9 @@ export function createStreamEditing(ctx: Pick<StreamingContext, 'abortController
     if (compactCommand) {
       return ctx.send(directMessage, invocationOverride);
     }
+    if ((draft.acquisitionMode || draft.followupMode) && directMessage === undefined && invocationOverride === undefined) {
+      return ctx.send(directMessage, invocationOverride);
+    }
     if (planMode) {
       return sendPlanMode(ctx.effectiveApiUrl, ctx.abortControllersRef, ctx.generateSummary, directMessage);
     }

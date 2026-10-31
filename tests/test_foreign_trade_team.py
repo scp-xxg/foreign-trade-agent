@@ -369,8 +369,8 @@ class IsolatedUpgradeTests(unittest.TestCase):
                     "WHERE kind='plugin' AND profile_id='local' AND json_extract(payload,'$.owner_user_id')='test-owner'"
                 ).fetchall()
                 self.assertEqual(len(device),1)
-                self.assertEqual(device[0][:2],("0.4.0","ready"))
-                self.assertEqual(len(json.loads(device[0][2])["components"]["skills"]),5)
+                self.assertEqual(device[0][:2],("0.6.0","ready"))
+                self.assertEqual(len(json.loads(device[0][2])["components"]["skills"]),9)
                 metadata = json.loads(db.execute("SELECT metadata FROM users_shadow WHERE user_id='test-owner'").fetchone()[0])
                 self.assertEqual(metadata,{'role':'super_admin','preserve_marker':'synthetic-account'})
                 self.assertEqual(db.execute('SELECT count(*) FROM local_users').fetchone()[0],0)

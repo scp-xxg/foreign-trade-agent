@@ -24,6 +24,7 @@ export interface LayoutItemMeta {
 // 「智能体」也不再单列——已成为「能力中心」的二级导航项。两者的 PanelKey 仍保留可用，
 // 但从这里移除后，即便后台页面配置里还存着旧 key，itemVisible() 也会因 meta 为空而过滤掉。
 export const LAYOUT_ITEMS: Record<string, LayoutItemMeta> = {
+  trade_buyers: { label: t('潜在买家搜索'), icon: '/home/projects.svg', targetPanel: 'trade_buyers', activePanels: ['trade_buyers'] },
   trade_collaboration: { label: t('跨岗位协同'), icon: '/home/projects.svg', targetPanel: 'trade_collaboration', activePanels: ['trade_collaboration'] },
   trade_content: { label: t('产品内容工作台'), icon: '/home/my-space.svg', targetPanel: 'trade_content', activePanels: ['trade_content'] },
   trade_inquiries: { label: t('询盘工作台'), icon: '/home/projects.svg', targetPanel: 'trade_inquiries', activePanels: ['trade_inquiries'] },

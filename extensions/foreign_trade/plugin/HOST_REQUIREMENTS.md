@@ -1,4 +1,4 @@
-# Host requirements for foreign-trade-demo 0.4.0
+# Host requirements for foreign-trade-demo 0.6.0
 
 This package targets the public scp-xxg/foreign-trade-agent fork of HugAgentOS.
 Keep the installed plugin slug foreign-trade-demo when upgrading.
@@ -7,16 +7,16 @@ The existing loopback MCP at http://127.0.0.1:9120/mcp still provides exactly
 search_products, get_product and calculate_quote for the synthetic catalog.
 The ZIP includes that legacy standalone quotation runtime.
 
-The package contains five skills: inquiry-quote, buyer-inquiry-followup,
-product-content and cross-role-collaboration. The latter three require this
-fork's seven authenticated native tools: trade_save_inquiry, trade_inquiry,
+The package contains six skills: inquiry-quote, buyer-inquiry-followup,
+product-content, cross-role-collaboration, localization-review and trade-buyer-search. The latter three require this
+fork's nine authenticated native tools: trade_save_inquiry, trade_inquiry,
 trade_calculate_quote, trade_import_product, trade_confirm_product_facts,
-trade_product_content, trade_collaboration and trade_review. The host must include their
+trade_product_content, trade_collaboration, trade_review trade_buyer_search and trade_buyer_research. The host must include their
 database services, attachment checks, authenticated APIs and result cards.
 These tools are injected only for a visible, active plugin in an eligible
 writable conversation and are bound to its authenticated user. Required skills
 must be enabled and read before business writes. They are NOT HTTP MCP tools
-on port 9120; the three catalog MCP tools are separate from the eight native tools.
+on port 9120; the three catalog MCP tools are separate from the nine native tools.
 Do not expose them by accepting a user_id supplied by a model or by embedding
 database credentials, browser sessions or per-user tokens in this package.
 
@@ -68,3 +68,5 @@ sources and must remain clearly identified. Nothing in this package sends email,
 publishes product listings or executes purchases/payments.
 
 Version 0.4 additionally requires owner-scoped ForeignTradeReview and versioned ForeignTradeKnowledgeRule tables, the authenticated review API, the trade_review native adapter, and revision/source-checked report cards. Importing only this ZIP into an unmodified upstream host does not install these backend/frontend features.
+
+买家搜索：打开 `/trade-buyers`，导入目标客户画像或填写产品/市场，预览计划后搜索并人工审核。需配置 INTERNET_SEARCH_ENGINE 及所选引擎密钥；无配置不会生成演示结果。本轮结果不持久化，请导出。

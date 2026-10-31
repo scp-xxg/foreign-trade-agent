@@ -39,6 +39,7 @@ const PANEL_SLUGS: Partial<Record<PanelKey, string>> = {
   trade_inquiries: 'trade-inquiries',
   trade_content: 'trade-content',
   trade_collaboration: 'trade-collaboration',
+  trade_buyers: 'trade-buyers',
 };
 
 export const ROUTED_PANELS = Object.entries(PANEL_SLUGS) as Array<[PanelKey, string]>;

@@ -17,11 +17,13 @@ const SettingsPage = lazy(() => import('./components/settings/SettingsModal'));
 const SitesPanel = lazy(() => import('./components/sites/SitesPanel').then(m => ({ default: m.SitesPanel })));
 const UserManagementPage = lazy(() => import('./components/settings/UserManagementPage').then(m => ({ default: m.UserManagementPage })));
 
+const BuyerSearchWorkspace = lazy(() => import('./components/foreign-trade/AcquisitionWorkflow').then(m => ({ default: m.AcquisitionWorkspace })));
 const InquiryWorkspace = lazy(() => import('./components/foreign-trade/InquiryWorkspace').then(m => ({ default: m.InquiryWorkspace })));
 const ProductContentWorkspace = lazy(() => import('./components/foreign-trade/ProductContentWorkspace').then(m => ({ default: m.ProductContentWorkspace })));
 const CollaborationWorkspace = lazy(() => import('./components/foreign-trade/CollaborationWorkspace').then(m => ({ default: m.CollaborationWorkspace })));
 
 const pages = {
+  trade_buyers: BuyerSearchWorkspace,
   trade_inquiries: InquiryWorkspace,
   trade_content: ProductContentWorkspace,
   trade_collaboration: CollaborationWorkspace,

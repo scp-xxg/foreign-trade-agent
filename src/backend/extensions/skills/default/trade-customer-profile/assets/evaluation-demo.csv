@@ -1,0 +1,9 @@
+case_id,prediction,gold_label,hard_violation,factual_claims,supported_claims
+demo-01,qualified,suitable,false,4,4
+demo-02,qualified,suitable,false,3,3
+demo-03,qualified,unsuitable,true,2,1
+demo-04,qualified,insufficient,unknown,,
+demo-05,needs_review,suitable,unknown,2,2
+demo-06,rejected,unsuitable,true,2,2
+demo-07,needs_review,insufficient,unknown,,
+demo-08,rejected,suitable,false,1,1

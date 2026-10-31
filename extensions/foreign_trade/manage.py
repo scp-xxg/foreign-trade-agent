@@ -85,8 +85,18 @@ def build() -> dict:
         plugin / "skills/product-content/SKILL.md",
         plugin / "skills/cross-role-collaboration/SKILL.md",
         plugin / "skills/localization-review/SKILL.md",
+        plugin / "skills/trade-buyer-search/SKILL.md",
+        plugin / "skills/trade-customer-profile/SKILL.md",
+        plugin / "skills/trade-buyer-due-diligence/SKILL.md",
+        plugin / "skills/trade-buyer-contact-discovery/SKILL.md",
+        plugin / "skills/trade-lead-prioritization/SKILL.md",
+        plugin / "skills/trade-personalized-outreach/SKILL.md",
+        plugin / "skills/trade-followup-cadence/SKILL.md",
+        plugin / "skills/trade-reply-triage/SKILL.md",
+        plugin / "skills/trade-buyer-search/references/evaluation.md",
         plugin / "HOST_REQUIREMENTS.md",
         HERE.parents[1] / "docs/CHAT_PLUGIN.md",
+        HERE.parents[1] / "docs/ACQUISITION_WORKFLOW.md",
         HERE.parents[1] / "docs/CHAT_PLUGIN_ACCEPTANCE.md",
         HERE.parents[1] / "docs/SCENARIO_THREE.md",
         HERE.parents[1] / "docs/ACCEPTANCE_20261028.md",
@@ -109,6 +119,7 @@ def build() -> dict:
         if (HERE / "README.md").is_file():
             archive.write(HERE / "README.md", "README.md")
         archive.write(HERE.parents[1] / "docs/CHAT_PLUGIN.md", "CHAT_PLUGIN.md")
+        archive.write(HERE.parents[1] / "docs/ACQUISITION_WORKFLOW.md", "ACQUISITION_WORKFLOW.md")
         archive.write(HERE.parents[1] / "docs/CHAT_PLUGIN_ACCEPTANCE.md", "CHAT_PLUGIN_ACCEPTANCE.md")
         archive.write(HERE.parents[1] / "docs/SCENARIO_THREE.md", "SCENARIO_THREE.md")
         archive.write(HERE.parents[1] / "docs/ACCEPTANCE_20261028.md", "ACCEPTANCE_20261028.md")

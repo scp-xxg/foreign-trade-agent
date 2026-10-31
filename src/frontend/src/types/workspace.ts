@@ -1,7 +1,7 @@
 // Modified by foreign-trade-agent contributors, 2026-10-28; see CHANGES_FOREIGN_TRADE.md.
 import type { EditionChatShareScope, EditionProjectChatFields, EditionProjectFields, EditionProjectKind } from '../editionModelTypes';
 
-export type PanelKey = 'chat' | 'personal_agent' | 'skills' | 'agents' | 'mcp' | 'kb' | 'docs' | 'app_center' | 'settings' | 'user_management' | 'my_space' | 'ability_center' | 'lab' | 'projects' | 'automation' | 'sites' | 'trade_inquiries' | 'trade_content' | 'trade_collaboration';
+export type PanelKey = 'chat' | 'personal_agent' | 'skills' | 'agents' | 'mcp' | 'kb' | 'docs' | 'app_center' | 'settings' | 'user_management' | 'my_space' | 'ability_center' | 'lab' | 'projects' | 'automation' | 'sites' | 'trade_inquiries' | 'trade_content' | 'trade_collaboration' | 'trade_buyers';
 
 /** 能力中心的四类能力。选中项由侧边栏的二级导航驱动，所以状态放在 catalogStore 而非页面内部。 */
 export type AbilityTabKey = 'agents' | 'skills' | 'mcp' | 'plugins';
