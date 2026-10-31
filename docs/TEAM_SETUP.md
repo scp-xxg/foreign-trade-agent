@@ -131,6 +131,8 @@ test -f "$TRADE_APP_HOME/data.db" && \
 
 三种图片都用授权原图或明确标注的模拟示意图进行排版，不是 AI 生图。模型失败时可用工作台模板继续独立演示，但只能记录“本地流程完成”，不能记为模型翻译或聊天端到端通过。完整三场景多轮问答与预期输出见 [HACKATHON_DEMO.md](HACKATHON_DEMO.md)。
 
+本地私有知识库操作与旧账号权限处理见 [PRIVATE_KNOWLEDGE.md](PRIVATE_KNOWLEDGE.md)。没有 embedding 时默认采用 Wiki 原文追溯，不代表已配置向量检索。
+
 ## 5. 验收相同的外贸功能
 
 ```bash

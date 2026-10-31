@@ -89,7 +89,11 @@ def _build_kb_lite_section(enabled_kb_ids: Optional[List[str]]) -> str:
                 )
                 for s in spaces:
                     desc_part = f"：{s.description[:120]}" if s.description else ""
-                    lines.append(f"- {s.name}（私有，kb_id: `{s.kb_id}`）{desc_part}")
+                    from features.knowledge.wiki.config import index_modes_of
+                    modes = index_modes_of(s)
+                    route = ("仅 Wiki 索引：用 wiki_locate（短关键词，可用 | 分隔）定位，再用 wiki_fetch_source 取原文；不要调用向量检索"
+                             if modes == ["wiki"] else "RAG 向量检索" if modes == ["rag"] else "RAG 与 Wiki 均已启用")
+                    lines.append(f"- {s.name}（私有，kb_id: `{s.kb_id}`，{route}）{desc_part}")
         except Exception as exc:
             _log.debug("[kb_lite] DB query failed: %s", exc)
 

@@ -41,6 +41,7 @@ updateKBSpace,
 uploadKBDocument,
 } from '../../api';
 import { useChunkChildrenExpander } from '../../hooks/useChunkChildrenExpander';
+import { useKnowledgeRuntime } from '../../hooks/useKnowledgeRuntime';
 import { useStatusFlash } from '../../hooks/useFlash';
 import { t } from '../../i18n';
 import { useKbTab } from '../../routing/subPages';
@@ -51,6 +52,7 @@ import { formatDateTime } from '../../utils/date';
 import { getFileIconSrc,getFolderIconSrc } from '../../utils/fileIcon';
 import { mdToHtml } from '../../utils/markdown';
 import { EASE,staggerStyle } from '../../utils/motionTokens';
+import { watchWikiProgress } from '../../utils/wikiProgressPoll';
 import { parseSeparators } from '../../utils/separators';
 import { KBChunkImages,WikiPanel } from '../kb';
 import IndexModePicker from '../kb/IndexModePicker';
@@ -231,6 +233,7 @@ function filterDisplayTags(tags?: string[]): string[] {
 }
 
 export function CatalogPanel() {
+  const knowledgeRuntime = useKnowledgeRuntime();
   const isCE = useEditionStore((s) => s.edition === 'ce');
   const {
     catalog, catalogLoading,
@@ -370,7 +373,8 @@ export function CatalogPanel() {
   // Whether editing chunk tags/questions is allowed: decided by the authorization capability bit editable (true for owners / authorized admins;
   // ordinary public and externally managed libraries have editable=false, preview-only). No longer using is_public as a blanket rule — otherwise
   // a shared library the user is authorized to manage would also be wrongly treated as read-only.
-  const canEditChunks = !!selectedItem && !!selectedItem.editable;
+  const canEditChunks = !!selectedItem && !!selectedItem.editable
+    && !(knowledgeRuntime?.local_private_only && selectedItem.capabilities?.wiki);
 
   useEffect(() => {
     if (selectedItem) {
@@ -396,7 +400,7 @@ export function CatalogPanel() {
     return () => {
       alive = false;
     };
-  }, []);
+  }, [selectedItem?.id, selectedItem?.capabilities?.wiki]);
 
   // 进入某个知识库时确认它确实有 Wiki 产物，避免出现点开就是空的死 Tab。
   // 自建库还要同时拿生成进度：刚建好的库页数为 0，但正在生成——这时也要给入口，
@@ -433,20 +437,14 @@ export function CatalogPanel() {
     };
   }, [selectedItem?.id, selectedItem?.capabilities?.wiki, selectedItem?.source, wikiBackendReady]);
 
-  // 生成期间轮询：页数会随生成推进增长，Tab 上的计数要跟着动
+  // Keep polling a selected local Wiki even when initially idle: uploading the
+  // first document starts generation after the initial capability request.
   useEffect(() => {
     const kbId = selectedItem?.id;
-    if (!wikiGenerating || !kbId || selectedItem?.source !== 'local') return;
-    const timer = window.setInterval(() => {
-      void getKBWikiStatus(kbId).then((status) => {
-        setWikiGenerating(Boolean(status.generating));
-      });
-      void getWikiStats(kbId)
-        .then((stats) => setWikiPageCount(stats.total_pages || 0))
-        .catch(() => undefined);
-    }, 10000);
-    return () => window.clearInterval(timer);
-  }, [wikiGenerating, selectedItem?.id, selectedItem?.source]);
+    if (!kbId || selectedItem?.source !== 'local' || !selectedItem.capabilities?.wiki || !wikiBackendReady) return;
+    return watchWikiProgress({status:()=>getKBWikiStatus(kbId),stats:()=>getWikiStats(kbId),
+      onGenerating:setWikiGenerating,onPages:setWikiPageCount});
+  }, [selectedItem?.id, selectedItem?.source, selectedItem?.capabilities?.wiki, wikiBackendReady]);
 
 
   useEffect(() => {
@@ -616,8 +614,8 @@ export function CatalogPanel() {
     setKbEditorMode('create');
     setKbEditorName('');
     setKbEditorDesc('');
-    setKbEditorIndexModes(['rag']);
-    setKbEditorGranularity('standard');
+    setKbEditorIndexModes(knowledgeRuntime ? knowledgeRuntime.default_index_modes : ['rag']);
+    setKbEditorGranularity(knowledgeRuntime?.local_private_only ? 'focused' : 'standard');
     setKbEditorExtractionHint('');
     setKbEditorContentHint('');
     // Default to whichever one is permitted; if both are, default to private
@@ -1358,7 +1356,7 @@ export function CatalogPanel() {
         footer={(
           <div className="jx-kbEditorFooter">
             <Button onClick={closeKbEditor}>{t('取消')}</Button>
-            <Button type="primary" loading={kbEditorLoading} onClick={() => void handleKbEditorSubmit()}>
+            <Button type="primary" loading={kbEditorLoading} disabled={kbEditorIndexModes.length === 0} onClick={() => void handleKbEditorSubmit()}>
               {kbEditorMode === 'create' ? t('创建') : t('保存')}
             </Button>
           </div>
@@ -1400,7 +1398,12 @@ export function CatalogPanel() {
               contentInstructions={kbEditorContentHint}
               onContentInstructionsChange={setKbEditorContentHint}
               disabled={kbEditorLoading}
+              unavailableModes={knowledgeRuntime ? [
+                ...(!knowledgeRuntime.embedding_configured ? ['rag' as const] : []),
+                ...(!knowledgeRuntime.wiki_configured ? ['wiki' as const] : []),
+              ] : []}
             />
+            {knowledgeRuntime && !knowledgeRuntime.embedding_configured && <Typography.Paragraph type="secondary">{knowledgeRuntime.wiki_configured ? t('尚未配置向量模型，可使用 Wiki 索引；语义检索需要在模型服务中配置 embedding。') : t('尚未配置知识库所需模型，请先在模型服务中配置对话模型或 embedding。')}</Typography.Paragraph>}
           </div>
           <div className="jx-kbEditorField">
             <div className="jx-kbEditorLabel">{t('知识库简介')}</div>
@@ -1795,6 +1798,7 @@ export function CatalogPanel() {
                 popupClassName="jx-kbUploadSelectDropdown"
                 options={UPLOAD_CHUNK_METHOD_OPTIONS.map((option) => ({
                   value: option.value,
+                  disabled: option.value === 'embedding_semantic' && knowledgeRuntime?.embedding_configured === false,
                   label: option.label,
                   desc: option.desc,
                   recommended: option.recommended,

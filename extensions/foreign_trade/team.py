@@ -49,6 +49,7 @@ def runtime_env(home: Path, port: int = 3001) -> dict[str, str]:
         "HUGAGENT_BOOTSTRAP_DEFAULT_PLUGINS": "1",
         "LOG_FILE_PATH": str(home / "logs/backend.log"),
         "MILVUS_URL": str(home / "milvus.db"),
+        "LOCAL_PRIVATE_KB_ENABLED": "true",
         "MEM0_ENABLED": "false",  # Optional vector memory needs its own model/runtime.
         "NODE_PATH": str(home / "node/node_modules"),
         "PLAYWRIGHT_BROWSERS_PATH": str(home / "node/browsers"),

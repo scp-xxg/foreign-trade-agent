@@ -9,6 +9,7 @@ from features.knowledge.wiki.finalize import INDEX_SLUG
 from features.knowledge.wiki.store import children_index, clean_category_path, descendant_folder_ids, get_page, load_folder_tree, page_counts_by_folder, subtree_counts, walk_folder_path
 from sqlalchemy import func, or_
 from features.knowledge.wiki import local_graph
+from features.knowledge.wiki.local_graph import wiki_graph
 from features.knowledge.wiki import local_projection
 from features.knowledge.wiki import local_provider_state
 

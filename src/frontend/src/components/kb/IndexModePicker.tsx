@@ -14,6 +14,7 @@ interface IndexModePickerProps {
   contentInstructions: string;
   onContentInstructionsChange: (value: string) => void;
   disabled?: boolean;
+  unavailableModes?: KBIndexMode[];
 }
 
 const MODE_CARDS: Array<{
@@ -63,16 +64,18 @@ export default function IndexModePicker({
   contentInstructions,
   onContentInstructionsChange,
   disabled,
+  unavailableModes = [],
 }: IndexModePickerProps) {
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const hasWiki = value.includes('wiki');
   const isLlmWiki = value.includes('rag') && hasWiki;
 
   const toggle = (mode: KBIndexMode) => {
-    if (disabled) return;
+    if (disabled || (unavailableModes.includes(mode) && !value.includes(mode))) return;
     const next = value.includes(mode) ? value.filter((m) => m !== mode) : [...value, mode];
     // 一个都不选没有意义（既不检索也不生成），兜底回检索
-    onChange(next.length ? next : ['rag']);
+    const fallback = (['rag', 'wiki'] as const).find(item => !unavailableModes.includes(item));
+    onChange(next.length ? next : fallback ? [fallback] : []);
   };
 
   return (
@@ -91,7 +94,7 @@ export default function IndexModePicker({
               type="button"
               role="checkbox"
               aria-checked={active}
-              disabled={disabled}
+              disabled={disabled || (unavailableModes.includes(card.mode) && !active)}
               className={`jx-idxModeCard${active ? ' is-active' : ''}`}
               onClick={() => toggle(card.mode)}
             >

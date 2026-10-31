@@ -83,7 +83,11 @@ jobs:
             src/backend/tests/llm/test_responses_stream_integrity.py \
             tests/test_image_attachment_context.py \
             src/backend/tests/llm/test_file_context_preview.py src/backend/tests/llm/test_file_context_offloads_blocking_parse.py \
-            src/backend/tests/features/desktop/capabilities/test_trade_import_native_tools.py -q
+            src/backend/tests/features/desktop/capabilities/test_trade_import_native_tools.py \
+            src/backend/tests/features/knowledge/test_kb_wiki_pipeline.py \
+            src/backend/tests/features/knowledge/test_kb_wiki_end_to_end.py \
+            src/backend/tests/features/knowledge/test_kb_index_queue.py \
+            src/backend/tests/features/knowledge/test_kb_document_status.py -q
 
   quote-and-web:
     name: Quote engine, bilingual exports, and CE web build
@@ -151,6 +155,7 @@ jobs:
           npm run test:model-context-length
           npm run test:foreign-trade-content-mode
           npm run test:foreign-trade-record-view
+          npm run test:local-private-knowledge
 
       - name: Test attachment routing and non-vision image references
         working-directory: src/frontend

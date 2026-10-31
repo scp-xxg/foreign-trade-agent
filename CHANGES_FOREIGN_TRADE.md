@@ -65,3 +65,11 @@ are local deployment state and are not distributed.
 - Tighten per-SKU inquiry extraction, review source/role requirements, and concurrent export checks; retain explicit unknown commercial terms.
 - Support configurable loopback web ports, explicit Chinese build defaults, required chat model context windows, historical inquiry receipts, stable record URLs and English demo CSV downloads.
 - Add scenario scripts and offline regression coverage; actual runtime acceptance is recorded separately.
+
+## 2026-10-31 · 本地私有知识库
+
+- 在独立本地模式下接通私有知识库入口，保留账号归属与其他应用的可用性边界。
+- 修复社区版建库/更新字段、Wiki 路由注册与知识地图接口；缺少 embedding 时默认 Wiki，写入前明确检查模型能力。
+- 将索引类型传入对话与连接器，Wiki 定位后读取原文，避免误用向量检索；模式修改会刷新提示缓存。
+- 增加旧管理员的显式建库配置脚本、数据备份与审计；不覆盖其他权限。
+- 增加隔离测试、真实网页上传示例与操作文档。

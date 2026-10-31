@@ -234,6 +234,8 @@ class KBService:
         }
 
         space = self.repo.create_space(space_data)
+        from prompts.kb_lite_section import invalidate_kb_lite_cache
+        invalidate_kb_lite_cache()
 
         grants = [
             (str(kind).strip(), str(principal_id).strip())
@@ -327,6 +329,8 @@ class KBService:
             update_data["extra_data"] = metadata
 
         updated = self.repo.update_space(kb_id, update_data)
+        from prompts.kb_lite_section import invalidate_kb_lite_cache
+        invalidate_kb_lite_cache()
         if not updated:
             return None
 

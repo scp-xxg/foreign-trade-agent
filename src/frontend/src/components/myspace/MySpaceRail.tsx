@@ -9,6 +9,7 @@ StarOutlined,
 } from '@ant-design/icons';
 import { Badge } from 'antd';
 import { useState } from 'react';
+import { useLocalPrivateKnowledge } from '../../hooks/useLocalPrivateKnowledge';
 import { t } from '../../i18n';
 import { useKbTab } from '../../routing/subPages';
 import { usePersonalAgentName } from '../../personalAgentEdition';
@@ -24,6 +25,7 @@ const NAV_ITEMS: Array<{ key: MySpaceTab; label: string; icon: React.ReactNode }
 
 /** 我的空间的模块导航；桌面与窄屏抽屉共用同一份路由。 */
 export function MySpaceRail() {
+  const localPrivate = useLocalPrivateKnowledge();
   const tab = useMySpaceStore((s) => s.tab);
   const setTab = useMySpaceStore((s) => s.setTab);
   const assetScope = useMySpaceStore((s) => s.assetScope);
@@ -54,6 +56,9 @@ export function MySpaceRail() {
     { key: 'private', label: t('私有知识库') },
   ] as const).filter((s) => !isCE || s.key !== 'public');
 
+  if (localPrivate) return <aside className="jx-spaceNavigation" aria-label={t('我的空间')}><div className="jx-msRail-inner"><div className="jx-msRail-nav">
+    <button type="button" className="jx-msRail-item active" onClick={() => setTab('kb', 'private')}><BookOutlined /><span>{t('私有知识库')}</span></button>
+  </div></div></aside>;
   return (
     <aside
       className="jx-spaceNavigation"

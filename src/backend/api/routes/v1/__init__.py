@@ -18,6 +18,7 @@ CE_ROUTERS: tuple[tuple[str, str], ...] = (
     ("user_preferences", "router"),
     ("catalog", "router"),
     ("features.knowledge.api.kb", "router"),
+    ("features.knowledge.api.kb_wiki", "router"),
     ("summary", "router"),
     ("classify", "router"),
     ("config", "router"),

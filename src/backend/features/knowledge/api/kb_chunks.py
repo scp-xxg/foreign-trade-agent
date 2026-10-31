@@ -80,6 +80,10 @@ def list_chunk_children(
     if not parent:
         raise ResourceNotFoundError(resource_type="kb_chunk", resource_id=chunk_id)
 
+    from features.knowledge.wiki.config import rag_enabled
+    if not rag_enabled(kb_space):
+        return success_response(data={"children": [], "count": 0}, message="Wiki-only knowledge bases retain source chunks without vector children")
+
     from features.knowledge.vector_indexing import get_children_for_parent
 
     children = get_children_for_parent(chunk_id)
@@ -119,6 +123,11 @@ def update_chunk(
     chunk = db.query(KBChunk).filter(KBChunk.chunk_id == chunk_id, KBChunk.kb_id == kb_id).first()
     if not chunk:
         raise ResourceNotFoundError(resource_type="kb_chunk", resource_id=chunk_id)
+
+    from features.knowledge.runtime import local_private_knowledge_enabled
+    from features.knowledge.wiki.config import wiki_enabled
+    if local_private_knowledge_enabled() and wiki_enabled(kb_space):
+        raise BadRequestError(message="Wiki 知识条目依赖原文出处；请更新上传的原文并重新生成，不直接修改其证据分块。")
 
     content_changed = request.content is not None
     if content_changed:

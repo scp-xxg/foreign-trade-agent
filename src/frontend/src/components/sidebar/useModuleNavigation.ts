@@ -1,3 +1,4 @@
+import { useLocalPrivateKnowledge } from '../../hooks/useLocalPrivateKnowledge';
 import { useAuthStore } from '../../stores/authStore';
 import { useDeploymentModeStore } from '../../stores/deploymentModeStore';
 import { usePageConfig } from '../../hooks/usePageConfig';
@@ -5,12 +6,13 @@ import { DEFAULT_MENU_ITEMS, DEFAULT_SIDEBAR_ITEMS } from '../../utils/pageConfi
 import { moduleNavigation } from './moduleNavigation';
 
 export function useModuleNavigation() {
+  const localPrivate = useLocalPrivateKnowledge();
   const user = useAuthStore(s => s.authUser);
   const localOnly = useDeploymentModeStore(s => s.provisionMode === 'local_only');
   const sidebar = usePageConfig<string[]>('navigation.sidebar_items', DEFAULT_SIDEBAR_ITEMS);
   const menu = usePageConfig<string[]>('navigation.menu_items', DEFAULT_MENU_ITEMS);
   return moduleNavigation({ sidebar, menu }, {
-    labEnabled: user?.lab_enabled !== false, localOnly,
+    labEnabled: user?.lab_enabled !== false, localOnly: localOnly && !localPrivate,
     automationAllowed: !Array.isArray(user?.allowed_apps) || user.allowed_apps.includes('automation'),
   });
 }

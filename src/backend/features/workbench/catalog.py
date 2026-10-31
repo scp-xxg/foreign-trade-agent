@@ -106,7 +106,10 @@ def project(item, layout):
     if reason is None and item.get("authenticationRequired"):
         reason = "auth_configuration_required"
     if item["applicationKey"] == "builtin:my_space" and local_mode_enabled():
-        reason = "origin_unavailable"
+        from features.knowledge.runtime import local_private_knowledge_enabled
+        value["localPrivateKnowledgeOnly"] = local_private_knowledge_enabled()
+        if not value["localPrivateKnowledgeOnly"]:
+            reason = "origin_unavailable"
     value["availability"] = {"available": reason is None, "reason": reason}
     value["navigation"] = {
         "defaultPinned": item["applicationKey"] in layout["defaultPinned"],

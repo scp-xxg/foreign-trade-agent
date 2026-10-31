@@ -16,6 +16,17 @@ class IndexingConfig(BaseModel):
     child_separators: Optional[List[str]] = None
 
 
+class WikiConfigRequest(BaseModel):
+    granularity: Literal["focused", "standard", "exhaustive"] = "standard"
+    language: str = Field("中文", min_length=1, max_length=40)
+    extraction_instructions: str = Field("", max_length=4000)
+    content_instructions: str = Field("", max_length=4000)
+    batch_size: int = Field(5, ge=1, le=50)
+    map_parallel: int = Field(2, ge=1, le=16)
+    reduce_parallel: int = Field(2, ge=1, le=16)
+    max_llm_calls: int = Field(100, ge=1, le=4000)
+
+
 class CreateKBSpaceRequest(BaseModel):
     name: str = Field(..., min_length=1, max_length=255)
     description: Optional[str] = None
@@ -23,11 +34,15 @@ class CreateKBSpaceRequest(BaseModel):
     metadata: Optional[dict] = Field(default_factory=dict)
     indexing_config: Optional[IndexingConfig] = None
     visibility: Literal["private"] = "private"
+    index_modes: Optional[List[Literal["rag", "wiki"]]] = Field(None, min_length=1, max_length=2)
+    wiki_config: Optional[WikiConfigRequest] = None
 
 
 class UpdateKBSpaceRequest(BaseModel):
     name: Optional[str] = Field(None, min_length=1, max_length=255)
     description: Optional[str] = None
+    index_modes: Optional[List[Literal["rag", "wiki"]]] = Field(None, min_length=1, max_length=2)
+    wiki_config: Optional[WikiConfigRequest] = None
 
 
 class PolishKBDescriptionRequest(BaseModel):

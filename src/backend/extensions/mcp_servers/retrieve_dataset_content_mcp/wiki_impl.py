@@ -236,7 +236,7 @@ def wiki_locate(
         "total": len(pages),
         "hint": (
             "命中为空时：换更书面的术语重试，或用正则交替一次给多个说法"
-            "（如 资质|牌照|证书）；仍为空则改用 retrieve_dataset_content 走原文语义检索。"
+            "（如 资质|牌照|证书），不要将整段问题作为一个短语。仅 Wiki 的库不支持向量检索；仍为空可查看 wiki_overview，或说明未找到原文。"
         ),
     }
 

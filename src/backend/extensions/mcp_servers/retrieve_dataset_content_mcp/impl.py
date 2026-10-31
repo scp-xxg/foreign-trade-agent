@@ -49,6 +49,9 @@ def _list_local_datasets(
                     .all()
                 )
                 shared = is_shared_visibility(space.visibility)
+                from features.knowledge.wiki.config import index_modes_of
+                from features.knowledge.wiki_router import capabilities_for_local_kb
+                modes = index_modes_of(space)
                 item = {
                     "kb_id": space.kb_id,
                     "name": space.name,
@@ -56,6 +59,9 @@ def _list_local_datasets(
                     "document_count": space.document_count or len(docs),
                     "document_titles": [doc.title for doc in docs if doc.title],
                     "type": "public" if shared else "private",
+                    "index_modes": modes,
+                    "capabilities": capabilities_for_local_kb(space),
+                    "recommended_tools": ["wiki_locate", "wiki_fetch_source"] if modes == ["wiki"] else ["retrieve_dataset_content" if shared else "retrieve_local_kb"],
                 }
                 (shared_items if shared else private_items).append(item)
     except Exception as exc:

@@ -76,6 +76,8 @@ async def preview_chunks(
     user: UserContext = Depends(get_current_user),
 ):
     """预览文档的分块效果，不落库、不写入向量库。上传文件并按指定分块方法（structured/recursive/embedding_semantic/laws/qa）与父子分块参数解析，返回父块及其子块预览，用于创建知识库前调参。文件大小受 MAX_PREVIEW_SIZE（20MB）限制。"""
+    from features.knowledge.runtime import require_indexing_ready
+    require_indexing_ready([], chunk_method)
     content = await file.read()
     if len(content) > kb_state.MAX_PREVIEW_SIZE:
         raise FileTooLargeError(max_size=kb_state.MAX_PREVIEW_SIZE, actual_size=len(content))
