@@ -13,6 +13,7 @@ import {sourceTargets, type WorkbenchOrigin, type WorkbenchSource, type SourceFa
 export interface CatalogItem extends Omit<ExternalApplication, 'revision'> {
   revision: number | string;
   legacy?: boolean;
+  localPrivateKnowledgeOnly?: boolean;
   origin?: WorkbenchOrigin;
   binding?: {installId:string;packageRevision:string;slug:string;executionScope:WorkbenchSource;origin:WorkbenchOrigin};
   availability: { available: boolean; reason: string | null };

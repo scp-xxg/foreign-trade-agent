@@ -49,7 +49,13 @@ def create_kb_space(
     # 索引模式：rag（向量检索）/ wiki（LLM Wiki 图谱），两者同选即 LLM-Wiki 知识库。
     # 三种组合都会分块——wiki 省掉的是向量化，不是分块（引文标注要 chunk id、
     # 回溯原文要按 chunk 直取）。
-    metadata["index_modes"] = normalize_index_modes(request.index_modes)
+    from features.knowledge.runtime import new_space_modes, require_indexing_ready
+    metadata["index_modes"] = new_space_modes(request.index_modes)
+    require_indexing_ready(metadata["index_modes"], request.chunk_method or "structured")
+    from features.knowledge.runtime import local_private_knowledge_enabled
+    if local_private_knowledge_enabled() and "wiki" in metadata["index_modes"] and not request.wiki_config:
+        from features.knowledge.personal_request_models import WikiConfigRequest
+        metadata.setdefault("wiki_config", WikiConfigRequest(granularity="focused").model_dump())
     if request.wiki_config:
         metadata["wiki_config"] = {
             k: v for k, v in request.wiki_config.model_dump().items() if v is not None
@@ -103,13 +109,16 @@ def update_kb_space(
     才会把已有文档排进生成队列。
     """
     kb_service = KBService(db)
+    if request.index_modes is not None:
+        from features.knowledge.runtime import require_indexing_ready
+        require_indexing_ready(request.index_modes)
     space = kb_service.update_space(
         kb_id=kb_id,
         user_id=user.user_id,
         name=request.name,
         description=request.description,
         index_modes=request.index_modes,
-        wiki_config=(request.wiki_config.model_dump() if request.wiki_config else None),
+        wiki_config=(request.wiki_config.model_dump(exclude_unset=True) if request.wiki_config else None),
     )
     if not space:
         raise ResourceNotFoundError(resource_type="kb_space", resource_id=kb_id)

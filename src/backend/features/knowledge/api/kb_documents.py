@@ -44,6 +44,9 @@ def upload_document(
         raise ResourceNotFoundError(resource_type="kb_space", resource_id=kb_id)
     kb_helpers.require_kb_write(db, kb_space, user.user_id, "edit")
 
+    from features.knowledge.runtime import require_indexing_ready
+    require_indexing_ready(index_modes_of(kb_space), chunk_method or kb_space.chunk_method or "structured")
+
     if not file.filename:
         raise BadRequestError(message="Filename is required", data={"field": "file"})
 
