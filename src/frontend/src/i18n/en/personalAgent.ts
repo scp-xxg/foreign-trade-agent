@@ -110,7 +110,7 @@ export const PERSONAL_AGENT_DICT: Record<string, string> = {
   '未开启任何许可': 'No permissions enabled',
   '管理会话': 'Manage sessions',
   '会话管理': 'Session management',
-  'sailagent 会话操作': 'sailagent session operation',
+  'SailAgent 会话操作': 'SailAgent session operation',
   '操作尚未确认。请检查会话后再重试。': 'The operation is unconfirmed. Check the session before retrying.',
   '会话名称': 'Session title',
   '删除会话': 'Delete session',

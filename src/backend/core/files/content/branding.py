@@ -68,6 +68,16 @@ def seed_page_config_if_missing(db: Session) -> bool:
     return True
 
 
+def legacy_hero_updates(branding: dict) -> dict:
+    """Replace the previous shipped hero copy; preserve other authored text."""
+    legacy = {
+        "hero_title": {"从询盘到上品，再到岗位协同", "用对话完成询盘、上品与跨岗位协同"},
+        "hero_subtitle": {"核验买家、处理报价与跟进；整理产品资料，让业务、采购、美工、运营与合规围绕同一记录协作。", "核验买家、处理报价与产品资料，按岗位分工并人工验收交接。"},
+    }
+    defaults = content_blocks_constants.DEFAULT_PAGE_CONFIG["branding"]
+    return {key: defaults[key] for key, values in legacy.items() if branding.get(key) in values}
+
+
 def enforce_ce_branding(db: Session) -> bool:
     """Keep this public derivative identity and CE auth policy consistent.
 
@@ -102,6 +112,7 @@ def enforce_ce_branding(db: Session) -> bool:
         "wordmark_url": content_blocks_constants.DEFAULT_PAGE_CONFIG["branding"]["wordmark_url"],
         "favicon_url": content_blocks_constants.DEFAULT_PAGE_CONFIG["branding"]["favicon_url"],
     }
+    desired_branding.update(legacy_hero_updates(branding))
     changed = any(branding.get(key) != value for key, value in desired_branding.items())
     changed = changed or admin_header.get("title") != f"{product_name} — 后台管理"
     changed = changed or admin_platform.get("product_name") != product_name

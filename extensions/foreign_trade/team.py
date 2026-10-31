@@ -37,7 +37,7 @@ def runtime_env(home: Path, port: int = 3001) -> dict[str, str]:
     env.update({
         "HUGAGENT_HOME": str(home), "HUGAGENT_CAPS_ROOT": str(home),
         "HUGAGENT_SKIP_ENV_FILES": "1", "DEPLOY_PROFILE": "local",
-        "JX_EDITION": "ce", "BRAND_PRODUCT_NAME": "sailagent",
+        "JX_EDITION": "ce", "BRAND_PRODUCT_NAME": "SailAgent",
         "DATABASE_URL": "sqlite:///" + str(home / "data.db"),
         "REDIS_URL": "", "SESSION_STORE": "memory", "AUTH_MODE": "session",
         "SSO_LOGIN_MODE": "local", "LOCAL_AUTH_ENABLED": "true",

@@ -40,8 +40,8 @@ export function useChatWelcome(chat: ChatItem | undefined) {
   }, [chat?.agentId, agents]);
 
   // ── Page config default values ──
-  const cfgHeroTitle = usePageConfig('branding.hero_title', '用对话完成询盘、上品与跨岗位协同');
-  const cfgHeroSubtitle = usePageConfig('branding.hero_subtitle', '核验买家、处理报价与产品资料，按岗位分工并人工验收交接。');
+  const cfgHeroTitle = usePageConfig('branding.hero_title', '让外贸更简单');
+  const cfgHeroSubtitle = usePageConfig('branding.hero_subtitle', '核验买家、快速报价、生成商品资料，让团队高效协作。');
   const cfgProductName = usePageConfig('branding.product_name', PRODUCT_NAME);
   const cfgDisclaimer = usePageConfig('branding.disclaimer', '');
   const cfgInputPlaceholder = usePageConfig('texts.input_placeholder', '粘贴询盘、上传产品资料，或描述需要协同完成的任务…');

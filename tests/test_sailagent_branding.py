@@ -24,7 +24,7 @@ def test_branding_survives_restart_without_overwriting_business_copy(brand_db,mo
     brand_db.add(ContentBlock(id='page_config',payload=deepcopy(original)));brand_db.commit()
     assert branding.enforce_ce_branding(brand_db)
     value=brand_db.get(ContentBlock,'page_config').payload
-    assert value['branding']['product_name']=='sailagent'
+    assert value['branding']['product_name']=='SailAgent'
     assert value['branding']['logo_url']=='/brand/sailagent-mark.svg'
     assert value['branding']['favicon_url']=='/brand/sailagent-favicon.png'
     for key in ('hero_title','hero_subtitle','disclaimer','product_subtitle'):assert value['branding'][key]==original['branding'][key]
@@ -40,7 +40,7 @@ def test_prompt_identity_changes_do_not_rebrand_the_attribution():
     original=[{'part_id':'system/00_role','content':'你是 HugAgentOS 外贸助手，基于 HugAgentOS 开源框架。保留 HugAgentOS 署名。'},{'part_id':'system/40_format','content':'以"HugAgentOS"身份输出。'},{'part_id':'custom','content':'Human instruction. Powered by HugAgentOS'}]
     saved=deepcopy(original);result=identity_parts(original)
     assert original==saved
-    assert '你是 sailagent' in result[0]['content'] and '基于 HugAgentOS' in result[0]['content']
-    assert '以"sailagent"身份' in result[1]['content']
+    assert '你是 SailAgent' in result[0]['content'] and '基于 HugAgentOS' in result[0]['content']
+    assert '以"SailAgent"身份' in result[1]['content']
     assert result[2]==original[2]
     assert identity_parts(result)==result

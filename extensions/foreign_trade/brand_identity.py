@@ -11,8 +11,8 @@ import sqlite3
 from uuid import uuid4
 
 IDENTITY_REPLACEMENTS={
-    'system/00_role': [('你是 HugAgentOS 外贸助手，','你是 sailagent 外贸出海助手，')],
-    'system/40_format': [('以"HugAgentOS"身份输出','以"sailagent"身份输出')],
+    'system/00_role': [('你是 sailagent 外贸出海助手，','你是 SailAgent 外贸出海助手，'), ('你是 HugAgentOS 外贸助手，','你是 SailAgent 外贸出海助手，')],
+    'system/40_format': [('以"sailagent"身份输出','以"SailAgent"身份输出'), ('以"HugAgentOS"身份输出','以"SailAgent"身份输出')],
 }
 
 
@@ -36,7 +36,7 @@ def apply_identity_prompt(db):
     existing=prompts.get_version('system',version,db=db)
     if existing and existing.get('parts')!=parts:version+='-'+uuid4().hex[:8];existing=None
     if not existing:
-        prompts.upsert_version('system',version,name='sailagent · 外贸出海助手',description='Only the assistant product identity changed; HugAgentOS attribution and business rules retained.',parts=parts,db=db,updated_by='sailagent-branding')
+        prompts.upsert_version('system',version,name='SailAgent · 外贸出海助手',description='Only the assistant product identity changed; HugAgentOS attribution and business rules retained.',parts=parts,db=db,updated_by='sailagent-branding')
     prompts.activate_version('system',version,db=db)
     return version,True
 
@@ -52,7 +52,7 @@ def apply(home,quiet=False):
     os.environ.update(runtime_env(home,3002))
     from core.db.engine import SessionLocal
     from core.db.models import ContentBlock
-    from core.files.content.branding import enforce_ce_branding
+    from core.files.content.branding import enforce_ce_branding, legacy_hero_updates
     from core.files.content.content_blocks_constants import DEFAULT_PAGE_CONFIG
     from core.llm import prompt_versions as prompts
     before=counts(home/'data.db')
@@ -64,19 +64,20 @@ def apply(home,quiet=False):
         keys=('product_name','page_title','logo_url','wordmark_url','favicon_url')
         nav=payload.get('navigation') or {}
         needs=any(old.get(k)!=default[k] for k in keys) or (payload.get('homepage') or {}).get('logo_url')!=default['logo_url']
-        needs=needs or (nav.get('admin_header') or {}).get('title')!='sailagent — 后台管理' or (nav.get('admin_platform') or {}).get('product_name')!='sailagent'
+        needs=needs or (nav.get('admin_header') or {}).get('title')!='SailAgent — 后台管理' or (nav.get('admin_platform') or {}).get('product_name')!='SailAgent'
         needs=needs or (payload.get('auth') or {}).get('allow_register') is not False
+        needs=needs or bool(legacy_hero_updates(old))
         needs=needs or bool(active and identity_parts(active['parts'])!=active['parts'])
         if not needs:
-            result={'ok':True,'changed':False,'brand':'sailagent','prompt_version':active['id'] if active else None}
+            result={'ok':True,'changed':False,'brand':'SailAgent','prompt_version':active['id'] if active else None}
         else:
             backup=home/'brand-backups'/('before-sailagent-'+datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S%fZ')+'.json');backup.parent.mkdir(exist_ok=True,mode=0o700)
-            snapshot={'branding':{k:old.get(k) for k in keys},'homepage_logo_url':(payload.get('homepage') or {}).get('logo_url'),'admin_header_title':(nav.get('admin_header') or {}).get('title'),'admin_platform_name':(nav.get('admin_platform') or {}).get('product_name'),'active_prompt_version':active['id'] if active else None,'table_counts':before}
+            snapshot={'branding':{k:old.get(k) for k in (*keys,'hero_title','hero_subtitle')},'homepage_logo_url':(payload.get('homepage') or {}).get('logo_url'),'admin_header_title':(nav.get('admin_header') or {}).get('title'),'admin_platform_name':(nav.get('admin_platform') or {}).get('product_name'),'active_prompt_version':active['id'] if active else None,'table_counts':before}
             descriptor=os.open(backup,os.O_CREAT|os.O_EXCL|os.O_WRONLY,0o600)
             with os.fdopen(descriptor,'w',encoding='utf-8') as stream:json.dump(snapshot,stream,ensure_ascii=False,indent=2)
             branding_changed=enforce_ce_branding(db)
             version,prompt_changed=apply_identity_prompt(db)
-            result={'ok':True,'changed':branding_changed or prompt_changed,'brand':'sailagent','prompt_version':version,'backup':str(backup)}
+            result={'ok':True,'changed':branding_changed or prompt_changed,'brand':'SailAgent','prompt_version':version,'backup':str(backup)}
     after=counts(home/'data.db')
     result['table_count_changes']={name:{'before':value,'after':after.get(name)} for name,value in before.items() if after.get(name)!=value}
     if any(after.get(name,0)<value for name,value in before.items()):raise RuntimeError('Unexpected table row decrease; inspect before continuing.')

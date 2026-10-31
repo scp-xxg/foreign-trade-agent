@@ -1,4 +1,4 @@
-"""Optional: regenerate the committed sailagent raster icons from the SVG master."""
+"""Optional: regenerate the committed SailAgent raster icons from the SVG master."""
 from pathlib import Path
 import io
 import cairosvg
@@ -12,10 +12,10 @@ image=Image.open(io.BytesIO(cairosvg.svg2png(bytestring=svg,output_width=256,out
 image.save(ASSETS/'sailagent.ico',sizes=[(16,16),(32,32),(48,48)])
 word=(ASSETS/'sailagent-wordmark.svg').read_bytes()
 cairosvg.svg2png(bytestring=word,write_to=str(ASSETS/'sailagent-wordmark.png'),output_width=1160,output_height=256)
-print('sailagent SVG master and PNG/ICO exports ready')
+print('SailAgent SVG master and PNG/ICO exports ready')
 
 # White presentation preview; the reusable wordmark itself keeps transparency.
-inner=(ASSETS/'sailagent-wordmark.svg').read_text().split('<title>sailagent</title>',1)[1].rsplit('</svg>',1)[0]
+inner=(ASSETS/'sailagent-wordmark.svg').read_text().split('<title>SailAgent</title>',1)[1].rsplit('</svg>',1)[0]
 preview='<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="360" viewBox="0 0 1000 360"><rect width="1000" height="360" rx="24" fill="white"/><g transform="translate(108,94) scale(2.7)">'+inner+'</g></svg>'
 cairosvg.svg2png(bytestring=preview.encode(),write_to=str(ASSETS/'sailagent-preview.png'))
 frames=[]

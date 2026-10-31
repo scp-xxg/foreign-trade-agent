@@ -80,8 +80,8 @@ export const DEFAULT_PAGE_CONFIG: PageConfig = {
     wordmark_url: BRAND_WORDMARK_URL,
     favicon_url: BRAND_FAVICON_URL,
     page_title: PRODUCT_NAME,
-    hero_title: '用对话完成询盘、上品与跨岗位协同',
-    hero_subtitle: '核验买家、处理报价与产品资料，按岗位分工并人工验收交接。',
+    hero_title: '让外贸更简单',
+    hero_subtitle: '核验买家、快速报价、生成商品资料，让团队高效协作。',
     disclaimer: '真实公开资料保留来源；报价目录为模拟数据。所有回复与上品结果均是待审核草稿，不自动发送或发布。',
   },
   homepage: {

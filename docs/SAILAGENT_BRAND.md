@@ -1,6 +1,6 @@
-# sailagent 品牌
+# SailAgent 品牌
 
-产品名称：**sailagent**（全小写），寓意“启航”。面向外贸出海的询盘、商品内容与岗位协同。技术仓库/目录/命令仍使用foreign-trade-agent、hugagent等既有标识，避免破坏部署、插件与数据。
+产品名称：**SailAgent**（S、A 大写），寓意“启航”。面向外贸出海的询盘、商品内容与岗位协同。技术仓库/目录/命令仍使用foreign-trade-agent、hugagent等既有标识，避免破坏部署、插件与数据。
 
 Logo采用两片帆、一条弧形航线与目的地点：蓝色#1264E8、海青#70E5D0、文字深蓝#102A43。矢量主图适合16px标签页到大尺寸展示；提供透明SVG、PNG、ICO和浅/深底字标。
 
@@ -13,7 +13,7 @@ Logo采用两片帆、一条弧形航线与目的地点：蓝色#1264E8、海青
 - sailagent-wordmark.png：透明高分辨率字标；sailagent-preview.png：白底预览。
 - manifest.webmanifest：移动端添加到主屏幕的名称与图标。
 
-源码、首次部署默认值、登录页、首页、侧栏、标签页、初始化页、默认助手身份和新生成报价单抬头已采用sailagent。新导出的文件继续保留Powered by HugAgentOS；既有历史文件和聊天记录不重写。
+源码、首次部署默认值、登录页、首页、侧栏、标签页、初始化页、默认助手身份和新生成报价单抬头已采用SailAgent。新导出的文件继续保留Powered by HugAgentOS；既有历史文件和聊天记录不重写。
 
 ## 已有本地环境升级
 
@@ -30,7 +30,7 @@ VITE_EDITION=ce VITE_DEFAULT_LANGUAGE=zh-CN npm --prefix src/frontend run build
 
 ## 开源来源
 
-界面保留 **Powered by HugAgentOS**，帮助文档继续链接原开源项目；LICENSE及上游NOTICE保留。sailagent是此公开衍生项目的品牌，不宣称是HugAgentOS官方产品。
+界面保留 **Powered by HugAgentOS**，帮助文档继续链接原开源项目；LICENSE及上游NOTICE保留。SailAgent是此公开衍生项目的品牌，不宣称是HugAgentOS官方产品。
 
 ## 重新导出素材（开发者可选）
 
@@ -44,7 +44,11 @@ VITE_EDITION=ce VITE_DEFAULT_LANGUAGE=zh-CN npm --prefix src/frontend run build
 
 - 公开扩展测试：617项通过；品牌与CE持久化专项：2项通过。
 - CE前端完整构建通过；报价导出15组回归通过。
-- Chrome实际登录后，首页、侧栏、标签页显示sailagent，Logo正常加载，底部Powered by HugAgentOS保留；登录页字标已核验。
-- 实际新建对话自我介绍：“我叫 sailagent，是基于 HugAgentOS 开源框架的外贸出海助手。”
+- Chrome实际登录后，首页、侧栏、标签页显示SailAgent，Logo正常加载，底部Powered by HugAgentOS保留；登录页字标已核验。
+- 实际新建对话自我介绍：“我叫 SailAgent，是基于 HugAgentOS 开源框架的外贸出海助手。”
 - 品牌迁移重复执行不再改动，迁移前后各表行数一致。既有业务记录、模型配置及知识库未迁移或清空。
 - 另跑旧导航回填测试时有8项失败；使用本次修改前HEAD文件重跑也出现相同8项失败，属于既有外贸导航与上游旧测试夹具不一致，未改动导航业务逻辑。本次不宣称全部上游测试通过。
+
+## 品牌大小写与简洁首页（2026-10-31）
+
+统一显示为SailAgent（S、A大写），资源文件路径继续保持小写。首页标题为“让外贸更简单”，说明为“核验买家、快速报价、生成商品资料，让团队高效协作。”；已同步现有公开数据库，迁移重复执行无改动，各表行数未变化。Chrome刷新已确认标题、侧栏、首页文案与开源署名。CE前端构建通过；30项相关检查通过（旧标题断言更新后单独复验通过）。

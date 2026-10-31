@@ -1,6 +1,6 @@
 {
-  "name": "sailagent",
-  "short_name": "sailagent",
+  "name": "SailAgent",
+  "short_name": "SailAgent",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#F5F8FC",

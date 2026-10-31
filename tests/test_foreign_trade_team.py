@@ -205,8 +205,9 @@ class IsolatedUpgradeTests(unittest.TestCase):
                 self.assertEqual(db.execute('SELECT count(*) FROM local_users').fetchone()[0], 0)
                 self.assertIn('user_center_id', {row[1] for row in db.execute('PRAGMA table_info(users_shadow)')})
                 payload = json.loads(db.execute("SELECT payload FROM content_blocks WHERE id='page_config'").fetchone()[0])
-                self.assertEqual(payload['branding']['product_name'], 'sailagent')
-                self.assertIn('协同', payload['branding']['hero_title'])
+                self.assertEqual(payload['branding']['product_name'], 'SailAgent')
+                self.assertEqual('让外贸更简单', payload['branding']['hero_title'])
+                self.assertIn('团队高效协作', payload['branding']['hero_subtitle'])
                 self.assertFalse(payload['auth']['allow_register'])
                 self.assertIn('trade_collaboration', payload['navigation']['sidebar_items'])
 
