@@ -181,7 +181,7 @@ DEMO DESK-001 1000 units with custom packaging for Spain. Goods total USD 4800.0
 
 ## 工作流 B：Pi 实际附件 → 确认事实/英文资料 → Amazon Listing 两轮审核
 
-先准备 [双语事实 CSV](../extensions/foreign_trade/demo_product/product_facts.csv)、[许可原图](../extensions/foreign_trade/demo_product/raspberry-pi-5-original.jpg) 和 [图片许可](../extensions/foreign_trade/demo_product/PHOTO_LICENSE.txt)。这是来自 Raspberry Pi 官网的 8 条规格，不是供货或经销证明。B1 必须实际上传到聊天，不把磁盘路径粘贴当作上传成功。
+先准备 [双语事实 CSV](../extensions/foreign_trade/demo_product/product_facts.csv)、[许可原图](../extensions/foreign_trade/demo_product/raspberry-pi-5-original.jpg) 和 [图片许可](../extensions/foreign_trade/demo_product/PHOTO_LICENSE.txt)。这是来自 Raspberry Pi 官网的 8 条规格，不是供货或经销证明。B1 必须实际上传到聊天，不把磁盘路径粘贴当作上传成功。 即使当前模型不支持看图，应用也会提供经归属校验的图片文件引用，让业务工具导入原图；用户无需手填内部文件编号。这不代表模型已识别图片内容。
 
 现场无模型备选使用 [英文事实 CSV](../extensions/foreign_trade/demo_product/product_facts_en.csv) 和工作台的“本地原文模板（不调用模型）”。模板不翻译，不要求模型；但它不证明本节 AI 路线或聊天已通过。无论哪种模式，三图都只是基于许可原图的缩放、排版和文字叠加，**不是 AI 生成产品图**。确认之后才可生成，英文失败时不能谎报三图完整。
 ### B1 · 用户输入
