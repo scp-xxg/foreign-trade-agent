@@ -15,6 +15,7 @@ const LabPanel = lazy(() => import('./components/lab/LabPanel'));
 const MySpacePanel = lazy(() => import('./components/myspace/MySpacePanel').then(m => ({ default: m.MySpacePanel })));
 const SettingsPage = lazy(() => import('./components/settings/SettingsModal'));
 const SitesPanel = lazy(() => import('./components/sites/SitesPanel').then(m => ({ default: m.SitesPanel })));
+const UserManagementPage = lazy(() => import('./components/settings/UserManagementPage').then(m => ({ default: m.UserManagementPage })));
 
 const InquiryWorkspace = lazy(() => import('./components/foreign-trade/InquiryWorkspace').then(m => ({ default: m.InquiryWorkspace })));
 const ProductContentWorkspace = lazy(() => import('./components/foreign-trade/ProductContentWorkspace').then(m => ({ default: m.ProductContentWorkspace })));
@@ -33,6 +34,7 @@ const pages = {
   sites: SitesPanel,
   lab: LabPanel,
   settings: SettingsPage,
+  user_management: UserManagementPage,
   my_space: MySpacePanel,
   projects: ProjectListPage,
 } satisfies Partial<Record<PanelKey, ComponentType<WorkspaceContext>>>;

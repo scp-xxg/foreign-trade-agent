@@ -29,6 +29,7 @@ const PANEL_SLUGS: Partial<Record<PanelKey, string>> = {
   docs: 'help',
   app_center: 'app-center',
   settings: 'settings',
+  user_management: 'user-management',
   my_space: 'my-space',
   ability_center: 'ability-center',
   lab: 'lab',

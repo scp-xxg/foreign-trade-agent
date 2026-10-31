@@ -360,8 +360,7 @@ async def require_ontology_governance(
     )
 
 
-def _authorize_super_admin(db: Session, request: Request) -> str:
-    user_id = _resolve_current_user_id(request)
+def _authorize_super_admin(db: Session, request: Request, user_id: Optional[str]) -> str:
     if not user_id:
         AuditLogRepository(db).log_denial(
             user_id=None,
@@ -391,4 +390,5 @@ async def require_super_admin(request: Request) -> str:
     authorization = request.headers.get("authorization")
     if admin_token and authorization == f"Bearer {admin_token}":
         return "admin_token"
-    return await run_in_session(_authorize_super_admin, request)
+    user_id = await _resolve_session_user_id(request)
+    return await run_in_session(_authorize_super_admin, request, user_id)

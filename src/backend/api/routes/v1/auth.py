@@ -77,6 +77,7 @@ def _serialize_user(db: Session, user_data: dict, ttl_seconds: Optional[int] = N
         "onboarding_required": ce_onboarding_required(meta),
         **caps,
         **page_admin_flags(meta, caps),
+        "can_manage_users": meta.get("role") == "super_admin",
     }
 
 

@@ -14,5 +14,6 @@ export function useModuleNavigation() {
   return moduleNavigation({ sidebar, menu }, {
     labEnabled: user?.lab_enabled !== false, localOnly: localOnly && !localPrivate,
     automationAllowed: !Array.isArray(user?.allowed_apps) || user.allowed_apps.includes('automation'),
+    admin: user?.can_manage_users === true,
   });
 }

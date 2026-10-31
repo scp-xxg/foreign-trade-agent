@@ -41,6 +41,7 @@ export const LAYOUT_ITEMS: Record<string, LayoutItemMeta> = {
   projects:       { label: t('项目'),     icon: '/home/projects.svg',   targetPanel: 'projects',   activePanels: ['projects'] },
   my_space:       { label: t('我的空间'), icon: '/home/my-space.svg',   targetPanel: 'my_space',   activePanels: ['my_space'] },
   settings:       { label: t('设置'),     icon: '/home/settings.svg',   targetPanel: 'settings' },
+  user_management: { label: t('用户管理'), icon: '/home/settings.svg', targetPanel: 'user_management', activePanels: ['user_management'] },
   lab:            { label: t('实验室'),   icon: '/home/new-icons/lab.svg', targetPanel: 'lab',     requiresLab: true },
 };
 

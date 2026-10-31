@@ -20,6 +20,7 @@ export function ApplicationAccess({id, children}: {id: string; children: ReactNo
   const authoritative = catalog.items.length > 0 && !catalog.error;
   if (id === 'my_space' && catalog.loading && !item) return <p role="status">{t('正在加载应用目录…')}</p>;
   const denied = ((id === 'automation' && Array.isArray(auth?.allowed_apps) && !auth.allowed_apps.includes(id))
+    || (id === 'user_management' && auth?.can_manage_users !== true)
     || (['lab', 'sites'].includes(id) && auth?.lab_enabled === false)
     );
   if (denied || (authoritative && !item)) {

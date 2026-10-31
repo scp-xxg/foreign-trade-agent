@@ -2472,6 +2472,8 @@ export async function resetLarkAppInit(target?: RequestTarget): Promise<LarkAppI
 // ── Auth API (SSO session) ──────────────────────────────────────────────
 
 export interface AuthUser extends EditionAuthUserFields {
+  /** Server-derived super-admin permission for account management. */
+  can_manage_users?: boolean;
   user_id: string;
   username: string;
   email?: string;
@@ -2526,6 +2528,33 @@ export interface MyProfile extends AuthUser {
   user_center_id?: string;
   phone?: string | null;
   auth_source?: 'local' | 'external';
+}
+
+export interface AdminUser {
+  user_id: string;
+  username: string;
+  email?: string | null;
+  nickname?: string | null;
+  status: string;
+  role: 'member' | 'super_admin';
+  created_at?: string | null;
+}
+
+export async function listAdminUsers(): Promise<AdminUser[]> {
+  const wrapped = await apiRequest<unknown>('/v1/admin/users');
+  return unwrapData<AdminUser[]>(wrapped);
+}
+
+export async function createAdminUser(payload: {
+  username: string; password: string; nickname?: string; email?: string; role: AdminUser['role'];
+}): Promise<AdminUser> {
+  const wrapped = await apiRequest<unknown>('/v1/admin/users', { method: 'POST', body: JSON.stringify(payload) });
+  return unwrapData<AdminUser>(wrapped);
+}
+
+export async function updateAdminUserRole(userId: string, role: AdminUser['role']): Promise<AdminUser> {
+  const wrapped = await apiRequest<unknown>(`/v1/admin/users/${encodeURIComponent(userId)}/role`, { method: 'PATCH', body: JSON.stringify({ role }) });
+  return unwrapData<AdminUser>(wrapped);
 }
 
 export async function getMyProfile(): Promise<MyProfile> {

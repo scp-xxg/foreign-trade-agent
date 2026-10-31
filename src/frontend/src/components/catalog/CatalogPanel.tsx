@@ -15,6 +15,7 @@ Upload,
 } from 'antd';
 import { AnimatePresence,motion } from 'motion/react';
 import { useCallback,useEffect,useMemo,useRef,useState } from 'react';
+import { panelFromPath, subsFromPath } from '../../routing/navigation';
 import type {
 IndexingConfig,
 KBChunkChild,
@@ -339,7 +340,8 @@ export function CatalogPanel() {
   );
 
   useEffect(() => {
-    if (isCE && activeTab !== 'private') setActiveTab('private');
+    if (panelFromPath() === 'my_space' && subsFromPath()[0] === 'kb'
+      && isCE && activeTab !== 'private') setActiveTab('private');
   }, [activeTab, isCE]);
 
   const counts = useMemo(() => {
@@ -377,7 +379,7 @@ export function CatalogPanel() {
     && !(knowledgeRuntime?.local_private_only && selectedItem.capabilities?.wiki);
 
   useEffect(() => {
-    if (selectedItem) {
+    if (selectedItem && panelFromPath() === 'my_space' && subsFromPath()[0] === 'kb') {
       setActiveTab(resolveVisibility(selectedItem));
     }
   }, [selectedItem]);
