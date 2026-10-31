@@ -9,6 +9,7 @@ on:
     paths:
       - "extensions/foreign_trade/**"
       - "extensions/blender/**"
+      - "extensions/tripo/**"
       - "packages/**"
       - "tests/**"
       - "tests/test_foreign_trade*.py"
@@ -28,6 +29,7 @@ on:
     paths:
       - "extensions/foreign_trade/**"
       - "extensions/blender/**"
+      - "extensions/tripo/**"
       - "packages/**"
       - "tests/**"
       - "tests/test_foreign_trade*.py"

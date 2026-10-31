@@ -126,3 +126,7 @@ main 保持可运行；每项功能独立分支、提交 PR，通过 CI 和队�
 ### 中文 3D 产品概念打样（可选插件）
 
 新增通用 Blender MCP 插件：模型动态编写 bpy，不设物体类别白名单；真实创建服装外观、产品或其他3D概念，支持第二轮修改及GLB、PNG、Blend下载。使用隔离的Blender/Xvfb，保留HugAgentOS署名；概念建模不等同于生产CAD或服装仿真。安装与两轮演示见 [Blender MCP 使用说明](docs/BLENDER_MCP.md)。
+
+### 高质量云端3D生成（Tripo，可选）
+
+新增独立Tripo插件：参考图/文字预检估价、按当前账号有限预算单次提交、持久化任务查询、真实GLB下载和隔离Blender实渲染交付。需独立Tripo API账号及实际可用额度；注册不代表已获免费额度，默认不充值或未经授权扣费。见 [Tripo部署与使用](docs/TRIPO_3D.md)。
