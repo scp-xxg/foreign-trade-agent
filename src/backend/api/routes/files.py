@@ -145,7 +145,9 @@ def _authorize_access(
 ) -> None:
     metadata = item.get("metadata") or {}
     if not user:
-        if metadata.get("source") == "local_project_reference":
+        # An unguessable artifact ID is not authentication. Keep only legacy
+        # unowned artifacts public; generated owner-bound files require login.
+        if metadata.get("owner_id") or metadata.get("user_id") or metadata.get("source") == "local_project_reference":
             raise HTTPException(status_code=401, detail="请先登录")
         return
     if can_access_artifact_metadata(db, str(user.user_id), metadata):

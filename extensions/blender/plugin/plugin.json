@@ -1,0 +1,53 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "foreign-trade-blender",
+  "version": "0.2.0",
+  "description": "通用中文 3D 概念建模：模型动态编写 bpy，真实 Blender 执行、检查、对话修改和 GLB/PNG/Blend 下载。不限定物体类别。",
+  "author": {
+    "name": "Foreign Trade Agent Team"
+  },
+  "extensions": {
+    "org.hugagent": {
+      "default_enabled": {
+        "skills": [
+          "product-3d-sampling"
+        ],
+        "mcp": [
+          "blender"
+        ]
+      },
+      "mcp": {
+        "blender": {
+          "display_name": "Blender 通用 3D 建模",
+          "description": "不限定物体模板：动态 bpy、实际场景检查、版本化修改、导出与展示。",
+          "tools": [
+            {
+              "name": "blender_scene_info",
+              "description": "读取当前对话实际场景与版本。"
+            },
+            {
+              "name": "blender_scene_execute",
+              "description": "在隔离 Blender 中执行动态 bpy 建模和修改代码。"
+            },
+            {
+              "name": "blender_scene_export",
+              "description": "导出当前场景 GLB、渲染 PNG 和 Blend 源文件。"
+            }
+          ]
+        }
+      },
+      "ui": {
+        "version": 1,
+        "contributes": {
+          "shortcuts": [
+            {
+              "id": "product-3d",
+              "label": "通用中文 3D 建模",
+              "prompt": "请用 Blender 创建有金色梅花纹样的红色旗袍3D概念模型，包含立领、右斜襟盘扣、短袖和两侧开衩；自行说明采用的概念尺寸，实际建模并导出GLB、展示图和Blender源文件。花纹必须嵌入GLB，不是只在文字中描述。"
+            }
+          ]
+        }
+      }
+    }
+  }
+}
