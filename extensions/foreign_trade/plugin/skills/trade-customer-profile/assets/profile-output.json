@@ -1,0 +1,15 @@
+{
+  "schema_version": "1.0",
+  "profile_id": "demo-only",
+  "version": "0.1",
+  "created_at": null,
+  "status": "draft",
+  "merchant_facts": [],
+  "buyer_profiles": [{"id": "B1", "buyer_type": "饮具经销商（演示假设）", "markets": ["DE"], "fit_reason": "待商家资料及市场样本验证", "constraints": [], "hypotheses": ["此市场及买家类型是否适配待验证"]}],
+  "rules": [{"rule_id": "R1", "level": "should", "field": "operating_markets", "operator": "contains_any", "value": ["DE"], "basis": "hypothesis", "evidence_ids": [], "verification": "查企业销售或服务市场；演示市场，须用户确认后再升为 must", "unknown_action": "neutral"}],
+  "search_plan": [{"market": "DE", "language": "en", "queries": ["drinkware distributor Germany"], "channels": ["企业官网", "行业目录"], "rule_ids": ["R1"], "validation_status": "not_run"}],
+  "evidence": [],
+  "missing_information": [{"field": "products", "impact": "无法确定真实买家类型", "question": "主要产品、用途和供货条件是什么？"}],
+  "candidate_checks": [],
+  "evaluation": {"status": "not_run", "dataset": null, "report_path": null}
+}

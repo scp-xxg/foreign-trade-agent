@@ -25,6 +25,7 @@ import { createComposerKeyHandler } from './composerKeyboard';
 import { ComposerAttachments } from './ComposerAttachments';
 import { useVoiceInput } from '../voice/useVoiceInput';
 import { useComposerStore } from '../../stores/composerStore';
+import { AcquisitionGuide } from './AcquisitionShortcut';
 import { ComposerToolbar } from './ComposerToolbar';
 import { useComposerState } from './useComposerState';
 import { useComposerSuggestions } from './useComposerSuggestions';
@@ -284,6 +285,7 @@ function MainInputArea({
 
 
         </div>
+        <AcquisitionGuide draftKey={state.draftKey} />
         <ComposerToolbar state={state} editor={editor} options={options} fileInputRef={fileInputRef}
           showStopButton={showStopButton} composerHasContent={composerHasContent} voice={voice} />
       </div>

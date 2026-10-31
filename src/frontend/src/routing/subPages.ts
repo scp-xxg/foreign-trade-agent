@@ -1,6 +1,7 @@
 import type { AbilityTabKey, KbTabKey, MySpaceTab } from '../types';
 import { pathForPanel, subsFromPath } from './navigation';
 import { useRouteSubs } from './usePanel';
+import { useLocation } from 'react-router';
 
 /**
  * 各面板内部的下级页与地址段的对应关系，集中在这里一处。
@@ -55,9 +56,8 @@ export function useMySpaceTab(): MySpaceTab {
 }
 
 export function useKbTab(): KbTabKey {
-  // useRouteSubs 已订阅地址变化，这里再读一次当前地址即可保持同步
-  useRouteSubs();
-  return kbTabFrom();
+  // Stay on the same router snapshot as the mounted panel during transitions.
+  return kbTabFrom(useLocation().pathname);
 }
 
 /** 设置页的子菜单；默认落在「个人信息」。 */

@@ -147,7 +147,7 @@ def resolve_bindings(
     for pslug in bindings.get("plugin_ids", []):
         gid = f"{pslug}@global"
         match = (
-            gid
+            pslug if pslug in avail_plugin else gid
             if gid in avail_plugin
             else next((p for p in avail_plugin if p.startswith(f"{pslug}@")), None)
         )
@@ -192,8 +192,19 @@ def install_marketplace_agent(
     final_bindings, report = resolve_bindings(db, entry["bindings"], owner_user_id, operator_name)
 
     mc = entry.get("model_config") or {}
+    # Same-name device publications can become ambiguous. Keep every clone
+    # individually addressable, including installing one's own listing.
+    names = {row[0] for row in db.query(UserAgent.name).filter(
+        UserAgent.owner_type == ("admin" if owner_user_id is None else "user"),
+        UserAgent.user_id == owner_user_id,
+    ).all()}
+    clone_name = entry["name"]
+    suffix = 2
+    while clone_name in names:
+        clone_name = entry["name"][:50] + f" · {suffix}"
+        suffix += 1
     data: Dict[str, Any] = {
-        "name": entry["name"],
+        "name": clone_name,
         "avatar": entry.get("avatar") or None,
         "description": (entry.get("summary") or entry.get("description") or "")[:agents_state.MAX_DESC],
         "system_prompt": entry.get("system_prompt") or "",

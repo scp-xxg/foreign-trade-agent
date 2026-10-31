@@ -208,7 +208,10 @@ def start(args, home: Path, env: dict[str, str]) -> None:
     print(f"打开 http://127.0.0.1:{web_port}，用自己的账号登录。首次在 设置→模型服务 添加支持工具调用的模型并指派 main_agent。")
     print("对话中可选择“外贸业务助手（演示）”处理询盘和商品资料；三处工作台保留，用于查看、编辑与人工验收同一业务记录。")
     print("保持此终端运行，Ctrl-C 停止网页后端；MCP 单独停止：.venv/bin/python extensions/foreign_trade/manage.py stop")
-    command = [str(VENV / "bin/hugagent-server"), "serve", "--host", "127.0.0.1", "--port", str(web_port), "--no-browser"]
+    # Docker needs the web server on the container interface; local installs
+    # keep the loopback-only default for the same-machine security boundary.
+    bind_host = env.get("HUGAGENT_BIND_HOST", "127.0.0.1")
+    command = [str(VENV / "bin/hugagent-server"), "serve", "--host", bind_host, "--port", str(web_port), "--no-browser"]
     if args.dry_run:
         run(command, env=env, dry_run=True)
     else:

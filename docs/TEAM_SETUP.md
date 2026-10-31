@@ -1,6 +1,8 @@
+> 当前最终演示入口与逐项验收见 [FINAL_DEMO_20261101.md](FINAL_DEMO_20261101.md)。模型密钥、知识资料和账号不随Git复制。
+
 # 队友部署、模型配置与代码同步
 
-本指南针对团队公开仓库的 Linux / WSL2 本机部署。团队统一使用本仓库的 `main`，无需切换历史 PR 或功能分支。品牌保留 HugAgentOS；仓库名为 foreign-trade-agent。上游原始说明见 [README_UPSTREAM.md](../README_UPSTREAM.md)，安装外贸功能请使用本指南的团队脚本。
+本指南针对团队公开仓库的 Linux / WSL2 本机部署。本次整合版本位于 `codex/sailagent-final-integration`，合入main后可继续使用main。品牌为SailAgent，保留HugAgentOS开源署名；仓库名为foreign-trade-agent。上游原始说明见 [README_UPSTREAM.md](../README_UPSTREAM.md)，安装外贸功能请使用本指南的团队脚本。
 
 首次部署按第 2—5 节执行 `clone main → setup → init → start → check`；已有账号和数据按第 6—7 节更新，不能靠换目录或重新 `init` 来代替升级。
 
@@ -35,7 +37,7 @@ nvm use 22
 ## 2. 拉取和安装
 
 ```bash
-git clone --branch main https://github.com/scp-xxg/foreign-trade-agent.git
+git clone --branch codex/sailagent-final-integration https://github.com/scp-xxg/foreign-trade-agent.git
 cd foreign-trade-agent
 python3.11 extensions/foreign_trade/team.py setup
 .venv/bin/python -c 'import sys, sqlite3; print("Python", sys.version.split()[0], "SQLite", sqlite3.sqlite_version); assert sys.version_info >= (3, 11); assert sqlite3.sqlite_version_info >= (3, 38, 0)'
@@ -55,9 +57,9 @@ setup 会创建或更新本仓库 `.venv`、安装 requirements.txt 和 editable
 
 1. 在 `~/.foreign-trade-agent` 创建独立 SQLite 和本机文件目录。
 2. 创建本机账号，应用外贸首页、推荐问题和外贸助手提示词。
-3. 将“外贸业务助手（演示）”0.4.0 安装到该账号，包含五个技能、八个会话绑定业务工具，另保留三个目录/报价 MCP 工具。
+3. 将“外贸业务助手（演示）”0.9.0 安装到该账号，包含十四个技能、十个会话绑定业务工具，另保留三个目录/报价 MCP 工具。
 
-五个技能为 `inquiry-quote`、`buyer-inquiry-followup`、`product-content`、`cross-role-collaboration`、`localization-review`。八个业务工具为 `trade_save_inquiry`、`trade_import_product`、`trade_confirm_product_facts`、`trade_inquiry`、`trade_calculate_quote`、`trade_product_content`、`trade_collaboration`、`trade_review`。三个 MCP 工具为 `search_products`、`get_product`、`calculate_quote`。原生业务工具需要本公开宿主的注册和当前用户身份，单独导入 ZIP 不会给未适配的上游安装这些能力。
+基础五个技能为 `inquiry-quote`、`buyer-inquiry-followup`、`product-content`、`cross-role-collaboration`、`localization-review`。另有Max-channel八个获客/跟进技能和sales-to-listing总流程技能。十个业务工具为 `trade_save_inquiry`、`trade_import_product`、`trade_confirm_product_facts`、`trade_inquiry`、`trade_calculate_quote`、`trade_product_content`、`trade_collaboration`、`trade_review`、`trade_buyer_search`、`trade_buyer_research`。三个 MCP 工具为 `search_products`、`get_product`、`calculate_quote`。原生业务工具需要本公开宿主的注册和当前用户身份，单独导入 ZIP 不会给未适配的上游安装这些能力。
 
 同名账号已存在时，init 保留密码和权限。数据目录已有其他账号时，不会额外创建管理员；已有实例更新应使用正确目录和已有用户名执行 `install`。
 
@@ -269,7 +271,7 @@ git push -u origin codex/your-feature
 | 普通回复正常，但工具执行后回答为空/失败 | 核对协议探测和工具结果往返能力；保留失败步骤，不用普通HTTP200替代完整工具链验证 |
 | 127.0.0.1:3001打不开/连接被重置 | 先核对本项目启动输出和端口归属；其他容器占用时保留对方，按原app-home改用3002，再用同端口check --running |
 | 3002页面能开但账号/记录不对 | 核对启动时app-home，换端口可能需重登录；不要init新库或复制他人的认证数据 |
-| 新审核工具不出现 | 确认当前公开宿主、0.4.0插件和五技能/八业务工具已安装启用，重开聊天；ZIP不能代替宿主源码升级 |
+| 新审核工具不出现 | 确认当前公开宿主、0.9.0插件和五技能/八业务工具已安装启用，重开聊天；ZIP不能代替宿主源码升级 |
 | 报技能未加载或来源版本冲突 | 完整读取对应技能或get当前来源后核对，不伪造已读、跳过确认或盲重放写入 |
 | 模板没有英文图片 | 核对实际事实是否英文及原图/署名是否齐全；中文未翻译不算生成失败被绕过，不称AI已翻译 |
 | 产品工具连接失败 | 检查 team.py start 的 MCP 状态和 9120 端口 |

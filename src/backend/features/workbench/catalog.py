@@ -22,8 +22,10 @@ BUILTINS = {
     "sites": ("站点", "builtin", "sites"),
     "lab": ("实验室", "builtin", "lab"),
     "settings": ("设置", "builtin", "settings"),
+    "user_management": ("用户管理", "builtin", "user_management"),
     "docs": ("帮助", "builtin", "docs"),
     # Public foreign-trade extension: record views remain scoped to the signed-in user.
+    "trade_buyers": ("获客工作台", "builtin", "trade_buyers"),
     "trade_inquiries": ("询盘工作台", "builtin", "trade_inquiries"),
     "trade_content": ("产品内容工作台", "builtin", "trade_content"),
     "trade_collaboration": ("协同工作台", "builtin", "trade_collaboration"),
@@ -94,6 +96,8 @@ def permitted(item, caps, layout):
     identifier = key if key.startswith("plugin:") else item["declaration"]["id"]
     if key in layout["hidden"]:
         return False
+    if key == "builtin:user_management":
+        return caps.get("can_manage_users") is True
     if key.startswith("builtin:") and identifier not in WHITELIST_BUILTINS:
         return identifier not in {"lab", "sites"} or caps["lab_enabled"]
     allowed = caps["allowed_apps"]

@@ -1,0 +1,4 @@
+interface:
+  display_name: "外贸目标客户画像与筛选规则"
+  short_description: "将产品与供货能力转成有证据的客户画像、筛选规则和搜索条件，并评估筛选效果"
+  default_prompt: "使用 $trade-customer-profile，根据我的产品和供货资料生成客户画像、筛选规则、搜索条件和验证方案。"

@@ -124,6 +124,11 @@ def resolve_capabilities(
 
     result: Dict[str, Any] = {}
     for key, sys_default in BOOL_CAPABILITY_DEFAULTS.items():
+        # Account administrators can create/install agents, matching
+        # user_has_capability. Keep unrelated opt-in features unchanged.
+        if key == "can_add_agent" and meta.get("role") == "super_admin":
+            result[key] = True
+            continue
         personal = meta.get(key)
         if isinstance(personal, bool):
             result[key] = personal  # personal explicit
@@ -196,6 +201,8 @@ def resolve_user_capabilities(db: Session, user_id: str) -> Dict[str, Any]:
     shadow = db.query(UserShadow).filter(UserShadow.user_id == user_id).first()
     meta = dict(shadow.extra_data) if (shadow and isinstance(shadow.extra_data, dict)) else {}
     caps = resolve_capabilities(meta, *default_capability_layers_for_user(db, user_id))
+    # Managing accounts requires the super-admin role, not delegated content access.
+    caps["can_manage_users"] = meta.get("role") == "super_admin"
     if settings.edition.edition == "ce":
         caps["can_create_public_kb"] = False
     return caps

@@ -75,6 +75,7 @@ DEFAULT_PAGE_CONFIG: dict[str, Any] = {
             "settings": "系统设置",
             "my_space": "我的空间",
             "trade_inquiries": "询盘工作台",
+            "trade_buyers": "潜在买家搜索",
             "trade_content": "产品内容工作台",
             "trade_collaboration": "协同工作台",
         },
@@ -110,7 +111,7 @@ DEFAULT_PAGE_CONFIG: dict[str, Any] = {
         # 与前端 utils/pageConfigDefaults.ts 的 DEFAULT_SIDEBAR_ITEMS / DEFAULT_MENU_ITEMS 保持一致。
         # 这只是新装环境的出厂值——已存在的部署以 DB 现有取值为准，由 backfill_navigation_entries
         # 补齐新增条目，管理员随后可在 /config「页面配置」里自由编排。
-        "sidebar_items": ["ability_center", "trade_inquiries", "trade_content", "trade_collaboration", "automation", "sites", "my_space"],
+        "sidebar_items": ["ability_center", "trade_buyers", "trade_inquiries", "trade_content", "trade_collaboration", "automation", "sites", "my_space"],
         "menu_items": ["settings", "app_center", "projects", "lab"],
     },
     "texts": {
@@ -155,6 +156,7 @@ DEFAULT_PROMPT_VERSIONS: dict[str, Any] = {
 
 
 NAV_BACKFILL_ENTRIES: list[dict[str, Any]] = [
+    {"key": "trade_buyers", "bucket": "sidebar", "insert_after": "ability_center"},
     {"key": "trade_inquiries", "bucket": "sidebar", "insert_after": "ability_center"},
     {"key": "trade_content", "bucket": "sidebar", "insert_after": "trade_inquiries"},
     {"key": "trade_collaboration", "bucket": "sidebar", "insert_after": "trade_content"},

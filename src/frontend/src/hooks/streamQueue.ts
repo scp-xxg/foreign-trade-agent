@@ -1,3 +1,4 @@
+import { tradeWorkflowMessage } from '../utils/acquisitionMode';
 import { chatDraftKey, readComposer } from '../stores/composerStore';
 import { message } from 'antd';
 import { t } from '../i18n';
@@ -19,7 +20,7 @@ export function createStreamQueue(ctx: Pick<StreamingContext, 'abortControllersR
   ) {
     const state = useChatStore.getState();
     const draft = readComposer(chatDraftKey(state.currentChatId));
-    const content = (directMessage ?? draft.input).trim();
+    const content = directMessage?.trim() || tradeWorkflowMessage(draft.input.trim(), invocationOverride === undefined && draft.acquisitionMode, invocationOverride === undefined && draft.followupMode);
     if (!content) return;
     if (state.planMode || state.loopMode) {
       message.info(t('当前运行模式暂不支持追加消息'));

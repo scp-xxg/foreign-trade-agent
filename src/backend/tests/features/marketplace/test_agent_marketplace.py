@@ -110,6 +110,12 @@ def test_submit_review_install_lifecycle(db_session):
     assert "skill:test-skill" in report["bound"]
     assert "mcp:test-mcp" in report["bound"]
 
+    # A second private install must not hide both same-name publications.
+    second = agent_installation.install_marketplace_agent(db, slug, owner_user_id="u2", operator_name="U2")
+    copy = db.query(UserAgent).filter_by(agent_id=second["agent_id"]).one()
+    assert copy.name != clone.name
+    assert copy.user_id == clone.user_id and copy.source_market_slug == slug
+
     # 4) Installed annotation: u2 hits, u3 not installed
     items = agent_catalog.list_marketplace_agents(db)
     assert (

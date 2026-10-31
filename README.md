@@ -1,6 +1,8 @@
 <!-- Modified by foreign-trade-agent contributors, 2026-10-21: public team distribution. -->
 # SailAgent
 
+当前整合版：[现场完整步骤与评分对照](docs/FINAL_DEMO_20261101.md) · [队友部署](docs/TEAM_SETUP.md)。
+
 <img src="src/frontend/public/brand/sailagent-preview.png" alt="SailAgent" width="500" />
 
 面向外贸询盘、商品资料和跨岗位协同的演示 Agent，最初基于公开 HugAgentOS Community Edition desktop-v1.0.2，现同步上游 **2026-10-27 main（d969492f）**。产品品牌为 **SailAgent（启航）**，仓库和技术目录继续使用 `foreign-trade-agent`。保留 **Powered by HugAgentOS**、上游许可证和来源署名。
