@@ -80,3 +80,10 @@ are local deployment state and are not distributed.
 - 固定 Blender 5.2.3 LTS、MCP for Blender 2.2.6，隔离 SDK1/SDK2；通用动态bpy、场景持久化、多轮局部修改、真实GLB/PNG/Blend导出及渲染图反馈。没有物体类别白名单。
 - 动态代码运行于仅挂载本次场景的bubblewrap文件系统；宿主私有源码、数据库、密钥和其他会话不挂载。GLB导出兼容网格、曲线、文字等几何并保留可编辑源对象。
 - 增加场景边界、版本冲突、账号/会话、隔离、导出校验测试与部署说明；真实验证花纹旗袍两轮改稿，不更改报价目录，不包含私有源代码。
+
+## sailagent branding (2026-10-31)
+
+- Adopt the lowercase public product name sailagent with original sail/route SVG, PNG, ICO and loading assets.
+- Update public UI, login, browser metadata, assistant identity and new quotation export headings; retain Powered by HugAgentOS, LICENSE and upstream NOTICE.
+- Add an explicit, idempotent public-home brand migration with a limited brand-field snapshot; retain authored business copy, data, model configuration and previous prompt versions.
+- Validate the public extension suite (617 passed), CE frontend build, quotation export regressions (15 groups), two branding checks and actual Chrome login/homepage. See docs/SAILAGENT_BRAND.md for scope and pre-existing upstream navigation-test failures.

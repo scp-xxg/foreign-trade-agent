@@ -37,7 +37,7 @@ def runtime_env(home: Path, port: int = 3001) -> dict[str, str]:
     env.update({
         "HUGAGENT_HOME": str(home), "HUGAGENT_CAPS_ROOT": str(home),
         "HUGAGENT_SKIP_ENV_FILES": "1", "DEPLOY_PROFILE": "local",
-        "JX_EDITION": "ce", "BRAND_PRODUCT_NAME": "HugAgentOS",
+        "JX_EDITION": "ce", "BRAND_PRODUCT_NAME": "sailagent",
         "DATABASE_URL": "sqlite:///" + str(home / "data.db"),
         "REDIS_URL": "", "SESSION_STORE": "memory", "AUTH_MODE": "session",
         "SSO_LOGIN_MODE": "local", "LOCAL_AUTH_ENABLED": "true",
@@ -203,6 +203,7 @@ def start(args, home: Path, env: dict[str, str]) -> None:
                 owned = False
             if not owned:
                 raise RuntimeError("端口 9120 已被其他实例占用；不会接管它。")
+    run([PYTHON, HERE / "brand_identity.py", "--app-home", home, "--quiet"], env=env, dry_run=args.dry_run)
     run([PYTHON, HERE / "manage.py", "start"], env=env, dry_run=args.dry_run)
     print(f"打开 http://127.0.0.1:{web_port}，用自己的账号登录。首次在 设置→模型服务 添加支持工具调用的模型并指派 main_agent。")
     print("对话中可选择“外贸业务助手（演示）”处理询盘和商品资料；三处工作台保留，用于查看、编辑与人工验收同一业务记录。")

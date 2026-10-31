@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any
 from core.config.settings import settings
 
-BRAND_NAME = settings.branding.product_name
+BRAND_NAME = "sailagent"  # Public derivative identity; upstream notices remain unchanged.
 
 
 DOCS_BLOCK_MAP = {
@@ -37,18 +37,18 @@ DEFAULT_PAGE_CONFIG: dict[str, Any] = {
     "branding": {
         "product_name": BRAND_NAME,
         "product_subtitle": "外贸业务，对话即入口",
-        "logo_url": "/home/header.svg",
-        "favicon_url": "/icon.png",
+        "logo_url": "/brand/sailagent-mark.svg",
+        "wordmark_url": "/brand/sailagent-wordmark.svg",
+        "favicon_url": "/brand/sailagent-favicon.png",
         "page_title": BRAND_NAME,
         "hero_title": "从询盘到上品，再到岗位协同",
         "hero_subtitle": "核验买家、处理报价与跟进；整理产品资料，让业务、采购、美工、运营与合规围绕同一记录协作。",
         "disclaimer": "真实公开资料保留来源；报价目录为模拟数据。回复、商品内容和内部交接均为待审草稿，不自动发送或发布。",
     },
     "homepage": {
-        # The homepage uses the transparent standalone brand mark rather than
-        # the square sidebar logo, mirroring the lighter Qwen Office hero.
+        # The homepage and sidebar share the public sailagent mark.
         "show_logo": True,
-        "logo_url": "/icon.png",
+        "logo_url": "/brand/sailagent-mark.svg",
         "show_suggestions": True,
         "suggested_questions": [
             "核验 LYRECO 法国公司的官网 https://www.lyreco.com/group/ 和公开登记资料，说明已知事实与未核实事项。",

@@ -239,14 +239,16 @@ def test_ce_branding_repairs_persistent_page_config(db_session, monkeypatch):
     assert branding.enforce_ce_branding(db_session) is True
     row = db_session.query(ContentBlock).filter_by(id="page_config").one()
     assert row.payload["branding"] == {
-        "product_name": "HugAgentOS",
-        "product_subtitle": "外贸产品查询与询盘报价",
-        "page_title": "HugAgentOS",
-        "hero_title": "外贸询盘，从产品查询到报价",
-        "logo_url": "/custom.svg",
+        "product_name": "sailagent",
+        "product_subtitle": "旧副标题",
+        "page_title": "sailagent",
+        "hero_title": "你好，我是旧名称",
+        "logo_url": "/brand/sailagent-mark.svg",
+        "wordmark_url": "/brand/sailagent-wordmark.svg",
+        "favicon_url": "/brand/sailagent-favicon.png",
     }
-    assert row.payload["navigation"]["admin_header"]["title"] == "HugAgentOS — 后台管理"
-    assert row.payload["navigation"]["admin_platform"]["product_name"] == "HugAgentOS"
+    assert row.payload["navigation"]["admin_header"]["title"] == "sailagent — 后台管理"
+    assert row.payload["navigation"]["admin_platform"]["product_name"] == "sailagent"
     assert row.payload["auth"]["allow_register"] is False
     assert branding.enforce_ce_branding(db_session) is False
 

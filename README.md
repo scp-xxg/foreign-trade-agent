@@ -1,7 +1,9 @@
 <!-- Modified by foreign-trade-agent contributors, 2026-10-21: public team distribution. -->
-# foreign-trade-agent
+# sailagent
 
-面向外贸询盘、商品资料和跨岗位协同的演示 Agent，最初基于公开 HugAgentOS Community Edition desktop-v1.0.2，现同步上游 **2026-10-27 main（d969492f）**。仓库名称暂用 `foreign-trade-agent`，页面名称和 Logo 暂保留 HugAgentOS。
+<img src="src/frontend/public/brand/sailagent-preview.png" alt="sailagent" width="500" />
+
+面向外贸询盘、商品资料和跨岗位协同的演示 Agent，最初基于公开 HugAgentOS Community Edition desktop-v1.0.2，现同步上游 **2026-10-27 main（d969492f）**。产品品牌为 **sailagent（启航）**，仓库和技术目录继续使用 `foreign-trade-agent`。保留 **Powered by HugAgentOS**、上游许可证和来源署名。
 
 **报价目录中的产品、价格和参考生产周期均为虚构演示数据，非真实商业报价。** 场景二另附可核验的真实产品资料和有署名的公开授权照片，两者独立，不混用价格。
 

@@ -1,3 +1,4 @@
+import { PRODUCT_NAME, BRAND_MARK_URL } from '../../brand';
 import { useModuleNavigation } from './useModuleNavigation';
 import { ModuleButton } from './ModuleButton';
 import { MoreModules } from './MoreModules';
@@ -32,8 +33,8 @@ function ModernSidebar(actions: SidebarProps) {
   const setCollapsed = useUIStore(s => s.setSiderCollapsed);
   const openSearch = useUIStore(s => s.openSearchModal);
   const count = useMySpaceStore(s => s.notifUnreadCount);
-  const brandName = usePageConfig('branding.product_name', 'HugAgentOS');
-  const logo = usePageConfig('branding.logo_url', '/home/logo.svg');
+  const brandName = usePageConfig('branding.product_name', PRODUCT_NAME);
+  const logo = usePageConfig('branding.logo_url', BRAND_MARK_URL);
   const config = usePageConfigAll();
   const { primary, more } = useModuleNavigation();
   const moreModule = secondaryModule(panel, more);

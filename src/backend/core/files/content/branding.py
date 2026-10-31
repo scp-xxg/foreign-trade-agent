@@ -69,7 +69,7 @@ def seed_page_config_if_missing(db: Session) -> bool:
 
 
 def enforce_ce_branding(db: Session) -> bool:
-    """Keep the fixed CE product identity and auth policy consistent.
+    """Keep this public derivative identity and CE auth policy consistent.
 
     ``page_config`` survives image upgrades, so merely changing the code/env
     defaults does not repair an already-running CE instance. CE does not expose
@@ -85,25 +85,28 @@ def enforce_ce_branding(db: Session) -> bool:
     if row is None or not isinstance(row.payload, dict):
         return False
 
-    product_name = "HugAgentOS"
+    product_name = content_blocks_constants.DEFAULT_PAGE_CONFIG["branding"]["product_name"]
     payload = dict(row.payload)
     branding = dict(payload.get("branding") or {})
     navigation = dict(payload.get("navigation") or {})
     auth = dict(payload.get("auth") or {})
+    homepage = dict(payload.get("homepage") or {})
     admin_header = dict(navigation.get("admin_header") or {})
     admin_platform = dict(navigation.get("admin_platform") or {})
 
     desired_branding = {
         "product_name": product_name,
-        # Public derivative business copy; product identity and attribution stay HugAgentOS.
-        "product_subtitle": content_blocks_constants.DEFAULT_PAGE_CONFIG["branding"]["product_subtitle"],
+        # Public derivative branding; the upstream Powered by attribution stays visible.
         "page_title": product_name,
-        "hero_title": content_blocks_constants.DEFAULT_PAGE_CONFIG["branding"]["hero_title"],
+        "logo_url": content_blocks_constants.DEFAULT_PAGE_CONFIG["branding"]["logo_url"],
+        "wordmark_url": content_blocks_constants.DEFAULT_PAGE_CONFIG["branding"]["wordmark_url"],
+        "favicon_url": content_blocks_constants.DEFAULT_PAGE_CONFIG["branding"]["favicon_url"],
     }
     changed = any(branding.get(key) != value for key, value in desired_branding.items())
     changed = changed or admin_header.get("title") != f"{product_name} — 后台管理"
     changed = changed or admin_platform.get("product_name") != product_name
     changed = changed or auth.get("allow_register") is not False
+    changed = changed or homepage.get("logo_url") != desired_branding["logo_url"]
     if not changed:
         return False
 
@@ -116,6 +119,8 @@ def enforce_ce_branding(db: Session) -> bool:
     payload["branding"] = branding
     payload["navigation"] = navigation
     payload["auth"] = auth
+    homepage["logo_url"] = desired_branding["logo_url"]
+    payload["homepage"] = homepage
     row.payload = payload
     row.updated_at = datetime.now(timezone.utc)
     row.updated_by = "system_seed"
@@ -207,6 +212,7 @@ def get_branding_info() -> dict[str, str]:
     defaults = {
         "product_name": content_blocks_constants.DEFAULT_PAGE_CONFIG["branding"]["product_name"],
         "logo_url": content_blocks_constants.DEFAULT_PAGE_CONFIG["branding"]["logo_url"],
+        "wordmark_url": content_blocks_constants.DEFAULT_PAGE_CONFIG["branding"]["wordmark_url"],
     }
     try:
         from core.db.engine import SessionLocal
@@ -219,6 +225,7 @@ def get_branding_info() -> dict[str, str]:
             return {
                 "product_name": branding.get("product_name") or defaults["product_name"],
                 "logo_url": branding.get("logo_url") or defaults["logo_url"],
+                "wordmark_url": branding.get("wordmark_url") or defaults["wordmark_url"],
             }
         finally:
             db.close()

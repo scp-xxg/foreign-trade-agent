@@ -128,7 +128,7 @@ CE 原版隐藏插件贡献的首页快捷卡。本地安装脚本会在现有�
 
 ## 外贸首页与默认助手
 
-本公开分支的首页与默认助手以外贸业务为定位，支持产品查询、询盘报价、买家核验与跟进、商品资料制作，以及岗位协同与内部交接。保留 HugAgentOS 产品名称、图标、Powered by 及原开源许可证。
+本公开分支的首页与默认助手以外贸业务为定位，支持产品查询、询盘报价、买家核验与跟进、商品资料制作，以及岗位协同与内部交接。产品名称与图标使用 sailagent；保留 Powered by HugAgentOS 及原开源许可证。
 
 - 后端默认文案：`src/backend/core/files/content/content_blocks_constants.py`。
 - 前端兜底文案：`src/frontend/src/utils/pageConfigDefaults.ts`，页面组件兜底保持一致。

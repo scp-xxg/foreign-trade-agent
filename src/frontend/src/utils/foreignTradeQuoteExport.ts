@@ -1,3 +1,4 @@
+import { PRODUCT_NAME } from '../brand';
 import type { TradeQuote } from './foreignTradeQuote';
 import * as XLSX from 'xlsx';
 
@@ -19,7 +20,7 @@ export function buildTradeQuoteWorkbook(quote: TradeQuote): XLSX.WorkBook {
   const d = quote.data;
   for (const zh of [true, false]) {
     const rows: (string | number | null)[][] = [
-      [zh ? '报价单 | HugAgentOS 外贸助手' : 'QUOTATION | HugAgentOS Trade Assistant'],
+      [zh ? `报价单 | ${PRODUCT_NAME} 外贸助手` : `QUOTATION | ${PRODUCT_NAME} Trade Assistant`],
       [zh ? 'DEMO / 模拟数据，非真实商业报价' : 'DEMO / Simulated data. Not a binding commercial offer.'],
       [(zh ? '报价编号：' : 'Quote reference: ') + quote.quoteId],
       [(zh ? '目的国：' : 'Destination: ') + (d.destination_country || (zh ? '待确认' : 'Pending confirmation'))],
@@ -61,7 +62,7 @@ export function buildTradeQuoteWorkbook(quote: TradeQuote): XLSX.WorkBook {
     // aoa_to_sheet writes user-controlled strings as t:s, never as formulas.
     XLSX.utils.book_append_sheet(wb, ws, zh ? '中文报价单' : 'English Quotation');
   }
-  wb.Props = { Title: `${quote.quoteId} - Bilingual Demo Quotation`, Author: 'HugAgentOS Trade Assistant', Subject: 'Tool-calculated simulated quotation' };
+  wb.Props = { Title: `${quote.quoteId} - Bilingual Demo Quotation`, Author: `${PRODUCT_NAME} Trade Assistant`, Subject: 'Tool-calculated simulated quotation' };
   return wb;
 }
 
@@ -72,7 +73,7 @@ export function buildTradeQuoteHtml(quote: TradeQuote): string {
     const last = offset + 4 >= d.items.length;
     const items = d.items.slice(offset, offset + 4);
     pages.push(`<section class="trade-pdf-page" style="${offset ? 'break-before:page;page-break-before:always;' : ''}">
-      <header><b>HugAgentOS · 外贸助手 / Trade Assistant</b><span>DEMO · 模拟报价</span></header>
+      <header><b>${esc(PRODUCT_NAME)} · 外贸助手 / Trade Assistant</b><span>DEMO · 模拟报价</span></header>
       <h1>报价单 <small>/ QUOTATION</small></h1>
       <div class="trade-meta"><div><b>报价编号 / Reference</b><br>${esc(quote.quoteId)}</div><div><b>目的国 / Destination</b><br>${esc(d.destination_country || '待确认 / Pending confirmation')}</div><div><b>币种 / Currency</b><br>USD</div></div>
       <table><colgroup><col style="width:25%"><col style="width:7%"><col style="width:12%"><col style="width:12%"><col style="width:14%"><col style="width:14%"><col style="width:16%"></colgroup>

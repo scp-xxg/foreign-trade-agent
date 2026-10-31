@@ -1,3 +1,4 @@
+import { PRODUCT_NAME, BRAND_MARK_URL, BRAND_WORDMARK_URL, BRAND_FAVICON_URL } from '../brand';
 // Modified by foreign-trade-agent contributors, 2026-10-21; see CHANGES_FOREIGN_TRADE.md.
 // Frontend defaults: serve as the fallback while the store has not yet loaded, aligned with the backend DEFAULT_PAGE_CONFIG
 // After the backend seeds, frontend polling overrides these values. When changing values, keep content_blocks.py in sync.
@@ -8,6 +9,7 @@ export interface PageConfig {
     product_subtitle: string;
     logo_url: string;
     favicon_url: string;
+    wordmark_url?: string;
     page_title: string;
     hero_title: string;
     hero_subtitle: string;
@@ -72,18 +74,19 @@ export const DEFAULT_MENU_ITEMS = ['settings', 'app_center', 'projects', 'lab'];
 
 export const DEFAULT_PAGE_CONFIG: PageConfig = {
   branding: {
-    product_name: 'HugAgentOS',
+    product_name: PRODUCT_NAME,
     product_subtitle: '外贸业务，对话即入口',
-    logo_url: '/home/header.svg',
-    favicon_url: '/icon.png',
-    page_title: 'HugAgentOS',
+    logo_url: BRAND_MARK_URL,
+    wordmark_url: BRAND_WORDMARK_URL,
+    favicon_url: BRAND_FAVICON_URL,
+    page_title: PRODUCT_NAME,
     hero_title: '用对话完成询盘、上品与跨岗位协同',
     hero_subtitle: '核验买家、处理报价与产品资料，按岗位分工并人工验收交接。',
     disclaimer: '真实公开资料保留来源；报价目录为模拟数据。所有回复与上品结果均是待审核草稿，不自动发送或发布。',
   },
   homepage: {
     show_logo: true,
-    logo_url: '/icon.png',
+    logo_url: BRAND_MARK_URL,
     show_suggestions: true,
     suggested_questions: [
       "核验 LYRECO 法国公司的官网 https://www.lyreco.com/group/ 和公开登记资料，说明已知事实与未核实事项。",
@@ -132,11 +135,11 @@ export const DEFAULT_PAGE_CONFIG: PageConfig = {
       sites: '在对话里描述需求，AI 生成完整网站并一键发布，由平台托管、凭链接即可访问',
     },
     admin_header: {
-      title: 'HugAgentOS — 后台管理',
+      title: `${PRODUCT_NAME} — 后台管理`,
       subtitle: '后台管理',
     },
     admin_platform: {
-      product_name: 'HugAgentOS',
+      product_name: PRODUCT_NAME,
       content_label: '内容管理',
       config_label: '系统配置',
       apidoc_label: '接口文档',

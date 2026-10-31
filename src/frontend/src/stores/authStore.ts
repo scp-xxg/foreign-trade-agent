@@ -180,7 +180,7 @@ function showDesktopReturnOverlay(deeplink: string): void {
     '<svg width="34" height="34" viewBox="0 0 24 24" fill="none"><path d="M20 6L9 17l-5-5" stroke="#02B589" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>' +
     '</div>' +
     '<h1 style="font-size:21px;font-weight:600;margin:0 0 8px">登录成功</h1>' +
-    '<p style="font-size:13.5px;color:#808080;line-height:1.75;margin:0 0 28px">已唤起HugAgentOS桌面客户端，<br/>您可以关闭此页面了。</p>' +
+    '<p style="font-size:13.5px;color:#808080;line-height:1.75;margin:0 0 28px">已唤起 sailagent 桌面客户端，<br/>您可以关闭此页面了。</p>' +
     '<button id="jx-reopen" style="width:100%;height:46px;border:none;border-radius:12px;cursor:pointer;background:#126DFF;color:#fff;font-size:15px;font-weight:500">没有自动唤起？重新打开客户端</button>' +
     '<div id="jx-close" style="margin-top:14px;font-size:13px;color:#126DFF;cursor:pointer">关闭此页面</div>' +
     '</div>';

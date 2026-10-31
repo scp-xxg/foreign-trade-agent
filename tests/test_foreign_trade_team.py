@@ -141,7 +141,10 @@ class TeamBootstrapTests(unittest.TestCase):
             with patch.object(team,'FRONTEND',frontend), patch.object(team,'port_open',return_value=False) as probe, patch.object(team,'run') as run, patch.object(team.os,'execve') as execute, patch.object(team.os,'chdir'):
                 with redirect_stdout(output): team.start(argparse.Namespace(dry_run=False,port=3002),home,team.runtime_env(home,3002))
             self.assertEqual([call.args[0] for call in probe.call_args_list],[3002,8900,9120])
-            self.assertEqual(run.call_count,1)
+            self.assertEqual(run.call_count,2)
+            migration=run.call_args_list[0].args[0]
+            self.assertTrue(str(migration[1]).endswith('brand_identity.py'))
+            self.assertEqual(str(migration[migration.index('--app-home')+1]),str(home))
             self.assertEqual(str(run.call_args.args[0][-1]),'start')
             command = execute.call_args.args[1]; environment = execute.call_args.args[2]
             self.assertEqual(command[command.index('--port')+1],'3002')
@@ -202,7 +205,7 @@ class IsolatedUpgradeTests(unittest.TestCase):
                 self.assertEqual(db.execute('SELECT count(*) FROM local_users').fetchone()[0], 0)
                 self.assertIn('user_center_id', {row[1] for row in db.execute('PRAGMA table_info(users_shadow)')})
                 payload = json.loads(db.execute("SELECT payload FROM content_blocks WHERE id='page_config'").fetchone()[0])
-                self.assertEqual(payload['branding']['product_name'], 'HugAgentOS')
+                self.assertEqual(payload['branding']['product_name'], 'sailagent')
                 self.assertIn('协同', payload['branding']['hero_title'])
                 self.assertFalse(payload['auth']['allow_register'])
                 self.assertIn('trade_collaboration', payload['navigation']['sidebar_items'])

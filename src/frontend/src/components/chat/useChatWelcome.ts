@@ -1,3 +1,4 @@
+import { PRODUCT_NAME, BRAND_MARK_URL } from '../../brand';
 // Modified by foreign-trade-agent contributors, 2026-10-28; see CHANGES_FOREIGN_TRADE.md.
 import { usePublicChat } from '../../public-chat/PublicChatContext';
 import { useMemo, useState } from 'react';
@@ -41,11 +42,11 @@ export function useChatWelcome(chat: ChatItem | undefined) {
   // ── Page config default values ──
   const cfgHeroTitle = usePageConfig('branding.hero_title', '用对话完成询盘、上品与跨岗位协同');
   const cfgHeroSubtitle = usePageConfig('branding.hero_subtitle', '核验买家、处理报价与产品资料，按岗位分工并人工验收交接。');
-  const cfgProductName = usePageConfig('branding.product_name', 'HugAgentOS');
+  const cfgProductName = usePageConfig('branding.product_name', PRODUCT_NAME);
   const cfgDisclaimer = usePageConfig('branding.disclaimer', '');
   const cfgInputPlaceholder = usePageConfig('texts.input_placeholder', '粘贴询盘、上传产品资料，或描述需要协同完成的任务…');
   const showHomepageLogo = usePageConfig('homepage.show_logo', true);
-  const homepageLogoUrl = usePageConfig('homepage.logo_url', '/icon.png');
+  const homepageLogoUrl = usePageConfig('homepage.logo_url', BRAND_MARK_URL);
   const showHomepageSuggestions = usePageConfig('homepage.show_suggestions', true);
   const configuredHomepageSuggestions = usePageConfig<string[]>('homepage.suggested_questions', []);
   const suggestionPage = page.questions === configuredHomepageSuggestions && page.show === showHomepageSuggestions ? page.index : 0;

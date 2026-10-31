@@ -9,7 +9,7 @@ export function describeApproval(value: Record<string, unknown>): { op: string; 
   if (value.kind === 'hugagent.session') {
     const args = (value.args || {}) as Record<string, unknown>;
     const subject = [args.title, args.message].filter(Boolean).map(String).join(' · ');
-    return { op: t(SESSION_OPERATIONS[String(value.operation)] || 'HugAgentOS 会话操作'), detail: [where, subject].filter(Boolean).join(' · ') };
+    return { op: t(SESSION_OPERATIONS[String(value.operation)] || 'sailagent 会话操作'), detail: [where, subject].filter(Boolean).join(' · ') };
   }
   if (value.kind === 'email.send') {
     const files = Array.isArray(value.attachments) ? value.attachments.length : 0;

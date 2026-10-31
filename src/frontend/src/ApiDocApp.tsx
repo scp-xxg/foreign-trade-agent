@@ -1,3 +1,4 @@
+import { PRODUCT_NAME } from './brand';
 import { useEffect, useRef } from 'react';
 import { Button, Divider, Layout, Typography } from 'antd';
 import {
@@ -13,7 +14,7 @@ const { Header, Content } = Layout;
 export default function ApiDocApp() {
   usePageConfigPolling();
   // Unified admin-platform branding + the "API Docs" tab name (configurable at /config → Page Config → Admin Platform).
-  const platformName = usePageConfig('navigation.admin_platform.product_name', 'HugAgentOS');
+  const platformName = usePageConfig('navigation.admin_platform.product_name', PRODUCT_NAME);
   const apidocLabel = usePageConfig('navigation.admin_platform.apidoc_label', '接口文档');
   const docTitle = `${platformName} — ${apidocLabel}`;
   // The browser tab title follows the admin-platform branding (index.html's static <title> is only a first-frame fallback).

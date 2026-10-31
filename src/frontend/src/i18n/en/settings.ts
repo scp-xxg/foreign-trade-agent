@@ -233,8 +233,8 @@ export const SETTINGS_DICT: Record<string, string> = {
   '头像上传失败': 'Failed to upload avatar',
   '修改默认密码': 'Change Default Password',
   '首次登录必须修改默认密码': 'Change the default password to continue',
-  '默认账号使用临时密码 admin。为确保实例安全，请设置新密码后继续使用 HugAgentOS。':
-    'The default account uses the temporary password "admin". Set a new password before continuing to HugAgentOS.',
+  '默认账号使用临时密码 admin。为确保实例安全，请设置新密码后继续使用 sailagent。':
+    'The default account uses the temporary password "admin". Set a new password before continuing to sailagent.',
   '定期更新登录密码可以保护你的账号与实例配置。': 'Update your sign-in password regularly to protect your account and instance configuration.',
   '当前密码': 'Current Password',
   '请输入当前密码': 'Enter your current password',

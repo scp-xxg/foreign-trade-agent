@@ -187,6 +187,8 @@ def main():
             db.commit()
         if args.apply_assistant_prompt:
             apply_assistant_prompt(db)
+        from foreign_trade.brand_identity import apply_identity_prompt
+        apply_identity_prompt(db)
         report = result["import_report"]
         print(json.dumps({
             "ok": True, "action": result["action"], "name": result["name"], "schema_upgrade": upgrade_report,

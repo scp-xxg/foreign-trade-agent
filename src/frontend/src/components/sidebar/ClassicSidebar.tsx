@@ -1,3 +1,4 @@
+import { PRODUCT_NAME, BRAND_MARK_URL } from '../../brand';
 import { useState } from 'react';
 import { useModuleNavigation } from './useModuleNavigation';
 import { secondaryModule } from './moduleNavigation';
@@ -30,9 +31,9 @@ export function ClassicSidebar(actions: SidebarProps) {
   const collapsed = useUIStore(s => s.siderCollapsed);
   const setCollapsed = useUIStore(s => s.setSiderCollapsed);
   const openSearch = useUIStore(s => s.openSearchModal);
-  const name = usePageConfig('branding.product_name', 'HugAgentOS');
+  const name = usePageConfig('branding.product_name', PRODUCT_NAME);
   const subtitle = usePageConfig('branding.product_subtitle', '');
-  const logo = usePageConfig('branding.logo_url', '/home/logo.svg');
+  const logo = usePageConfig('branding.logo_url', BRAND_MARK_URL);
 
   return <><Layout.Sider width={280} collapsedWidth={56} collapsed={collapsed} theme="light"
     className={'jx-sider jx-classicShell' + (collapsed ? ' jx-classicShell--collapsed' : '')}>
