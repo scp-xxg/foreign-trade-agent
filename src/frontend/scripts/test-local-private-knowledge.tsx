@@ -14,3 +14,15 @@ assert.match(render(['wiki'],['rag']),/Wiki/);
 console.log('Local knowledge mode availability and existing-mode controls passed');
 
 const unavailable=buttons(render([],['rag','wiki']));assert.ok(unavailable.every(tag=>tag.includes('disabled')&&tag.includes('aria-checked="false"')));
+
+// The first upload starts after an initially idle capability response.
+const {watchWikiProgress}=await import('../src/utils/wikiProgressPoll');
+let tick:()=>void=()=>{};let cancelled=false;let phase=false;let pageCount=0;const phases:boolean[]=[];const counts:number[]=[];
+let resolveLate:(v:{total_pages:number})=>void=()=>{};let late=false;
+const dispose=watchWikiProgress({status:async()=>({generating:phase}),stats:()=>late?new Promise(resolve=>{resolveLate=resolve;}):Promise.resolve({total_pages:pageCount}),
+ onGenerating:value=>phases.push(value),onPages:value=>counts.push(value),schedule:fn=>{tick=fn;return()=>{cancelled=true;};}});
+tick();await Promise.resolve();phase=true;tick();await Promise.resolve();phase=false;pageCount=6;tick();await Promise.resolve();
+assert.deepEqual(phases,[false,true,false]);assert.deepEqual(counts,[0,0,6]);
+late=true;tick();await Promise.resolve();dispose();const previous=counts.length;resolveLate({total_pages:99});await Promise.resolve();
+assert.equal(counts.length,previous);assert.equal(cancelled,true);
+console.log('Wiki progress follows idle → generating → complete and ignores stale reads');

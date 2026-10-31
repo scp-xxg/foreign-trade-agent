@@ -52,6 +52,7 @@ import { formatDateTime } from '../../utils/date';
 import { getFileIconSrc,getFolderIconSrc } from '../../utils/fileIcon';
 import { mdToHtml } from '../../utils/markdown';
 import { EASE,staggerStyle } from '../../utils/motionTokens';
+import { watchWikiProgress } from '../../utils/wikiProgressPoll';
 import { parseSeparators } from '../../utils/separators';
 import { KBChunkImages,WikiPanel } from '../kb';
 import IndexModePicker from '../kb/IndexModePicker';
@@ -436,20 +437,14 @@ export function CatalogPanel() {
     };
   }, [selectedItem?.id, selectedItem?.capabilities?.wiki, selectedItem?.source, wikiBackendReady]);
 
-  // 生成期间轮询：页数会随生成推进增长，Tab 上的计数要跟着动
+  // Keep polling a selected local Wiki even when initially idle: uploading the
+  // first document starts generation after the initial capability request.
   useEffect(() => {
     const kbId = selectedItem?.id;
-    if (!wikiGenerating || !kbId || selectedItem?.source !== 'local') return;
-    const timer = window.setInterval(() => {
-      void getKBWikiStatus(kbId).then((status) => {
-        setWikiGenerating(Boolean(status.generating));
-      });
-      void getWikiStats(kbId)
-        .then((stats) => setWikiPageCount(stats.total_pages || 0))
-        .catch(() => undefined);
-    }, 10000);
-    return () => window.clearInterval(timer);
-  }, [wikiGenerating, selectedItem?.id, selectedItem?.source]);
+    if (!kbId || selectedItem?.source !== 'local' || !selectedItem.capabilities?.wiki || !wikiBackendReady) return;
+    return watchWikiProgress({status:()=>getKBWikiStatus(kbId),stats:()=>getWikiStats(kbId),
+      onGenerating:setWikiGenerating,onPages:setWikiPageCount});
+  }, [selectedItem?.id, selectedItem?.source, selectedItem?.capabilities?.wiki, wikiBackendReady]);
 
 
   useEffect(() => {
