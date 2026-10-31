@@ -123,6 +123,11 @@ jobs:
         working-directory: src/frontend
         run: npm ci --no-audit --no-fund
 
+      # prebuild produces local workspace packages required by SSR card tests.
+      - name: Build the public CE web app
+        working-directory: src/frontend
+        run: npm run build
+
       - name: Test quote cards and bilingual document exports
         working-directory: src/frontend
         run: npm run test:foreign-trade-quote
@@ -153,6 +158,3 @@ jobs:
           npm run test:attachment-routing
           npm run test:attachment-send
 
-      - name: Build the public CE web app
-        working-directory: src/frontend
-        run: npm run build
