@@ -122,3 +122,7 @@ main 保持可运行；每项功能独立分支、提交 PR，通过 CI 和队�
 许可证为 **Apache License 2.0 加补充条款**，完整条件见 [LICENSE](LICENSE) 和 [NOTICE](NOTICE)。界面保留 Powered by HugAgentOS 署名；白标及受限多租户 SaaS 场景遵循原许可。所有实现基于公开社区版，未使用私有商业版代码。
 
 团队改动见 [CHANGES_FOREIGN_TRADE.md](CHANGES_FOREIGN_TRADE.md)，业务细节见 [外贸插件说明](extensions/foreign_trade/README.md)。上游原始说明保存在 [README_UPSTREAM.md](README_UPSTREAM.md) 和 [README_CN_UPSTREAM.md](README_CN_UPSTREAM.md)；其中的上游安装地址不会安装本项目，请以本页步骤为准。
+
+### 中文 3D 产品概念打样（可选插件）
+
+新增 Blender MCP 插件：中文创建桌面分格收纳盒、第二轮改尺寸和颜色、下载 GLB、PNG 展示图与 Blender 源文件。使用真实本地 Blender/Xvfb 和独立 MCP 环境，保留 HugAgentOS 署名；当前范围为参数化概念打样。安装与两轮演示见 [Blender MCP 使用说明](docs/BLENDER_MCP.md)。

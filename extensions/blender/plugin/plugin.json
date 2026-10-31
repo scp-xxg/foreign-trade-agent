@@ -1,0 +1,49 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "foreign-trade-blender",
+  "version": "0.1.0",
+  "description": "中文桌面收纳盒 3D 概念打样、对话改稿及 GLB/PNG/Blend 下载。真实 Blender MCP，非服装仿真或生产 CAD。",
+  "author": {
+    "name": "Foreign Trade Agent Team"
+  },
+  "extensions": {
+    "org.hugagent": {
+      "default_enabled": {
+        "skills": [
+          "product-3d-sampling"
+        ],
+        "mcp": [
+          "blender"
+        ]
+      },
+      "mcp": {
+        "blender": {
+          "display_name": "Blender 产品概念打样",
+          "description": "真实 Blender 引擎：创建、版本化修改和导出，不调用付费生成服务。",
+          "tools": [
+            {
+              "name": "blender_product_model",
+              "description": "创建或修改收纳盒概念样品，核对外尺寸和版本。"
+            },
+            {
+              "name": "blender_export_product",
+              "description": "导出当前版本 GLB、PNG 和 Blender 源文件并提供真实下载。"
+            }
+          ]
+        }
+      },
+      "ui": {
+        "version": 1,
+        "contributes": {
+          "shortcuts": [
+            {
+              "id": "product-3d",
+              "label": "中文 3D 产品打样",
+              "prompt": "请用 Blender 创建桌面收纳盒概念样品：外尺寸宽20、深10、高8厘米，3格，壁厚3毫米，蓝色。实际建模并导出GLB、展示图和Blender源文件，给我下载链接。明确标注概念样品，不关联商品报价。"
+            }
+          ]
+        }
+      }
+    }
+  }
+}

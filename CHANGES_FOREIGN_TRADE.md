@@ -73,3 +73,9 @@ are local deployment state and are not distributed.
 - 将索引类型传入对话与连接器，Wiki 定位后读取原文，避免误用向量检索；模式修改会刷新提示缓存。
 - 增加旧管理员的显式建库配置脚本、数据备份与审计；不覆盖其他权限。
 - 增加隔离测试、真实网页上传示例与操作文档。
+
+## 2026-10-31：Blender MCP 概念打样插件
+
+- 新增独立 foreign-trade-blender 插件和 product-3d-sampling 技能，复用 HugAgent 原生插件生命周期、会话身份和文件下载。
+- 固定 Blender 5.2.3 LTS、MCP for Blender 2.2.6，隔离 SDK1/SDK2；参数化创建/版本修改/真实 GLB、PNG、Blend 导出。
+- 增加模型边界、版本冲突、账号/会话、导出校验测试和团队部署说明；不更改报价目录，不包含私有源代码。

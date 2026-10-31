@@ -8,6 +8,7 @@ on:
     branches: [main]
     paths:
       - "extensions/foreign_trade/**"
+      - "extensions/blender/**"
       - "packages/**"
       - "tests/**"
       - "tests/test_foreign_trade*.py"
@@ -26,6 +27,7 @@ on:
     branches: [main]
     paths:
       - "extensions/foreign_trade/**"
+      - "extensions/blender/**"
       - "packages/**"
       - "tests/**"
       - "tests/test_foreign_trade*.py"
