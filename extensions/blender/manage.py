@@ -28,7 +28,7 @@ PID=RUNTIME/'blender-process.json'
 
 def setup():
     if sys.platform!='linux':raise RuntimeError('请在 Linux/WSL 中运行。')
-    if shutil.which('xvfb-run') is None:raise RuntimeError('请先安装 xvfb xauth 及文档列出的图形库。')
+    if shutil.which('xvfb-run') is None or shutil.which('bwrap') is None:raise RuntimeError('请先安装 bubblewrap xvfb xauth 及文档列出的图形库。')
     RUNTIME.mkdir(exist_ok=True)
     path=RUNTIME/ARCHIVE
     if not path.exists():
@@ -150,7 +150,7 @@ def main():
         home=args.app_home.expanduser().resolve()
         if not (home/'data.db').is_file():parser.error('已有 HugAgent 数据目录不存在。')
         result=install(home,args.username)
-    else:result={'setup':setup,'start':start,'stop':stop,'status':lambda:{'managed':bool(owned()),'ready':health() is not None}}[args.action]()
+    else:result={'setup':setup,'start':start,'stop':stop,'status':lambda:{'managed':bool(owned()),'ready':health() is not None,'general_ready':BINARY.exists() and MCP_PYTHON.exists() and shutil.which('bwrap') is not None}}[args.action]()
     print(json.dumps(result,ensure_ascii=False))
 
 if __name__=='__main__':main()

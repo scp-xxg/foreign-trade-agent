@@ -1,8 +1,8 @@
 {
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "foreign-trade-blender",
-  "version": "0.1.0",
-  "description": "中文桌面收纳盒 3D 概念打样、对话改稿及 GLB/PNG/Blend 下载。真实 Blender MCP，非服装仿真或生产 CAD。",
+  "version": "0.2.0",
+  "description": "通用中文 3D 概念建模：模型动态编写 bpy，真实 Blender 执行、检查、对话修改和 GLB/PNG/Blend 下载。不限定物体类别。",
   "author": {
     "name": "Foreign Trade Agent Team"
   },
@@ -18,16 +18,20 @@
       },
       "mcp": {
         "blender": {
-          "display_name": "Blender 产品概念打样",
-          "description": "真实 Blender 引擎：创建、版本化修改和导出，不调用付费生成服务。",
+          "display_name": "Blender 通用 3D 建模",
+          "description": "不限定物体模板：动态 bpy、实际场景检查、版本化修改、导出与展示。",
           "tools": [
             {
-              "name": "blender_product_model",
-              "description": "创建或修改收纳盒概念样品，核对外尺寸和版本。"
+              "name": "blender_scene_info",
+              "description": "读取当前对话实际场景与版本。"
             },
             {
-              "name": "blender_export_product",
-              "description": "导出当前版本 GLB、PNG 和 Blender 源文件并提供真实下载。"
+              "name": "blender_scene_execute",
+              "description": "在隔离 Blender 中执行动态 bpy 建模和修改代码。"
+            },
+            {
+              "name": "blender_scene_export",
+              "description": "导出当前场景 GLB、渲染 PNG 和 Blend 源文件。"
             }
           ]
         }
@@ -38,8 +42,8 @@
           "shortcuts": [
             {
               "id": "product-3d",
-              "label": "中文 3D 产品打样",
-              "prompt": "请用 Blender 创建桌面收纳盒概念样品：外尺寸宽20、深10、高8厘米，3格，壁厚3毫米，蓝色。实际建模并导出GLB、展示图和Blender源文件，给我下载链接。明确标注概念样品，不关联商品报价。"
+              "label": "通用中文 3D 建模",
+              "prompt": "请用 Blender 创建有金色梅花纹样的红色旗袍3D概念模型，包含立领、右斜襟盘扣、短袖和两侧开衩；自行说明采用的概念尺寸，实际建模并导出GLB、展示图和Blender源文件。花纹必须嵌入GLB，不是只在文字中描述。"
             }
           ]
         }

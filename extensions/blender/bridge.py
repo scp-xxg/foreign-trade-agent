@@ -163,6 +163,12 @@ async def perform(remote,home,name,args):
         raise ValueError('未知工具。')
 
 
+def error_message(exc):
+    if isinstance(exc,BaseExceptionGroup):
+        return '; '.join(error_message(child) for child in exc.exceptions)[:3000]
+    return str(exc)[:3000]
+
+
 async def run(home):
     from mcp import Client,StdioServerParameters,types
     from mcp.server.lowlevel import Server
@@ -172,16 +178,23 @@ async def run(home):
     async with Client(upstream,read_timeout_seconds=240) as remote:
         discovered=await remote.list_tools()
         if 'execute_blender_code' not in {x.name for x in discovered.tools}:raise RuntimeError('Pinned Blender MCP tool unavailable')
-        pfields={'width_cm':{'type':'number'},'depth_cm':{'type':'number'},'height_cm':{'type':'number'},'wall_mm':{'type':'number'},'compartments':{'type':'integer'},'color':{'type':'string','enum':['blue','green','white','black','orange']}}
-        tool_list=[types.Tool(name='blender_product_model',description='通过真实 Blender MCP 创建/修改当前对话的桌面分格收纳盒概念模型。action=create/update/get；parameters 为明确修改的外尺寸厘米、壁厚毫米、分格数和颜色。省略字段沿用当前值或工具默认值；create 前说明默认值，update 必须提供最新 expected_revision。不能用于任意物体/服装仿真、工艺或认证结论。',input_schema={'type':'object','properties':{'action':{'type':'string','enum':['create','update','get']},'parameters':{'type':'object','properties':pfields,'additionalProperties':False},'expected_revision':{'type':'integer'}},'required':['action'],'additionalProperties':False}),types.Tool(name='blender_export_product',description='实际重新构建并导出当前版本的 GLB、1024x768 PNG 实渲染展示图和 .blend 源文件，校验后返回当前账号可下载的 /files 链接及 SHA256。expected_revision 必须等于最新模型版本。',input_schema={'type':'object','properties':{'expected_revision':{'type':'integer'}},'required':['expected_revision'],'additionalProperties':False})]
+        tool_list=[types.Tool(name='blender_scene_info',description='读取当前账号/会话已保存的通用 Blender 场景版本与实际网格、材质、贴图信息。没有预设物体类别；新场景 revision=0。第二轮修改前先读取。',input_schema={'type':'object','properties':{},'additionalProperties':False}),types.Tool(name='blender_scene_execute',description='通过真实 Blender MCP 在隔离文件系统执行模型动态编写的 bpy Python，支持任意类别的几何、服装外观、家具、器皿及贴图等概念建模。不是固定物体模板。code 最多48000字符；可 import bpy/bmesh/math/mathutils/json 等上游安全模式允许模块；不能 import os/sys/socket/subprocess、不能 eval/exec/open、不能访问宿主私有源码。只能使用隔离的 /workspace 文件；贴图用 bpy.data.images 创建并 pack，制作 glTF 支持的 Image Texture 材质。expected_revision 必须等于 scene_info 当前版本。脚本执行/实际检查成功后才保存为新版本；失败不覆盖旧版本。user_prompt 传用户原始建模/修改意图。输出请 print 实际完成内容。',input_schema={'type':'object','properties':{'code':{'type':'string'},'expected_revision':{'type':'integer'},'user_prompt':{'type':'string'}},'required':['code','expected_revision','user_prompt'],'additionalProperties':False}),types.Tool(name='blender_scene_export',description='从当前保存场景导出 GLB、真实渲染 PNG 和可编辑 Blend，返回当前账号真实下载地址。用户相机优先，缺失时按可见网格包围盒自动布光/取景；不导出 hug_display_only=true 的布景。expected_revision 使用最新场景版本。',input_schema={'type':'object','properties':{'expected_revision':{'type':'integer'}},'required':['expected_revision'],'additionalProperties':False})]
         async def listing(ctx,params):return types.ListToolsResult(tools=tool_list)
         async def calling(ctx,params):
             try:
-                result=await perform(remote,home,params.name,params.arguments or {})
-                return types.CallToolResult(content=[types.TextContent(type='text',text=json.dumps(result,ensure_ascii=False))])
+                if params.name.startswith('blender_scene_'):
+                    from general import perform as perform_general
+                    user,chat=check_actor(home)
+                    result=await perform_general(home,user,chat,params.name,params.arguments or {})
+                else:
+                    result=await perform(remote,home,params.name,params.arguments or {})
+                preview=result.pop('_preview_image_b64',None)
+                content=[types.TextContent(type='text',text=json.dumps(result,ensure_ascii=False))]
+                if preview:content.append(types.ImageContent(type='image',data=preview,mime_type='image/png'))
+                return types.CallToolResult(content=content)
             except Exception as exc:
-                return types.CallToolResult(is_error=True,content=[types.TextContent(type='text',text=json.dumps({'ok':False,'error':str(exc)[:2000],'type':type(exc).__name__,'action':'检查参数/版本；若连接失败，运行 extensions/blender/manage.py start。'},ensure_ascii=False))])
-        server=Server('foreign-trade-blender',version='0.1.0',instructions='Use Chinese input to create and revise a parametric concept. Only actual tool artifacts are downloadable; never invent URLs or claim CAD/garment simulation.',on_list_tools=listing,on_call_tool=calling)
+                return types.CallToolResult(is_error=True,content=[types.TextContent(type='text',text=json.dumps({'ok':False,'error':error_message(exc),'type':type(exc).__name__,'action':'依据错误修正脚本/版本；启动失败时检查 bubblewrap/Xvfb 依赖及操作目录 engine.log，不会回退到宿主执行。'},ensure_ascii=False))])
+        server=Server('foreign-trade-blender',version='0.2.0',instructions='General object-independent Blender modeling. Dynamically author bpy code, inspect actual geometry, iterate, export real GLB/PNG/Blend files. No fixed object templates. Only real artifacts are downloadable; never claim garment simulation or manufacturing CAD.',on_list_tools=listing,on_call_tool=calling)
         async with stdio_server() as (reader,writer):await server.run(reader,writer,server.create_initialization_options())
 
 

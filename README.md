@@ -125,4 +125,4 @@ main 保持可运行；每项功能独立分支、提交 PR，通过 CI 和队�
 
 ### 中文 3D 产品概念打样（可选插件）
 
-新增 Blender MCP 插件：中文创建桌面分格收纳盒、第二轮改尺寸和颜色、下载 GLB、PNG 展示图与 Blender 源文件。使用真实本地 Blender/Xvfb 和独立 MCP 环境，保留 HugAgentOS 署名；当前范围为参数化概念打样。安装与两轮演示见 [Blender MCP 使用说明](docs/BLENDER_MCP.md)。
+新增通用 Blender MCP 插件：模型动态编写 bpy，不设物体类别白名单；真实创建服装外观、产品或其他3D概念，支持第二轮修改及GLB、PNG、Blend下载。使用隔离的Blender/Xvfb，保留HugAgentOS署名；概念建模不等同于生产CAD或服装仿真。安装与两轮演示见 [Blender MCP 使用说明](docs/BLENDER_MCP.md)。
