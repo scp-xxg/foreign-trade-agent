@@ -48,7 +48,12 @@ def _parse_skill_definition(text):
     if not text.startswith("---"):
         return {}
     pieces = text.split("---", 2)
-    metadata = yaml.safe_load(pieces[1]) if len(pieces) > 2 else {}
+    try:
+        metadata = yaml.safe_load(pieces[1]) if len(pieces) > 2 else {}
+    except yaml.YAMLError as exc:
+        # Readiness callers handle invalid definitions as unavailable skills.
+        # A malformed marketplace file must not abort every chat preflight.
+        raise ValueError("invalid skill frontmatter") from exc
     if metadata is None:
         return {}
     if not isinstance(metadata, dict):
