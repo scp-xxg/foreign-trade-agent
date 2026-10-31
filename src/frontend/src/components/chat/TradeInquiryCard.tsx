@@ -3,10 +3,12 @@ import { memo, useMemo, useState } from 'react';
 import { Button, Select } from 'antd';
 import { CopyOutlined, DownOutlined, FileSearchOutlined, ReloadOutlined, UpOutlined } from '@ant-design/icons';
 import { t } from '../../i18n';
+import { getToolCallResult } from '../../api';
+import { useChatStore } from '../../stores';
 import type { ToolCall } from '../../types';
 import { ApiResponseError } from '../../utils/apiError';
 import { getInquiry, type InquiryRecord } from '../../utils/foreignTradeInquiryApi';
-import { canCopyInquiryDraft, extractTradeInquiryReceipts, readCurrentTradeInquiry, safeInquirySourceUrl,
+import { canCopyInquiryDraft, extractTradeInquiryReceipts, isTradeInquiryTool, readHistoricalTradeInquiry, readCurrentTradeInquiry, safeInquirySourceUrl,
   summarizeTradeInquiry, type TradeInquiryReceipt } from '../../utils/foreignTradeInquiryReceipt';
 import './TradeInquiryCard.css';
 
@@ -91,8 +93,29 @@ export const TradeInquiryCard = memo(function TradeInquiryCard({ receipt }: { re
     </div>}
   </section>;
 });
-export const TradeInquiryCards = memo(function TradeInquiryCards({ tools }: { tools: ToolCall[] }) {
+function HistoricalTradeInquiry({ tool, chatId, messageId }: { tool: ToolCall; chatId: string; messageId: string }) {
+  const [loading, setLoading] = useState(false); const [error, setError] = useState('');
+  const apply = useChatStore(state => state.applyToolCallOutput);
+  const load = async () => {
+    if (loading || !tool.id) return; setLoading(true); setError('');
+    try {
+      const result = await readHistoricalTradeInquiry(tool, chatId, messageId, getToolCallResult);
+      apply(chatId, messageId, tool.id, result);
+    } catch { setError(t('完整询盘回执不可用，请让助手重新读取当前询盘。')); }
+    finally { setLoading(false); }
+  };
+  return <section className="jx-inquiryStatusCard" aria-label={t('历史询盘记录')}>
+    <strong>{t('历史询盘记录')}</strong><p>{t('历史回执已精简，加载完整工具记录后查看询盘状态。')}</p>
+    <Button icon={<ReloadOutlined />} loading={loading} onClick={() => void load()}>{t('加载完整询盘回执')}</Button>
+    {error && <p className="jx-inquiryStatusError" role="alert">{error}</p>}
+  </section>;
+}
+export const TradeInquiryCards = memo(function TradeInquiryCards({ tools, chatId, messageId }: { tools: ToolCall[]; chatId: string; messageId?: string }) {
   const receipts = useMemo(() => extractTradeInquiryReceipts(tools), [tools]);
-  if (!receipts.length) return null;
-  return <div className="jx-inquiryStatusCards">{receipts.map((receipt) => <TradeInquiryCard key={`${receipt.id}:${receipt.revision}`} receipt={receipt} />)}</div>;
+  const historical = useMemo(() => tools.filter(tool => isTradeInquiryTool(tool.name) && tool.status === 'success' && tool.id && tool.outputTruncated && !tool.outputLoaded), [tools]);
+  if (!receipts.length && (!messageId || !historical.length)) return null;
+  return <div className="jx-inquiryStatusCards">
+    {receipts.map(receipt => <TradeInquiryCard key={`${receipt.id}:${receipt.revision}`} receipt={receipt} />)}
+    {messageId && historical.map(tool => <HistoricalTradeInquiry key={tool.id} tool={tool} chatId={chatId} messageId={messageId} />)}
+  </div>;
 });

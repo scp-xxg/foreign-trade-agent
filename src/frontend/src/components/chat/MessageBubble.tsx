@@ -13,6 +13,7 @@ import { TradeQuoteCards } from './TradeQuoteCard';
 import { ProductContentCards } from './ProductContentCard';
 import { TradeInquiryCards } from './TradeInquiryCard';
 import { CollaborationCards } from './CollaborationCard';
+import { TradeReviewCards } from './TradeReviewCard';
 import { MessageInheritedCards } from './MessageInheritedCards';
 import { useMessageSelection } from './useMessageSelection';
 import { useChatStore } from '../../stores';
@@ -105,8 +106,9 @@ export const MessageBubble = memo(function MessageBubble({ m, messageIndex, curr
         {m.role === 'assistant' && !m.isStreaming && !inherited && !publicChat && m.toolCalls && <>
           <TradeQuoteCards tools={m.toolCalls} chatId={currentChatId} messageId={m.messageId} />
           <ProductContentCards tools={m.toolCalls} chatId={currentChatId} messageId={m.messageId} />
-          <TradeInquiryCards tools={m.toolCalls} />
+          <TradeInquiryCards tools={m.toolCalls} chatId={currentChatId} messageId={m.messageId} />
           <CollaborationCards tools={m.toolCalls} chatId={currentChatId} messageId={m.messageId} />
+          <TradeReviewCards tools={m.toolCalls} chatId={currentChatId} messageId={m.messageId} />
         </>}
         {/* Artifact cards */}
         {m.role === 'assistant' && <MessageArtifacts m={m} currentChatId={currentChatId} />}

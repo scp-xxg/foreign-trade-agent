@@ -124,6 +124,32 @@ def test_multiple_countries_not_selected_by_static_priority():
     assert result["suggestions"].get("destination_country") in (None, "France")
 
 
+@pytest.mark.parametrize("raw", [
+    "Our company is registered in France. Please quote DESK-001, 500 units.",
+    "Buyer address: France. DESK-001 500 units; destination is not confirmed.",
+    "公司注册国为法国，DESK-001 500件，交付地待确认。",
+])
+def test_registration_country_never_becomes_delivery_destination(raw):
+    value = candidate(suggestions={"items": [{"sku": "DESK-001"}], "destination_country": "France"},
+                      evidence=[{"field": "items[0].sku", "quote": "DESK-001"},
+                                {"field": "destination_country", "quote": "法国" if "法国" in raw else "France"}])
+    assert "destination_country" not in ai.rule_suggestions(raw, PRODUCTS)["suggestions"]
+    assert "destination_country" not in ai.validate_model_suggestions(value, raw, PRODUCTS)["suggestions"]
+
+
+@pytest.mark.parametrize("raw,quote", [
+    ("Based in France. Ship to Spain: DESK-001 500 units.", "Spain"),
+    ("Do not ship to France. Delivery to Spain for DESK-001 500 units.", "Spain"),
+    ("公司在法国；DESK-001 500件，目的国：西班牙。", "西班牙"),
+])
+def test_explicit_destination_retained_separately_from_company_country(raw, quote):
+    value = candidate(suggestions={"items": [{"sku": "DESK-001"}], "destination_country": "Spain"},
+                      evidence=[{"field": "items[0].sku", "quote": "DESK-001"},
+                                {"field": "destination_country", "quote": quote}])
+    assert ai.rule_suggestions(raw, PRODUCTS)["suggestions"]["destination_country"] == "Spain"
+    assert ai.validate_model_suggestions(value, raw, PRODUCTS)["suggestions"]["destination_country"] == "Spain"
+
+
 def test_negated_packaging_cannot_be_accepted_by_trimming_evidence():
     raw = "DESK-001 500 units. We do not need custom packaging."
     value = candidate(suggestions={"items": [{"sku": "DESK-001", "custom_packaging": True}]},
@@ -139,6 +165,58 @@ def test_multiple_skus_do_not_guess_quantity_assignment():
     result = ai.rule_suggestions("DESK-001 and BOX-001: 500 units and 300 units.", PRODUCTS)
     assert len(result["suggestions"]["items"]) == 2
     assert all("quantity" not in item for item in result["suggestions"]["items"])
+
+
+def multi_candidate(quantities=(500, 300), packaging=None):
+    items, evidence = [], []
+    for index, (sku, quantity) in enumerate(zip(("DESK-001", "BOX-001"), quantities)):
+        items.append({"sku": sku, "quantity": quantity})
+        evidence.extend([{"field": f"items[{index}].sku", "quote": sku},
+                         {"field": f"items[{index}].quantity", "quote": f"{quantity} units"}])
+        if packaging is not None:
+            items[-1]["custom_packaging"] = packaging[index]
+            evidence.append({"field": f"items[{index}].custom_packaging",
+                             "quote": "custom packaging" if packaging[index] else "standard packaging"})
+    return {"suggestions": {"items": items}, "evidence": evidence}
+
+
+@pytest.mark.parametrize("raw", [
+    "DESK-001 500 units; BOX-001 300 units.",
+    "Please quote 500 units of DESK-001 and 300 units of BOX-001.",
+    "DESK-001: quantity 500 units\nBOX-001: 300 units",
+    "DESK-001 500 units and BOX-001 300 units.",
+])
+def test_multisku_quantities_require_their_own_local_pairs(raw):
+    expected = [{"sku": "DESK-001", "quantity": 500}, {"sku": "BOX-001", "quantity": 300}]
+    assert ai.rule_suggestions(raw, PRODUCTS)["suggestions"]["items"] == expected
+    assert ai.validate_model_suggestions(multi_candidate(), raw, PRODUCTS)["suggestions"]["items"] == expected
+    swapped = ai.validate_model_suggestions(multi_candidate((300, 500)), raw, PRODUCTS)
+    assert all("quantity" not in item for item in swapped["suggestions"]["items"])
+    assert any("人工确认" in warning for warning in swapped["warnings"])
+
+
+@pytest.mark.parametrize("raw", [
+    "DESK-001 and BOX-001: 500 units and 300 units.",
+    "DESK-001, BOX-001; quantities are 500 units and 300 units respectively.",
+])
+def test_model_cannot_assign_ambiguous_grouped_product_quantities(raw):
+    result = ai.validate_model_suggestions(multi_candidate(), raw, PRODUCTS)
+    assert all("quantity" not in item for item in result["suggestions"]["items"])
+    assert any("人工确认" in warning for warning in result["warnings"])
+
+
+def test_packaging_for_one_product_is_not_borrowed_by_another():
+    raw = "DESK-001 500 units custom packaging; BOX-001 300 units standard packaging."
+    good = ai.validate_model_suggestions(multi_candidate(packaging=(True, False)), raw, PRODUCTS)
+    assert [item["custom_packaging"] for item in good["suggestions"]["items"]] == [True, False]
+    swapped = ai.validate_model_suggestions(multi_candidate(packaging=(False, True)), raw, PRODUCTS)
+    assert all("custom_packaging" not in item for item in swapped["suggestions"]["items"])
+    assert any("包装" in warning and "人工确认" in warning for warning in swapped["warnings"])
+
+
+def test_conflicting_repeated_product_quantities_remain_unconfirmed():
+    raw = "DESK-001 500 units; DESK-001 300 units."
+    assert "quantity" not in ai.rule_suggestions(raw, PRODUCTS)["suggestions"]["items"][0]
 
 
 @pytest.mark.asyncio

@@ -6,7 +6,7 @@ import ts from 'typescript';
 import { normalizeToolId, resolveToolCardIndex } from '../src/utils/toolMatching';
 import type { ToolCall } from '../src/types';
 import type { InquiryRecord } from '../src/utils/foreignTradeInquiryApi';
-import { canCopyInquiryDraft, extractTradeInquiryReceipts, readCurrentTradeInquiry, safeInquirySourceUrl, summarizeTradeInquiry } from '../src/utils/foreignTradeInquiryReceipt';
+import { canCopyInquiryDraft, extractTradeInquiryReceipts, readCurrentTradeInquiry, readHistoricalTradeInquiry, safeInquirySourceUrl, summarizeTradeInquiry } from '../src/utils/foreignTradeInquiryReceipt';
 import { assertCurrentProductContent, downloadVerifiedProductContent, extractProductContentReceipts,
   isProductContentTool, productContentDownloads, ProductContentReceiptError,
 } from '../src/utils/foreignTradeContentReceipt';
@@ -269,6 +269,34 @@ await test('ontology result resolves exact ids and preserves no-id legacy matchi
   assert.equal(legacy.length, 1); assert.equal(legacy[0].output.legacy, true);
 });
 
+
+await test('historical inquiry fetch binds the exact chat, message and tool invocation', async () => {
+  const value = inquiryData(); const tool = inquiryCall(value, { id: 'tool-exact', outputTruncated: true });
+  const result = await readHistoricalTradeInquiry(tool, 'chat-exact', 'message-exact', async (...args) => {
+    assert.deepEqual(args, ['chat-exact','message-exact','tool-exact']);
+    return { tool_id: 'tool-exact', tool_name: 'trade_inquiry', status: 'success', truncated: false, result: inquiryEnvelope(value) };
+  });
+  assert.equal(extractTradeInquiryReceipts([{ ...tool, output: result, outputTruncated: false, outputLoaded: true }])[0].id, value.id);
+});
+await test('historical inquiry loader rejects wrong IDs, errors and incomplete receipts', async () => {
+  const value = inquiryData(); const tool = inquiryCall(value, { id: 'tool-exact', outputTruncated: true });
+  const detail = { tool_id: 'tool-exact', tool_name: 'trade_inquiry', status: 'success', truncated: false, result: inquiryEnvelope(value) };
+  for (const patch of [{ tool_id: 'other' }, { tool_name: 'other' }, { status: 'error' }, { truncated: true }, { result: { ok: false, errors: ['failed'], data: value } }]) {
+    await assert.rejects(readHistoricalTradeInquiry(tool, 'chat', 'message', async () => ({ ...detail, ...patch })), /invalid_inquiry_receipt/);
+  }
+});
+await test('historical inquiry loader never requests an unrelated or failed invocation', async () => {
+  let calls = 0; const value = inquiryData();
+  const read = async () => { calls++; return { tool_id: 'exact', status: 'success', truncated: false, result: inquiryEnvelope(value) }; };
+  for (const patch of [{ name: 'unrelated', id: 'exact' }, { status: 'error' as const, id: 'exact' }, { id: undefined }]) {
+    await assert.rejects(readHistoricalTradeInquiry(inquiryCall(value, patch), 'chat', 'message', read));
+  }
+  assert.equal(calls, 0);
+});
+await test('historical inquiry read respects denied access without fabricating a card', async () => {
+  const denied = new Error('HTTP 403');
+  await assert.rejects(readHistoricalTradeInquiry(inquiryCall(inquiryData(), { id: 'exact' }), 'chat', 'message', async () => { throw denied; }), error => error === denied);
+});
 
 await test('explicit save-inquiry alias is accepted and shares highest-revision deduplication', () => {
   const older = inquiryData(); const newer = inquiryData(); newer.revision = older.revision + 1;

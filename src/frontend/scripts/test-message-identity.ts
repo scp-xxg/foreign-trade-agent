@@ -21,7 +21,7 @@ const fakeStorage = {
 };
 const g = globalThis as unknown as Record<string, unknown>;
 g.localStorage = fakeStorage;
-g.window = { localStorage: fakeStorage, addEventListener() {}, removeEventListener() {} };
+g.window = { localStorage: fakeStorage, sessionStorage: fakeStorage, location: { pathname: '/', search: '', hash: '' }, addEventListener() {}, removeEventListener() {} };
 g.document = {
   documentElement: {},
   addEventListener() {},

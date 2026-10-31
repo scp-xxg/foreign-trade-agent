@@ -1,3 +1,4 @@
+// Modified by foreign-trade-agent contributors, 2026-10-31; see CHANGES_FOREIGN_TRADE.md.
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Button, Form, Input, Modal, Popconfirm, Select, Space, Switch, Table, Tag, Typography, message,
@@ -24,6 +25,7 @@ import { ReasoningEffortFields } from '../common/ReasoningEffortFields';
 import { reasoningFormValues, collectReasoningFields } from '../../utils/reasoningEffort';
 import { useModelCapabilitiesStore } from '../../stores';
 import { describeContextProbe } from '../../utils/contextUsage';
+import { contextLengthIssue } from '../../utils/modelContextLength';
 
 const { Text } = Typography;
 
@@ -434,14 +436,22 @@ export function SystemModelPanel() {
           <Space.Compact block>
             <Form.Item
               name="context_length"
-              label={t('上下文窗口（token，可选）')}
+              label={selectedType === 'chat' ? t('上下文窗口（token，必填）') : t('上下文窗口（token，可选）')}
+              required={selectedType === 'chat'}
+              rules={[{ validator: async (_, value) => {
+                const issue = contextLengthIssue(value, selectedType === 'chat');
+                if (issue === 'required') throw new Error(t('请填写当前服务支持的上下文窗口，或先自动探测；未探测到时需手工确认。'));
+                if (issue) throw new Error(t('上下文窗口必须为正整数 token。'));
+              } }]}
               style={{ flex: 1 }}
-              tooltip={t('模型真实的上下文长度，用于请求装配预算与自动压缩阈值。留空保存时系统会尝试自动探测（自建 vLLM 等会直接上报），探不到才需要手工填写。')}
+              tooltip={selectedType === 'chat' ? t('用于请求预算与自动压缩。请按当前服务实际支持的上限填写；可先自动探测，探测不到时必须手工确认，不按模型名称猜测。') : t('模型真实的上下文长度，用于请求装配预算与自动压缩阈值。留空保存时系统会尝试自动探测（自建 vLLM 等会直接上报），探不到才需要手工填写。')}
               extra={probeHint || undefined}
             >
               <Input
                 type="number"
-                placeholder="131072"
+                min={1}
+                step={1}
+                placeholder={t('填写当前服务确认的 token 上限')}
                 addonAfter={
                   <Button
                     type="link"

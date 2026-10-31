@@ -5,6 +5,8 @@ import { CopyOutlined, DownloadOutlined, FileImageOutlined, PlusOutlined, Reload
 import { t } from '../../i18n';
 import { useCatalogStore } from '../../stores/catalogStore';
 import { useRouteSubs } from '../../routing/usePanel';
+import { navigateTo, panelFromPath, pathForPanel } from '../../routing/navigation';
+import { canApplyRecordRead, canReplaceRecord, shouldPreserveRecordDraft } from '../../utils/foreignTradeRecordView';
 import { ApiResponseError } from '../../utils/apiError';
 import { createInquiry, searchInquiryProducts, type InquiryProduct } from '../../utils/foreignTradeInquiryApi';
 import { createContentPack, downloadContentAsset, downloadContentDemo, generateContentPack, getContentPack, listContentPacks,
@@ -62,15 +64,51 @@ export function ProductContentWorkspace() {
   const locked = !!busy;
   const lastImage = record?.documents.filter((doc) => doc.kind === 'image').at(-1);
   const change = (patch: Partial<ContentPackInput>) => { setForm((current) => ({ ...current, ...patch })); setConfirmed(false); };
+  const view = useRef({ record: null as ContentPackRecord | null, path: pathForPanel('trade_content', routeId), read: 0, mounted: true });
+  const dirtyRef = useRef(dirty); dirtyRef.current = dirty;
+  const busyRef = useRef(busy); busyRef.current = busy;
+  useEffect(() => { view.current.mounted = true; return () => { view.current.mounted = false; view.current.read++; }; }, []);
   const accept = (next: ContentPackRecord) => {
+    if (!view.current.mounted) return next;
+    const previous = view.current.record;
+    if (!canReplaceRecord({ id: next.pack_id, revision: next.revision }, previous ? { id: previous.pack_id, revision: previous.revision } : null)) {
+      throw new Error(t('记录版本已变化，请刷新后重试。'));
+    }
+    view.current.record = next; view.current.read++;
+
     setRecord(next); setForm(packInput(next)); setConfirmed(false);
     setRecords((current) => [next, ...current.filter((item) => item.pack_id !== next.pack_id)].sort((a, b) => b.updated_at.localeCompare(a.updated_at)));
+    const nextPath = pathForPanel('trade_content', next.pack_id);
+    view.current.path = nextPath;
+    if (panelFromPath() === 'trade_content') navigateTo(nextPath);
     return next;
   };
   useEffect(() => {
-    let active = true; setBusy('loading'); setRecord(null); setForm(emptyPack()); setConfirmed(false);
-    Promise.all([listContentPacks(), routeId ? getContentPack(routeId) : Promise.resolve(null)]).then(([items, selected]) => { if (active) { setRecords(items); const initial = selected || items[0]; if (initial) { setRecord(initial); setForm(packInput(initial)); } } })
-      .catch((err) => { if (active) setError(contentError(err)); }).finally(() => { if (active) setBusy(''); });
+    const path = pathForPanel('trade_content', routeId);
+    if (shouldPreserveRecordDraft(view.current.path, path, dirtyRef.current, busyRef.current)) {
+      setError(t('当前记录有未保存修改或操作正在进行，请完成后再切换。'));
+      navigateTo(view.current.path, { replace: true });
+      return;
+    }
+    view.current.path = path;
+    // A successful save already installed this record; URL synchronization must
+    // not clear the form or launch a stale read over a newer mutation response.
+    if (routeId && view.current.record?.pack_id === routeId) return;
+    const request = ++view.current.read;
+    let active = true; view.current.record = null;
+    setBusy('loading'); setError(''); setRecord(null); setForm(emptyPack()); setConfirmed(false);
+    Promise.all([listContentPacks(), routeId ? getContentPack(routeId) : Promise.resolve(null)]).then(([items, selected]) => {
+      if (!active || request !== view.current.read || dirtyRef.current) return;
+      setRecords(items);
+      const initial = selected || items[0];
+      const current = view.current.record;
+      if (initial && canApplyRecordRead(request, view.current.read, dirtyRef.current,
+        { id: initial.pack_id, revision: initial.revision }, current ? { id: current.pack_id, revision: current.revision } : null, routeId)) {
+        accept(initial);
+      }
+      setBusy('');
+    }).catch((err) => { if (active && request === view.current.read) setError(contentError(err)); })
+      .finally(() => { if (active && request === view.current.read) setBusy(''); });
     return () => { active = false; };
   }, [routeId]);
   useEffect(() => {
@@ -98,10 +136,12 @@ export function ProductContentWorkspace() {
     const input = { ...form, title: form.title.trim() || form.product_name.trim() || t('新的商品资料包') };
     if (record) return dirty ? accept(await updateContentPack(record.pack_id, record.revision, input)) : record;
     const created = await createContentPack(input.title);
+    view.current.record = created; view.current.read++;
     setRecord(created); setRecords((current) => [created, ...current]);
     return accept(await updateContentPack(created.pack_id, created.revision, input));
   }
   function startNew(demo = false) {
+    view.current.record = null; view.current.read++;
     setRecord(null); setForm(demo ? demoPack() : emptyPack()); setConfirmed(false); setError(''); setNotice(''); setInquiryCreated(false);
   }
   function download(kind: ContentDownloadKind) { if (record) void run(`download-${kind}`, () => downloadContentAsset(record.pack_id, kind, record.revision)); }
@@ -140,7 +180,7 @@ export function ProductContentWorkspace() {
           <div className="jx-contentSectionTitle"><span>01</span><div><h3>{t('收集产品资料与原图')}</h3><p>{t('支持文本、表格与可提取文字的 PDF；扫描件请先提供文字。')}</p></div></div>
           <details className="jx-contentDemo"><summary>{t('使用真实公开资料：Raspberry Pi 5')}</summary>
             <p>{t('示例规格来自产品官网，照片按其授权条件使用。请下载样例，再从下方实际上传；示例不含供货价格、库存或采购关系。')}</p>
-            <div className="jx-contentActions"><Button icon={<DownloadOutlined />} disabled={locked} onClick={() => downloadDemo('txt')}>{t('下载示例资料 TXT')}</Button><Button icon={<DownloadOutlined />} disabled={locked} onClick={() => downloadDemo('csv')}>{t('下载示例事实 CSV')}</Button><Button icon={<DownloadOutlined />} disabled={locked} onClick={() => downloadDemo('photo')}>{t('下载授权原图')}</Button></div>
+            <div className="jx-contentActions"><Button icon={<DownloadOutlined />} disabled={locked} onClick={() => downloadDemo('txt')}>{t('下载示例资料 TXT')}</Button><Button icon={<DownloadOutlined />} disabled={locked} onClick={() => downloadDemo('csv')}>{t('下载示例事实 CSV')}</Button><Button icon={<DownloadOutlined />} disabled={locked} onClick={() => downloadDemo('facts-en')}>{t('下载英文事实 CSV')}</Button><Button icon={<DownloadOutlined />} disabled={locked} onClick={() => downloadDemo('photo')}>{t('下载授权原图')}</Button></div>
           </details>
           <div className="jx-contentGrid"><label>{t('资料包标题')}<Input value={form.title} maxLength={200} disabled={locked} onChange={(e) => change({ title: e.target.value })} /></label>
             <label>{t('产品名称')}<Input value={form.product_name} maxLength={200} disabled={locked} onChange={(e) => change({ product_name: e.target.value })} /></label>

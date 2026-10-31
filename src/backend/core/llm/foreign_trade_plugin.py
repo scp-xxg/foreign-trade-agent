@@ -29,8 +29,35 @@ def _upgraded(version: str) -> bool:
         return False
 
 
-def _trade_selector(value: str) -> bool:
-    return value == TRADE_PLUGIN or value.endswith(":" + TRADE_PLUGIN)
+def _device_trade_identity(row, user_id: str, entry: dict | None) -> bool:
+    """Resolve imported names through the exact authorized package, never a prefix."""
+    if row.key == TRADE_PLUGIN:
+        return True
+    # Local import keys include the owner's dedup suffix. The callable catalog
+    # entry validates the retained package before its original manifest is read.
+    if entry is None or not (entry.get("enabled") and entry.get("callable")):
+        return False
+    from core.harness.registry import device_catalog
+    from core.capabilities.plugins.packaging.importer import detect_manifest
+    from fastapi import HTTPException
+    import json
+
+    try:
+        package = device_catalog.resolve_plugin(row.key, user_id, install_id=row.install_id)
+        if (
+            package is None or package.install_id != row.install_id
+            or package.slug != row.key
+            or not row.resolved_revision or package.revision != row.resolved_revision
+        ):
+            return False
+        _, manifest_path = detect_manifest(package.package)
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        return (
+            manifest.get("name") == TRADE_PLUGIN
+            and str(manifest.get("version") or "") == str(row.version)
+        )
+    except (OSError, ValueError, TypeError, HTTPException):
+        return False
 
 
 def _legacy_available(user_id: str, install_id: str) -> bool:
@@ -61,7 +88,30 @@ def _enabled_skill_ids(user_id: str) -> set[str]:
     from core.capabilities.catalog.resolver import resolve_all_runtime_enabled
     with SessionLocal() as db:
         selected, _, _ = resolve_all_runtime_enabled(db, user_id)
-    return set(selected or ())
+    enabled = set(selected or ())
+    # Local imports now live in the device registry rather than AdminSkill.
+    # Recheck the authoritative installation on each call, including revocation;
+    # neither a known suffix nor a previously loaded skill grants current access.
+    from core.harness.registry import device_catalog, execution_account
+    from core.capabilities.identity_rules import LOCAL_PROFILE, BUILTIN_PROFILE
+    allowed_profiles = {LOCAL_PROFILE, BUILTIN_PROFILE}
+    if execution_account.account_authorized_for(user_id):
+        profile = execution_account.current_account_profile()
+        if profile:
+            allowed_profiles.add(profile)
+    for row in device_catalog.installations("skill", user_id=user_id):
+        if (
+            row.kind != "skill" or row.profile_id not in allowed_profiles
+            or row.payload.get("owner_user_id") not in (None, "", user_id)
+        ):
+            continue
+        identities = {str(row.key), str(row.install_id)}
+        if row.ready and row.enabled and (row.payload.get("user_enabled") or {}).get(user_id, True):
+            enabled.update(identities)
+        else:
+            # A stale catalog cache must not revive a disabled device skill.
+            enabled.difference_update(identities)
+    return enabled
 
 
 def assert_trade_plugin_available(user_id: str, install_id: str) -> None:
@@ -79,7 +129,7 @@ def assert_trade_plugin_available(user_id: str, install_id: str) -> None:
             profile = execution_account.current_account_profile()
             if profile:
                 allowed_profiles.add(profile)
-        if (row.kind != "plugin" or row.key != TRADE_PLUGIN or
+        if (row.kind != "plugin" or
             row.profile_id not in allowed_profiles or not row.ready or not row.enabled or
             row.payload.get("owner_user_id") not in (None, "", user_id) or not _upgraded(row.version)):
             raise PermissionError("当前账号的外贸插件未安装、已停用或需要升级至 0.2.0。")
@@ -89,6 +139,8 @@ def assert_trade_plugin_available(user_id: str, install_id: str) -> None:
         }), None)
         if entry is not None and not (entry.get("enabled") and entry.get("callable")):
             raise PermissionError("当前用户已关闭外贸插件或其组件尚未就绪。")
+        if not _device_trade_identity(row, user_id, entry):
+            raise PermissionError("该安装不是受支持的外贸插件。")
         source_install = row.payload.get("db_install_id")
         if source_install and not device_catalog.active() and not _legacy_available(user_id, str(source_install)):
             raise PermissionError("当前用户已关闭外贸插件，请重新启用后再使用。")
@@ -106,8 +158,6 @@ def assert_trade_plugin_available(user_id: str, install_id: str) -> None:
 def register_trade_plugin_target(collector, target, *, user_id: str, chat_id: str | None,
                                 loaded_skill_ids: set[str] | None = None) -> list[str]:
     """Only the resolved trade installation can contribute these native tools."""
-    if not _trade_selector(str(target.slug)):
-        return []
     try:
         assert_trade_plugin_available(user_id, target.install_id)
     except PermissionError:
@@ -124,8 +174,23 @@ def register_trade_plugin_target(collector, target, *, user_id: str, chat_id: st
         if not set(matches).intersection(_enabled_skill_ids(user_id)):
             raise TradeSkillRequired("当前用户已关闭 " + name + " 技能，请重新启用后再执行；本次未执行。")
         if loaded_skill_ids is None or not set(matches).intersection(loaded_skill_ids):
-            path = "/workspace/skills/" + matches[0] + "/SKILL.md"
-            raise TradeSkillRequired("必须先用 view_text_file(file_path=\"" + path + "\") 读取当前技能，再重试业务操作；本次未执行。")
+            from core.capabilities.skills.loader_factory import get_skill_loader
+            from core.capabilities.skills.config import model_facing_skill_dir
+            import json
+            try:
+                directory = get_skill_loader().get_skill_dir(matches[0])
+                path = model_facing_skill_dir(matches[0], directory) + "/SKILL.md" if directory else None
+            except Exception:
+                path = None
+            required = "业务技能 " + name + "（当前技能 ID：" + matches[0] + "）"
+            if path:
+                hint = "用 view_text_file(file_path=" + json.dumps(path, ensure_ascii=False) + ") 完整读取" + required
+            else:
+                hint = (
+                    "为" + required + "取得当前 SKILL.md 路径（可调用 load_plugin 加载插件 "
+                    + str(target.slug) + "），再用 view_text_file 完整读取该指定技能"
+                )
+            raise TradeSkillRequired("必须先" + hint + "，不能以读取其他技能代替；再重试业务操作，本次未执行。")
     from core.llm.tools.foreign_trade_tool import register_foreign_trade_tools
     return register_foreign_trade_tools(collector, user_id=user_id, chat_id=chat_id,
                                        install_id=target.install_id, require_skill=require_skill)
@@ -150,8 +215,8 @@ def register_initial_trade_tools(collector, *, user_id: str, chat_id: str | None
         targets = []
         if selected:
             for row in device_catalog.installations("plugin", user_id=user_id):
-                if row.key != TRADE_PLUGIN:
-                    continue
+                # Exact package identity is checked by register_trade_plugin_target;
+                # imported keys must not be rejected merely for their owner suffix.
                 components = row.payload.get("components") or {}
                 skills = set(components.get("skills") or ())
                 aliases = skills | {

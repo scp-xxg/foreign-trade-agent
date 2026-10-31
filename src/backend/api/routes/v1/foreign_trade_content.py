@@ -103,7 +103,15 @@ def create_pack(req: CreatePack, user: UserContext = Depends(get_current_user), 
 
 
 @router.get("/demo/{kind}")
-def download_demo(kind: Literal["txt", "csv", "photo"], user: UserContext = Depends(get_current_user)):
+def download_demo(kind: Literal["txt", "csv", "photo", "facts-en"], user: UserContext = Depends(get_current_user)):
+    if kind == "facts-en":
+        from importlib.resources import files
+        filename = "product_facts_en.csv"
+        try:
+            content = files("foreign_trade").joinpath("demo_product", filename).read_bytes()
+        except (FileNotFoundError, OSError):
+            raise HTTPException(404, detail={"message": "示例资料未随当前安装提供"}) from None
+        return _file_response((content, "text/csv", filename))
     return _file_response(_call(demo_file, kind))
 
 

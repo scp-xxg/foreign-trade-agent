@@ -6,10 +6,9 @@
 ``function_call`` 前即可。走哪条由 ``extra_config.api_protocol`` 决定，是
 ``providers/protocol_probe`` 配置期探测出来的事实，不靠厂商名猜。
 
-AgentScope 自带的 ``OpenAIResponseModel`` 回发 reasoning 条目时只带 id，``content``
-恒为空、也不带 ``encrypted_content`` —— 而这两样正是 codex 做思考回传所依赖的
-（``codex-rs/core/src/client.rs``、``codex-rs/protocol/src/models.rs``）。本模块补上：
-留下上游给出的整条条目，下一轮原样发回，不解释也不重拼。上游没多给东西时自然空转。
+新版 AgentScope 原生保留 reasoning_item_raw，本模块同时兼容旧历史里整组保存的
+reasoning_items：上游给出的整条条目下一轮原样发回且只发一次。流式响应必须收到
+response.completed，失败、输出截断或提前 EOF 都不能被当成已完成回答。
 """
 
 from __future__ import annotations
@@ -95,6 +94,23 @@ def _as_dict(item: Any) -> dict[str, Any]:
     return {}
 
 
+class ResponsesIncompleteError(RuntimeError):
+    """The provider did not deliver a completed response; partial output is not success."""
+
+    code = "responses_incomplete"
+
+    def __init__(self, reason: str) -> None:
+        self.reason = reason
+        super().__init__(f"Responses generation did not complete ({reason})")
+
+
+def _incomplete_reason(response: Any) -> str:
+    details = getattr(response, "incomplete_details", None)
+    reason = details.get("reason") if isinstance(details, dict) else getattr(details, "reason", None)
+    # Report only documented status metadata, never provider payloads or request data.
+    return reason if reason in {"max_output_tokens", "content_filter"} else "incomplete"
+
+
 class _ReasoningItemCapture:
     """透传上游 SSE，旁路留下完整 reasoning 条目。
 
@@ -106,6 +122,12 @@ class _ReasoningItemCapture:
     def __init__(self, stream: Any) -> None:
         self._stream = stream
         self.items: list[dict[str, Any]] = []
+        self.completed = False
+
+    @property
+    def response(self):
+        # The native parser uses the HTTP request when constructing SSE APIError.
+        return self._stream.response
 
     async def __aenter__(self):
         await self._stream.__aenter__()
@@ -120,6 +142,10 @@ class _ReasoningItemCapture:
     async def _iter(self):  # noqa: ANN202
         async for event in self._stream:
             kind = getattr(event, "type", None)
+            if kind == "response.incomplete":
+                raise ResponsesIncompleteError(_incomplete_reason(getattr(event, "response", None)))
+            if kind == "response.completed":
+                self.completed = True
             if kind in _TERMINAL_EVENTS:
                 self._collect(getattr(event, "response", None))
             yield event
@@ -165,9 +191,8 @@ def _attach_reasoning_items(content: Any, items: list[dict[str, Any]]) -> None:
 def _restore_reasoning_items(msgs: list[Msg], items: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """把 AgentScope 发的精简 reasoning 条目换回上游原本给的那一条。
 
-    AgentScope 只保留了最后一个 reasoning 条目的 id，一轮里若有多条，它也只发一条
-    占位。这里按 id 找回整组，原样铺开——顺序就是上游给的顺序，紧挨着它产生的
-    ``function_call``，与 codex 的历史布局一致。
+    旧历史可能只留下最后一条的 id，加上本模块保存的整组条目；新版 SDK 会单独
+    发回每条 reasoning_item_raw。只补齐当前输出里缺少的组员，避免升级后重复回放。
     """
     groups: dict[str, list[dict[str, Any]]] = {}
     for msg in msgs:
@@ -185,12 +210,26 @@ def _restore_reasoning_items(msgs: list[Msg], items: list[dict[str, Any]]) -> li
     if not groups:
         return items
 
+    # Newer AgentScope replays every reasoning_item_raw itself. Expand only
+    # missing siblings from legacy grouped metadata, otherwise the last anchor
+    # would duplicate preceding reasoning items in an upgraded conversation.
+    present_ids = {
+        str(item.get("id") or "")
+        for item in items
+        if isinstance(item, dict) and item.get("type") == "reasoning"
+    }
     restored: list[dict[str, Any]] = []
     for item in items:
         if isinstance(item, dict) and item.get("type") == "reasoning":
             captured = groups.get(str(item.get("id") or ""))
             if captured:
-                restored.extend(dict(one) for one in captured)
+                anchor = str(item.get("id") or "")
+                restored.extend(
+                    dict(one)
+                    for one in captured
+                    if str(one.get("id") or "") == anchor
+                    or str(one.get("id") or "") not in present_ids
+                )
                 continue
         restored.append(item)
     return restored
@@ -424,12 +463,20 @@ class OpenAICompatResponsesModel(
             if getattr(chunk, "is_last", False):
                 _attach_reasoning_items(chunk.content, capture.items)
             yield chunk
+        if not capture.completed:
+            # A clean transport EOF can still be a truncated SSE response.
+            # Raise after delivered deltas so callers retain partial output.
+            raise ResponsesIncompleteError("stream_ended_before_completed")
 
     def _parse_completion_response(  # type: ignore[override]
         self,
         start_datetime: datetime,
         response: Any,
     ) -> ChatResponse:
+        status = getattr(response, "status", None)
+        if status and status != "completed":
+            reason = _incomplete_reason(response) if status == "incomplete" else "not_completed"
+            raise ResponsesIncompleteError(reason)
         parsed = super()._parse_completion_response(start_datetime, response)
         items = [
             _as_dict(item)

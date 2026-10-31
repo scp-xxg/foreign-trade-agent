@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { t } from '../src/i18n';
 import { setHybridDual, registerLocalChat, setChatRoutingContext, registerLocalProject, onUnauthorized, uploadFile, authFetch, chatTargetHeaders } from '../src/api';
 import { prepareChatAttachments } from '../src/utils/chatAttachments';
 import { uploadFileToOSS } from '../src/utils/fileParser';
@@ -87,7 +88,7 @@ const inFlight = prepareChatAttachments([slowFile], new Map(), [], '/api', 'draf
 await new Promise(resolve => setTimeout(resolve, 0));
 target = 'cloud';
 release();
-await assert.rejects(inFlight, /运行位置已变化/);
+await assert.rejects(inFlight, { message: t('运行位置已变化，请重新发送。') });
 globalThis.fetch = backendFetch;
 
 // Preview ownership is frozen at upload time, even if the draft now points elsewhere.
@@ -103,7 +104,7 @@ console.log('PASS: in-flight target changes are rejected; previews keep the actu
 target = 'local';
 for (const status of [403, 404]) {
   globalThis.fetch = async () => Response.json({ detail: 'unavailable' }, { status });
-  await assert.rejects(prepareChatAttachments([], new Map(), [imported], '/api', 'draft-chat'), /无法读取引用文件/);
+  await assert.rejects(prepareChatAttachments([], new Map(), [imported], '/api', 'draft-chat'), { message: t('无法读取引用文件：{name}', { name: imported.name }) });
 }
 globalThis.fetch = backendFetch;
 
@@ -142,7 +143,7 @@ globalThis.fetch = async () => new Response(new ReadableStream({
   },
   cancel() { cancelled = true; },
 }));
-await assert.rejects(prepareChatAttachments([], new Map(), [imported], '/api', 'draft-chat'), /文件过大/);
+await assert.rejects(prepareChatAttachments([], new Map(), [imported], '/api', 'draft-chat'), { message: t('文件过大，无法添加：{name}', { name: imported.name }) });
 assert.ok(cancelled && chunksRead < 100, 'oversized downloads must stop before consuming the entire response');
 globalThis.fetch = backendFetch;
 console.log('PASS: oversized imported files are cancelled during download');

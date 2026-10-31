@@ -43,7 +43,7 @@
     "test:project-instructions": "node scripts/run-project-instructions-test.mjs",
     "test:tool-approval": "esbuild scripts/test-tool-approval.ts --bundle --platform=node --format=esm --define:import.meta.env={} --outfile=node_modules/.tmp/test-tool-approval.mjs && node node_modules/.tmp/test-tool-approval.mjs",
     "test:desktop-task-routing": "esbuild scripts/test-desktop-task-routing.ts --bundle --platform=node --format=esm --define:import.meta.env={} --outfile=node_modules/.tmp/test-desktop-task-routing.mjs && node node_modules/.tmp/test-desktop-task-routing.mjs",
-    "test:message-identity": "esbuild scripts/test-message-identity.ts --bundle --platform=node --format=esm --jsx=automatic --packages=external --loader:.css=empty --define:import.meta.env={} --outfile=node_modules/.tmp/test-message-identity.mjs && node node_modules/.tmp/test-message-identity.mjs",
+    "test:message-identity": "esbuild scripts/test-message-identity.ts --bundle --platform=node --format=esm --jsx=automatic --packages=external --alias:dayjs/plugin/utc=dayjs/plugin/utc.js --alias:dayjs/plugin/timezone=dayjs/plugin/timezone.js --loader:.css=empty --define:import.meta.env={} --outfile=node_modules/.tmp/test-message-identity.mjs && node node_modules/.tmp/test-message-identity.mjs",
     "test:conversation-navigation": "esbuild scripts/test-conversation-navigation.ts --bundle --platform=node --format=esm --loader:.css=empty --define:import.meta.env={} --outfile=node_modules/.tmp/test-conversation-navigation.mjs && node node_modules/.tmp/test-conversation-navigation.mjs",
     "test:local-sites": "esbuild scripts/test-local-site-editing.ts --bundle --platform=node --format=esm --define:import.meta.env={} --outfile=node_modules/.tmp/test-local-site-editing.mjs && node node_modules/.tmp/test-local-site-editing.mjs",
     "test:automation-location": "esbuild scripts/test-automation-location.ts --bundle --platform=node --format=esm --jsx=automatic --packages=external --loader:.css=empty --define:import.meta.env={} --outfile=node_modules/.tmp/test-automation-location.mjs && node node_modules/.tmp/test-automation-location.mjs",
@@ -117,7 +117,11 @@
     "test:foreign-trade-content-card": "esbuild scripts/test-foreign-trade-content-card.ts --bundle --platform=node --format=esm --packages=external --outfile=node_modules/.tmp/test-foreign-trade-content-card.mjs && node node_modules/.tmp/test-foreign-trade-content-card.mjs",
     "test:foreign-trade-collaboration": "esbuild scripts/test-foreign-trade-collaboration.ts --bundle --platform=node --format=esm --packages=external --outfile=node_modules/.tmp/test-foreign-trade-collaboration.mjs && node node_modules/.tmp/test-foreign-trade-collaboration.mjs",
     "test:foreign-trade-collaboration-browser": "node scripts/test-foreign-trade-collaboration-browser.mjs",
-    "test:foreign-trade-content-mode": "node scripts/test-foreign-trade-content-mode.mjs"
+    "test:foreign-trade-content-mode": "node scripts/test-foreign-trade-content-mode.mjs",
+    "test:default-language": "esbuild scripts/test-default-language.ts --bundle --platform=node --format=esm --outfile=node_modules/.tmp/test-default-language.mjs && node node_modules/.tmp/test-default-language.mjs",
+    "test:model-context-length": "esbuild scripts/test-model-context-length.ts --bundle --platform=node --format=esm --outfile=node_modules/.tmp/test-model-context-length.mjs && node node_modules/.tmp/test-model-context-length.mjs",
+    "test:foreign-trade-record-view": "esbuild scripts/test-foreign-trade-record-view.ts --bundle --platform=node --format=esm --outfile=node_modules/.tmp/test-foreign-trade-record-view.mjs && node node_modules/.tmp/test-foreign-trade-record-view.mjs",
+    "test:foreign-trade-review": "esbuild scripts/test-foreign-trade-review.tsx --bundle --platform=node --format=esm --jsx=automatic --packages=external --alias:dayjs/plugin/utc=dayjs/plugin/utc.js --alias:dayjs/plugin/timezone=dayjs/plugin/timezone.js --loader:.css=empty --define:import.meta.env='{\"VITE_DEFAULT_LANGUAGE\":\"zh-CN\"}' --outfile=node_modules/.tmp/test-foreign-trade-review.mjs && node node_modules/.tmp/test-foreign-trade-review.mjs"
   },
   "dependencies": {
     "@ant-design/icons": "^6.1.0",

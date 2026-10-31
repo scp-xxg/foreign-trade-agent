@@ -84,6 +84,7 @@ def build() -> dict:
         plugin / "skills/buyer-inquiry-followup/SKILL.md",
         plugin / "skills/product-content/SKILL.md",
         plugin / "skills/cross-role-collaboration/SKILL.md",
+        plugin / "skills/localization-review/SKILL.md",
         plugin / "HOST_REQUIREMENTS.md",
         HERE.parents[1] / "docs/CHAT_PLUGIN.md",
         HERE.parents[1] / "docs/CHAT_PLUGIN_ACCEPTANCE.md",
@@ -91,7 +92,8 @@ def build() -> dict:
         HERE.parents[1] / "docs/ACCEPTANCE_20261028.md",
         HERE.parents[1] / "docs/DEMO_WALKTHROUGH.md",
         HERE.parents[1] / "docs/TEAM_SETUP.md",
-        HERE / "engine.py", HERE / "catalog.json", SERVER,
+        HERE.parents[1] / "docs/HACKATHON_DEMO.md",
+        HERE / "engine.py", HERE / "catalog.json", HERE / "knowledge_rules.json", SERVER,
     ]
     missing = [str(path) for path in required if not path.is_file()]
     if missing:
@@ -102,7 +104,7 @@ def build() -> dict:
         for path in sorted(plugin.rglob("*")):
             if path.is_file() and "__pycache__" not in path.parts:
                 archive.write(path, path.relative_to(plugin).as_posix())
-        for name in ("engine.py", "catalog.json", "mcp_server.py"):
+        for name in ("engine.py", "catalog.json", "knowledge_rules.json", "mcp_server.py"):
             archive.write(HERE / name, "runtime/" + name)
         if (HERE / "README.md").is_file():
             archive.write(HERE / "README.md", "README.md")
@@ -112,6 +114,7 @@ def build() -> dict:
         archive.write(HERE.parents[1] / "docs/ACCEPTANCE_20261028.md", "ACCEPTANCE_20261028.md")
         archive.write(HERE.parents[1] / "docs/DEMO_WALKTHROUGH.md", "DEMO_WALKTHROUGH.md")
         archive.write(HERE.parents[1] / "docs/TEAM_SETUP.md", "TEAM_SETUP.md")
+        archive.write(HERE.parents[1] / "docs/HACKATHON_DEMO.md", "HACKATHON_DEMO.md")
         for path in sorted((HERE / "demo_product").iterdir()):
             if path.is_file() and path.suffix in {".csv", ".txt", ".json", ".png", ".jpg"}:
                 archive.write(path, "demo_product/" + path.name)

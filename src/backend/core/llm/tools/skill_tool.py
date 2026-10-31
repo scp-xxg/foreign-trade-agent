@@ -45,6 +45,35 @@ def _extract_skill_id_from_skill_file(file_path: str) -> str | None:
     return skill_id or None
 
 
+def _bound_skill_for_path(file_path: str, loader: Any, prepared: Any = None) -> str | None:
+    """Map a physical revision path only through this loader's current bindings."""
+    real = os.path.realpath(file_path)
+    names = getattr(prepared, "bindings", None)
+    if names is None:
+        metadata = getattr(loader, "load_all_metadata", None)
+        names = metadata() if callable(metadata) else None
+    if names is not None:
+        for name in names:
+            directory = loader.get_skill_dir(name)
+            if directory and (real == os.path.realpath(directory) or real.startswith(os.path.realpath(directory) + os.sep)):
+                return str(name)
+        return None
+    # Legacy loaders without an identity index retain flat directory support.
+    # Never mistake an immutable revision directory for a canonical skill id.
+    import re
+    path = Path(real)
+    if re.fullmatch(r"[0-9a-f]{12,64}", path.parent.name):
+        return None
+    return _extract_skill_id_from_skill_file(real)
+
+
+def _read_error(text: str, *, denied: bool = False) -> ToolChunk:
+    return ToolChunk(
+        content=[TextBlock(type="text", text=text)],
+        state="denied" if denied else "error",
+    )
+
+
 def _build_skill_bash_hint(
     loader: Any,
     skill_id: str,
@@ -119,55 +148,47 @@ def register_sandboxed_view_text_file(
         ranges: list[int] | None = None,
     ) -> ToolChunk:
         """View file content within allowed skill directories."""
+        if ranges is not None and (
+            not isinstance(ranges, list) or len(ranges) not in (0, 2)
+            or any(type(value) is not int or value < 1 for value in ranges)
+            or (len(ranges) == 2 and ranges[0] > ranges[1])
+        ):
+            return _read_error("Error: ranges must be empty or [start, end] with positive ordered line numbers.")
         prepared = getattr(loader, "capability_run", None)
+        if prepared is not None or not _os.path.exists(_os.path.expanduser(file_path)):
+            mapped = _resolve_skill_path(file_path, loader)
+            if mapped:
+                file_path = mapped
+        real = _os.path.realpath(_os.path.expanduser(file_path))
+        skill_id = _bound_skill_for_path(real, loader, prepared)
         if prepared is not None:
             from core.harness.registry.capability_runtime import validate
             import asyncio
             from core.harness.capability_errors import CapabilityError
 
-            try:
-                # Check only the file's skill. An unrelated skill cannot block this read.
-                requested_name = _extract_skill_id_from_skill_file(file_path)
-                if requested_name not in prepared.bindings:
-                    requested_name = next(
-                        (
-                            name
-                            for name in prepared.bindings
-                            if _os.path.realpath(file_path).startswith(
-                                _os.path.realpath(loader.get_skill_dir(name) or "") + _os.sep
-                            )
-                        ),
-                        None,
-                    )
-                # 路径落不到任何一个已授权技能上：交给下面的目录白名单判定，
-                # 由它给出明确的拒绝，而不是含糊地说「技能暂不可用」。
-                if requested_name is not None:
-                    await asyncio.to_thread(validate, prepared, only_skill=requested_name)
-            except (CapabilityError, OSError):
-                return ToolChunk(
-                    content=[
-                        TextBlock(
-                            type="text",
-                            text="该技能当前不可读取或已停用；未执行该能力。请向用户说明并继续处理可完成的部分。",
-                        )
-                    ]
+            if skill_id is None:
+                return _read_error(
+                    "Error: Access denied. The requested file is not in a current authorized skill binding.",
+                    denied=True,
                 )
-            mapped = _resolve_skill_path(file_path, loader)
-            if mapped:
-                file_path = mapped
-        real = _os.path.realpath(_os.path.expanduser(file_path))
-
-        if not _os.path.exists(real):
-            resolved = _resolve_skill_path(file_path, loader)
-            if resolved:
-                file_path = resolved
-                real = _os.path.realpath(resolved)
+            try:
+                await asyncio.to_thread(validate, prepared, only_skill=skill_id)
+            except (CapabilityError, OSError):
+                return _read_error(
+                    "该技能当前不可读取或已停用；未执行该能力。请向用户说明并继续处理可完成的部分。",
+                    denied=True,
+                )
 
         if not any(real.startswith(d + _os.sep) or real == d for d in resolved_dirs):
-            return ToolChunk(content=[TextBlock(
-                type="text",
-                text=f"Error: Access denied. Only files inside skill directories can be read.\nRequested: {file_path}",
-            )])
+            return _read_error(
+                f"Error: Access denied. Only files inside skill directories can be read.\nRequested: {file_path}",
+                denied=True,
+            )
+        if _os.path.basename(real) == "SKILL.md" and skill_id is None:
+            return _read_error(
+                "Error: Access denied. This revision is not the current authorized skill.",
+                denied=True,
+            )
 
         # AgentScope 2.0: the private agentscope.tool._text_file subpackage has been removed. Inline an
         # equivalent text-file read (optional [start, end] 1-indexed line range).
@@ -184,10 +205,10 @@ def register_sandboxed_view_text_file(
             from core.harness.registry.skill_content import adapt_skill_content
             _text = adapt_skill_content(_text, user_id)
         except Exception as _e:  # noqa: BLE001
-            return ToolChunk(content=[TextBlock(
-                type="text", text=f"Error reading file: {_e}",
-            )])
-        resp = ToolChunk(content=[TextBlock(type="text", text=_text)])
+            return _read_error(f"Error reading file: {_e}")
+        if _os.path.basename(real) == "SKILL.md" and not _text.strip():
+            return _read_error("Error: The requested skill read is empty; no skill was loaded.")
+        resp = ToolChunk(content=[TextBlock(type="text", text=_text)], state="success")
 
         if _os.path.basename(real) == "SKILL.md":
             from core.config.local_mode import local_mode_enabled
@@ -200,10 +221,6 @@ def register_sandboxed_view_text_file(
                     "设计选择器的候选截图不要交付，使用 choose_design 的 image_path 参数。",
                 ))
             skill_dir = _os.path.dirname(real)
-            skill_id = _extract_skill_id_from_skill_file(file_path)
-            if prepared is not None:
-                skill_id = next((name for name in prepared.bindings
-                                 if _os.path.realpath(loader.get_skill_dir(name)) == skill_dir), None)
             if loaded_skill_ids is not None and skill_id:
                 loaded_skill_ids.add(skill_id)
             complete_read = not (ranges and isinstance(ranges, list) and len(ranges) >= 2) or (
@@ -211,6 +228,7 @@ def register_sandboxed_view_text_file(
             )
             if fully_loaded_skill_ids is not None and skill_id and complete_read:
                 fully_loaded_skill_ids.add(skill_id)
+            resp.metadata.update(skill_id=skill_id, fully_read=complete_read)
             for i, block in enumerate(resp.content):
                 text = block.get("text", "") if isinstance(block, dict) else getattr(block, "text", "")
                 if "{baseDir}" in text:

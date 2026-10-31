@@ -31,7 +31,7 @@ FRONTEND = ROOT / "src/frontend"
 DEFAULT_HOME = Path.home() / ".foreign-trade-agent"
 
 
-def runtime_env(home: Path) -> dict[str, str]:
+def runtime_env(home: Path, port: int = 3001) -> dict[str, str]:
     """Pin all local data/services; never inherit another project's data root."""
     env = os.environ.copy()
     env.update({
@@ -57,7 +57,7 @@ def runtime_env(home: Path) -> dict[str, str]:
         "SITE_TEMPLATE_DIR": str(home / "site-template/react-vite"),
         "SITE_NODE_BASE": str(home / "workspace/.site-node"),
         "FRONTEND_DIST_DIR": str(FRONTEND / "dist"),
-        "BACKEND_INTERNAL_URL": "http://127.0.0.1:3001", "BACKEND_PORT": "3001", "PORT": "3001",
+        "BACKEND_INTERNAL_URL": f"http://127.0.0.1:{port}", "BACKEND_PORT": str(port), "PORT": str(port),
         "PATH": str(VENV / "bin") + os.pathsep + env.get("PATH", ""),
         "PYTHONPATH": str(ROOT / "src/backend"),
         "PYTHONUNBUFFERED": "1",
@@ -124,13 +124,13 @@ def setup(args, env: dict[str, str]) -> None:
     print("依赖和前端准备完成。首次部署执行 team.py init；已有账号执行 team.py install --username YOUR_USERNAME 更新外贸业务助手。")
 
 
-def initialize(home: Path, username: str | None, *, legacy_chat_completions: bool = False, repair_legacy_filenames: bool = False, expected_filename_repairs: int | None = None) -> str:
+def initialize(home: Path, username: str | None, *, port: int = 3001, legacy_chat_completions: bool = False, repair_legacy_filenames: bool = False, expected_filename_repairs: int | None = None) -> str:
     # No password flags or environment input: enter the password only in a TTY.
     from foreign_trade.upgrade import prepare_database
     prepare_database(home, allow_create=True, legacy_chat_completions=legacy_chat_completions, repair_legacy_filenames=repair_legacy_filenames, expected_filename_repairs=expected_filename_repairs)
-    os.environ.update(runtime_env(home))
+    os.environ.update(runtime_env(home, port))
     from cli import apply_local_env, bootstrap_admin, mark_web_onboarding_complete
-    apply_local_env(3001)
+    apply_local_env(port)
     from core.db.engine import SessionLocal
     from core.db.models import UserShadow
     from core.files.content.branding import seed_page_config_if_missing, enforce_ce_branding
@@ -162,7 +162,7 @@ def initialize(home: Path, username: str | None, *, legacy_chat_completions: boo
 
 
 def install(home: Path, username: str, env: dict[str, str], dry_run: bool, *, legacy_chat_completions: bool = False, repair_legacy_filenames: bool = False, expected_filename_repairs: int | None = None) -> None:
-    command = [PYTHON, HERE / "install.py", "--app-home", home, "--username", username,
+    command = [PYTHON, HERE / "install.py", "--app-home", home, "--username", username, "--port", env.get("BACKEND_PORT", "3001"),
          "--apply-homepage-copy", "--apply-assistant-prompt"]
     if legacy_chat_completions:
         command.append("--legacy-chat-completions")
@@ -182,12 +182,15 @@ def port_open(port: int) -> bool:
 
 
 def start(args, home: Path, env: dict[str, str]) -> None:
+    web_port = getattr(args, "port", 3001)
     if not args.dry_run:
         if not (home / "data.db").is_file():
             raise RuntimeError("先执行 init 创建本机账号并安装演示插件。")
         if not (FRONTEND / "dist/index.html").is_file():
             raise RuntimeError("前端尚未构建；先执行 setup。")
-        for port in (3001, 8900):
+        if web_port in (8900, 9120):
+            raise RuntimeError("网页端口不能与本机沙箱 8900 或外贸 MCP 9120 相同。")
+        for port in (web_port, 8900):
             if port_open(port):
                 raise RuntimeError(f"端口 {port} 已被占用；不会停止或接管现有服务。请先结束原来的本机实例。")
         if port_open(9120):
@@ -200,10 +203,10 @@ def start(args, home: Path, env: dict[str, str]) -> None:
             if not owned:
                 raise RuntimeError("端口 9120 已被其他实例占用；不会接管它。")
     run([PYTHON, HERE / "manage.py", "start"], env=env, dry_run=args.dry_run)
-    print("打开 http://127.0.0.1:3001，用自己的账号登录。首次在 设置→模型服务 添加支持工具调用的模型并指派 main_agent。")
+    print(f"打开 http://127.0.0.1:{web_port}，用自己的账号登录。首次在 设置→模型服务 添加支持工具调用的模型并指派 main_agent。")
     print("对话中可选择“外贸业务助手（演示）”处理询盘和商品资料；三处工作台保留，用于查看、编辑与人工验收同一业务记录。")
     print("保持此终端运行，Ctrl-C 停止网页后端；MCP 单独停止：.venv/bin/python extensions/foreign_trade/manage.py stop")
-    command = [str(VENV / "bin/hugagent-server"), "serve", "--host", "127.0.0.1", "--port", "3001", "--no-browser"]
+    command = [str(VENV / "bin/hugagent-server"), "serve", "--host", "127.0.0.1", "--port", str(web_port), "--no-browser"]
     if args.dry_run:
         run(command, env=env, dry_run=True)
     else:
@@ -213,6 +216,7 @@ def start(args, home: Path, env: dict[str, str]) -> None:
 
 
 def check(args, env: dict[str, str]) -> None:
+    web_port = getattr(args, "port", 3001)
     # Deliberately enumerate unittest suites: the similarly named collaboration
     # module uses pytest fixtures and must not be imported or silently skipped.
     for filename in (
@@ -239,10 +243,20 @@ def check(args, env: dict[str, str]) -> None:
         if not args.dry_run:
             import urllib.request
             opener = urllib.request.build_opener(urllib.request.ProxyHandler({}))
-            with opener.open("http://127.0.0.1:3001/", timeout=5) as response:
+            with opener.open(f"http://127.0.0.1:{web_port}/", timeout=5) as response:
                 if response.status != 200 or "<html" not in response.read().decode("utf-8").lower():
                     raise RuntimeError("网页服务没有返回 HTML。")
-        print("本机网页与 MCP 检查完成；模型对话、工具调用和文件下载仍需在网页实际验收。")
+        print(f"本机网页 http://127.0.0.1:{web_port}/ 与 MCP 检查完成；模型对话、工具调用和文件下载仍需在网页实际验收。")
+
+
+def web_port_number(value: str) -> int:
+    try:
+        port = int(value)
+    except ValueError:
+        raise argparse.ArgumentTypeError("网页端口必须为 1—65535 的整数") from None
+    if not 1 <= port <= 65535:
+        raise argparse.ArgumentTypeError("网页端口必须为 1—65535 的整数")
+    return port
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -250,6 +264,7 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("action", choices=("setup", "init", "install", "upgrade", "start", "check"))
     parser.add_argument("--app-home", type=Path, default=DEFAULT_HOME, help="独立数据目录，默认 ~/.foreign-trade-agent；不继承 HUGAGENT_HOME")
+    parser.add_argument("--port", type=web_port_number, default=3001, help="网页/API 端口，默认 3001；冲突时可显式使用 3002，不停止占用者")
     parser.add_argument("--venv", type=Path, help="显式选择虚拟环境，默认项目 .venv")
     parser.add_argument("--legacy-chat-completions", action="store_true", help="显式确认既有无版本本地库来自旧Chat Completions运行时")
     parser.add_argument("--repair-legacy-filenames", action="store_true", help="以元数据重命名保留旧同名文件，保留修复审计与回滚快照")
@@ -263,7 +278,7 @@ def main(argv: list[str] | None = None) -> int:
         VENV = args.venv.expanduser().resolve()
         PYTHON = VENV / "bin/python"
     home = args.app_home.expanduser().resolve()
-    env = runtime_env(home)
+    env = runtime_env(home, args.port)
     print("公开源码：" + str(ROOT))
     print("本机数据：" + str(home))
     try:
@@ -294,13 +309,13 @@ def main(argv: list[str] | None = None) -> int:
                     username = args.username or "YOUR_LOCAL_USERNAME"
                 else:
                     os.environ.update(env)
-                    username = initialize(home, args.username, legacy_chat_completions=args.legacy_chat_completions, repair_legacy_filenames=args.repair_legacy_filenames, expected_filename_repairs=args.expected_filename_repairs)
+                    username = initialize(home, args.username, port=args.port, legacy_chat_completions=args.legacy_chat_completions, repair_legacy_filenames=args.repair_legacy_filenames, expected_filename_repairs=args.expected_filename_repairs)
             else:
                 username = args.username
                 if not username:
                     raise RuntimeError("install 需要 --username 指定已创建的本机账号。")
             install(home, username, env, args.dry_run, legacy_chat_completions=args.legacy_chat_completions, repair_legacy_filenames=args.repair_legacy_filenames, expected_filename_repairs=None if args.action == "init" else args.expected_filename_repairs)
-            print("下一步：.venv/bin/python extensions/foreign_trade/team.py start（自定义数据目录时继续带 --app-home）。")
+            print(f"下一步：.venv/bin/python extensions/foreign_trade/team.py start --port {args.port}（自定义数据目录/环境时继续带 --app-home/--venv）。")
         elif args.action == "start":
             start(args, home, env)
         else:

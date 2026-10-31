@@ -51,6 +51,55 @@ def legacy_site_row_count(database: Path) -> int:
         return total
 
 
+def repair_legacy_mcp_default(database: Path) -> int:
+    """Retain the retired MCP flag and its values, but allow new ORM inserts.
+
+    Old CE tables contain ``is_stable BOOLEAN NOT NULL`` without a server
+    default. Current models no longer write that field. SQLite cannot alter a
+    column default in place, so rebuild only this known legacy declaration,
+    preserving the original table definition, indexes, triggers and rowids.
+    Opaque configuration values move via INSERT SELECT, never into Python or
+    logs. The public entry point creates a private recovery snapshot first.
+    """
+    with sqlite3.connect(database) as db:
+        db.execute('PRAGMA foreign_keys=OFF')
+        db.execute('PRAGMA legacy_alter_table=ON')
+        db.execute('BEGIN IMMEDIATE')
+        columns = db.execute('PRAGMA table_info(admin_mcp_servers)').fetchall()
+        legacy = next((row for row in columns if row[1] == 'is_stable'), None)
+        if legacy is None or not legacy[3] or legacy[4] is not None:
+            return 0
+        schema = db.execute("SELECT sql FROM sqlite_master WHERE type='table' AND name='admin_mcp_servers'").fetchone()[0]
+        declaration = r'(?P<lead>[(,]\s*)(?:"is_stable"|`is_stable`|\[is_stable\]|is_stable)\s+BOOLEAN\s+NOT\s+NULL(?P<tail>\s*[,)])'
+        # Only accept the exact retired column shape, not arbitrary defaults,
+        # constraints or generated columns from an unknown custom schema.
+        changed, matches = re.subn(declaration, lambda m: m.group('lead') + 'is_stable BOOLEAN NOT NULL DEFAULT 0' + m.group('tail'), schema, flags=re.I)
+        xcolumns = db.execute('PRAGMA table_xinfo(admin_mcp_servers)').fetchall()
+        if matches != 1 or any(row[6] for row in xcolumns) or any(row[1].lower() in {'rowid', '_rowid_', 'oid'} for row in columns):
+            raise RuntimeError('Unknown legacy MCP table shape; compatibility repair refused.')
+        temporary = '_foreign_trade_mcp_' + uuid4().hex
+        changed, matches = re.subn(r'^CREATE\s+TABLE\s+(?:"admin_mcp_servers"|`admin_mcp_servers`|\[admin_mcp_servers\]|admin_mcp_servers)(?=\s*\()',
+                                  'CREATE TABLE "' + temporary + '"', changed, count=1, flags=re.I)
+        if matches != 1:
+            raise RuntimeError('Unknown legacy MCP table declaration; compatibility repair refused.')
+        definitions = db.execute("SELECT sql FROM sqlite_master WHERE tbl_name='admin_mcp_servers' AND type IN ('index','trigger') AND sql IS NOT NULL ORDER BY type,name").fetchall()
+        foreign_keys_before = set(db.execute('PRAGMA foreign_key_check').fetchall())
+        names = ','.join('"' + row[1].replace('"', '""') + '"' for row in columns)
+        projection = 'rowid,' + names
+        db.execute(changed)
+        db.execute('INSERT INTO "' + temporary + '" (' + projection + ') SELECT ' + projection + ' FROM admin_mcp_servers')
+        for left, right in [('admin_mcp_servers', temporary), (temporary, 'admin_mcp_servers')]:
+            if db.execute('SELECT count(*) FROM (SELECT ' + projection + ' FROM "' + left + '" EXCEPT SELECT ' + projection + ' FROM "' + right + '")').fetchone()[0]:
+                raise RuntimeError('Legacy MCP rows did not survive the compatibility copy.')
+        db.execute('DROP TABLE admin_mcp_servers')
+        db.execute('ALTER TABLE "' + temporary + '" RENAME TO admin_mcp_servers')
+        for (definition,) in definitions:
+            db.execute(definition)
+        if db.execute("PRAGMA quick_check('admin_mcp_servers')").fetchone() != ('ok',) or set(db.execute('PRAGMA foreign_key_check').fetchall()) != foreign_keys_before:
+            raise RuntimeError('Legacy MCP compatibility integrity check failed; transaction rolled back.')
+        return 1
+
+
 def preserve_legacy_chat_protocols(database: Path, revision: str | None, *, legacy_unversioned: bool = False) -> int:
     """Preserve the old transport without selecting provider config or credentials.
 
@@ -177,6 +226,8 @@ def _worker(home: Path, *, repair_filenames: bool = False, expected_repairs: int
         phase = 'identity_preflight'
         if duplicate_identity_groups(home / 'data.db'):
             raise RuntimeError('Duplicate identities require manual reconciliation.')
+        phase = 'legacy_mcp_default'
+        mcp_defaults_repaired = repair_legacy_mcp_default(home / 'data.db')
         phase = 'schema_and_catalog'
         from hugagent_cli.schema import ensure_schema_and_seed
         ensure_schema_and_seed()
@@ -189,7 +240,8 @@ def _worker(home: Path, *, repair_filenames: bool = False, expected_repairs: int
             enforce_ce_branding(db)
             backfill_navigation_entries(db)
             seed_from_filesystem(db=db)
-        return {'ok': True, 'revision': expected, 'legacy_filenames_repaired': repaired}
+        return {'ok': True, 'revision': expected, 'legacy_filenames_repaired': repaired,
+                'legacy_mcp_defaults_repaired': mcp_defaults_repaired}
     except Exception as exc:
         # SQL exception text can contain row values; expose only phase and class.
         frames = traceback.extract_tb(exc.__traceback__)
@@ -267,7 +319,8 @@ def prepare_database(home: Path, *, allow_create: bool = False, restore: Path | 
         database.chmod(0o600)
         return {'ok': True, 'action': 'upgraded' if existed else 'initialized', 'from_revision': previous,
                 'revision': report['revision'], 'backup': str(snapshot) if snapshot else None,
-                'legacy_chat_protocols_preserved': protocols_preserved, 'legacy_filenames_repaired': report.get('legacy_filenames_repaired', 0)}
+                'legacy_chat_protocols_preserved': protocols_preserved, 'legacy_filenames_repaired': report.get('legacy_filenames_repaired', 0),
+                'legacy_mcp_defaults_repaired': report.get('legacy_mcp_defaults_repaired', 0)}
     finally:
         os.close(descriptor)
 

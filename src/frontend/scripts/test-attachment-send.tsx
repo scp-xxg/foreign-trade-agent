@@ -53,6 +53,32 @@ for (const planMode of [false, true]) {
 }
 console.log('PASS: actual composer selection and regular/plan send preserve local attachments and message ownership');
 
+// A text-only model can still import an uploaded picture through an authorized tool.
+// Its send payload needs the server-issued identity, never browser pixels/base64.
+const { useModelCapabilitiesStore } = await import('../src/stores/modelCapabilitiesStore');
+useModelCapabilitiesStore.setState({ capabilities: {
+  supports_reasoning_effort: false, user_model_switch_enabled: false,
+  user_selectable_models: [], can_read_image: false, vision_bridge_enabled: false,
+} });
+for (const planMode of [false, true]) {
+  const chatId = planMode ? 'plan-image-no-vision' : 'chat-image-no-vision';
+  useChatStore.setState({ currentChatId: chatId, planMode, loopMode: false, sending: false, currentPlanId: null });
+  useChatStore.getState().setChatRunTarget(chatId, 'local');
+  readComposer().setInput('Import this authorized product image; do not infer its specifications.');
+  const file = new File(['attachment bytes'], 'product-photo.jpg', { type: 'image/jpeg' });
+  actions.handleFileSelect({ target: { files: [file] } } as unknown as React.ChangeEvent<HTMLInputElement>, { current: null });
+  const count = sent.length;
+  await actions.send();
+  assert.equal(sent.length, count + 1);
+  const attachment = sent.at(-1)!.attachments[0];
+  assert.deepEqual(Object.keys(attachment).sort(), ['file_id', 'mime_type', 'name']);
+  assert.equal(attachment.name, 'product-photo.jpg');
+  assert.equal(attachment.mime_type, 'image/jpeg');
+  assert.equal(files.get(attachment.file_id), 'attachment bytes');
+  assert.equal(JSON.stringify(sent.at(-1)).includes('base64'), false);
+}
+console.log('PASS: non-vision image sends retain the upload identity for tool import without pixels');
+
 const successfulFetch = globalThis.fetch;
 const errors: unknown[] = [];
 const originalError = message.error;
@@ -104,7 +130,7 @@ assert.equal(useChatStore.getState().store.chats['slow-a'].modeSlug,'mode-a');
 assert.equal(useChatStore.getState().store.chats['slow-a'].thinkingEffort,'high');
 assert.equal(sent.at(-1)?.mode_slug,'mode-a');
 
-// Queuing captures text/capabilities; unsupported attachment/reference fields stay in the draft.
+// Queuing captures text, capabilities and its quote; unsent attachments stay in the draft.
 useChatStore.setState({currentChatId:'queue-owner',sending:true,planMode:false,loopMode:false,queuedMessages:{}});
 const retained = new File(['later'],'later.txt');
 readComposer().setInput('Next turn');
@@ -115,7 +141,8 @@ await actions.send();
 assert.equal(useChatStore.getState().queuedMessages['queue-owner'].content,'Next turn');
 assert.equal(readComposer().input,'');
 assert.deepEqual(readComposer().uploadedFiles,[retained]);
-assert.equal(readComposer().quotedFollowUp?.text,'Quoted question');
+assert.equal(useChatStore.getState().queuedMessages['queue-owner'].invocation?.quote?.text,'Quoted question');
+assert.equal(readComposer().quotedFollowUp,null,'the captured quote belongs to the queued turn, not a future draft');
 assert.equal(readComposer().activePlugin,null);
 console.log('PASS: async send preserves draft owners/configuration/edits, queue consumes only its payload');
 
@@ -146,12 +173,13 @@ globalThis.fetch=async (input,init) => {
   if(String(input).endsWith('/v1/agents/responses')){
     const payload=JSON.parse(String(init?.body));
     assert.equal(payload.plugin_id,'queued-plugin');
+    assert.equal(payload.quoted_follow_up?.text,'Quoted question','queued quote reaches the real response request');
     assert.equal(payload.attachments?.length ?? 0,0);
     return new Response('data: [DONE]\n\n',{headers:{'Content-Type':'text/event-stream'}});
   }
   return Response.json({code:200,data:{}});
 };
-await actions.send('Queued text',{plugin:{id:'queued-plugin',name:'Queued plugin'},skill:null,connector:null,mention:null});
+await actions.send('Queued text',{plugin:{id:'queued-plugin',name:'Queued plugin'},skill:null,connector:null,mention:null,quote:useChatStore.getState().queuedMessages['queue-owner'].invocation?.quote});
 assert.equal(readComposer().input,'Next unsent turn');
 assert.equal(readComposer().activePlugin?.id,'next-plugin');
 assert.equal(readComposer().activeCommand?.command,'/init');

@@ -1,0 +1,242 @@
+{
+  "document_type": "foreign_trade_review",
+  "document_version": 1,
+  "previous_review_id": null,
+  "channel": "alibaba_rfq",
+  "role": "sales",
+  "source": {
+    "type": "inquiry",
+    "id": "inq_cccccccccccccccccccccccccccccccc",
+    "revision": 2,
+    "fingerprint": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "current_revision": 2,
+    "stale": false,
+    "stale_reason": null
+  },
+  "draft": {
+    "title": "DEMO RFQ reply",
+    "item_highlights": "",
+    "body": "DEMO DESK-001 1000 units custom packaging. Total USD 5100.00. Freight and taxes excluded; payment terms and validity pending confirmation. Free shipping. Free shipping.",
+    "bullets": [],
+    "language": "en",
+    "locale": "en_US"
+  },
+  "rule_version": "2026-10-31.1",
+  "rule_evidence": [
+    {
+      "rule_id": "alibaba.rfq_alignment",
+      "rule_version": "official-practice-2026-10-31",
+      "status": "active",
+      "category": "platform_rules",
+      "channels": [
+        "alibaba_rfq"
+      ],
+      "title": "Alibaba RFQ 需求匹配",
+      "summary": "报价应回应买家的规格、采购数量及时间要求，并说明尚未确认条件。",
+      "source_url": "https://seller.alibaba.com/rfq",
+      "source_publisher": "Alibaba.com seller RFQ guidance",
+      "verified_at": "2026-10-31",
+      "effective_from": "",
+      "scope_note": "官方实践指引，不作为强制平台禁令或法律结论。本项目自动核对SKU、数量、包装及可识别时间；其他自由文本规格与实际供货承诺由业务人员确认。"
+    },
+    {
+      "rule_id": "quote.amount_consistency",
+      "rule_version": "project-2026-10-31.1",
+      "status": "active",
+      "category": "quotation_terms",
+      "channels": [
+        "alibaba_rfq",
+        "amazon_listing"
+      ],
+      "title": "金额与当前报价一致",
+      "summary": "明确声明的金额和币种应与当前保存报价对应；无当前报价的售价声明留待确认。",
+      "source_url": "https://github.com/scp-xxg/foreign-trade-agent/blob/main/src/backend/core/foreign_trade/review.py",
+      "source_publisher": "foreign-trade-agent deterministic policy",
+      "verified_at": "2026-10-31",
+      "effective_from": "",
+      "scope_note": "项目确定性一致性检查，不计算真实报价、不补造价格，也不判定合同法律效力。"
+    },
+    {
+      "rule_id": "quote.commercial_terms",
+      "rule_version": "project-2026-10-31.1",
+      "status": "active",
+      "category": "quotation_terms",
+      "channels": [
+        "alibaba_rfq",
+        "amazon_listing"
+      ],
+      "title": "付款、有效期与贸易术语待确认",
+      "summary": "未明确提供的付款条件、报价有效期及Incoterm，不自动变成对外承诺。",
+      "source_url": "https://github.com/scp-xxg/foreign-trade-agent/blob/main/src/backend/core/foreign_trade/review.py",
+      "source_publisher": "foreign-trade-agent deterministic policy",
+      "verified_at": "2026-10-31",
+      "effective_from": "",
+      "scope_note": "项目审核提示；保留未知项，不以检查完成替代商务批准或法律审查。"
+    },
+    {
+      "rule_id": "quote.simulation_disclosure",
+      "rule_version": "project-2026-10-31.1",
+      "status": "active",
+      "category": "quotation_terms",
+      "channels": [
+        "alibaba_rfq",
+        "amazon_listing"
+      ],
+      "title": "模拟报价与商品须明确标注",
+      "summary": "引用本项目虚构目录时，草稿应保留演示/模拟说明，不能表述为真实供货承诺。",
+      "source_url": "https://github.com/scp-xxg/foreign-trade-agent/blob/main/src/backend/core/foreign_trade/review.py",
+      "source_publisher": "foreign-trade-agent deterministic policy",
+      "verified_at": "2026-10-31",
+      "effective_from": "",
+      "scope_note": "仅适用于本项目模拟目录；真实Pi公开事实不得与DESK模拟价格混用。"
+    },
+    {
+      "rule_id": "quote.unknown_freight_tax",
+      "rule_version": "project-2026-10-31.1",
+      "status": "active",
+      "category": "quotation_terms",
+      "channels": [
+        "alibaba_rfq",
+        "amazon_listing"
+      ],
+      "title": "未知运费税费不能承诺免费或包含",
+      "summary": "没有已确认费用依据时，免费运输、含税或零运费等声明须纠正为待确认。",
+      "source_url": "https://github.com/scp-xxg/foreign-trade-agent/blob/main/src/backend/core/foreign_trade/review.py",
+      "source_publisher": "foreign-trade-agent deterministic policy",
+      "verified_at": "2026-10-31",
+      "effective_from": "",
+      "scope_note": "仅核对当前来源与草稿；不推定真实费用，不生成税务或法律意见。"
+    },
+    {
+      "rule_id": "quote.unsubstantiated_claims",
+      "rule_version": "project-2026-10-31.1",
+      "status": "active",
+      "category": "quotation_terms",
+      "channels": [
+        "alibaba_rfq",
+        "amazon_listing"
+      ],
+      "title": "认证和授权声明须有依据",
+      "summary": "草稿中的认证、官方经销或授权声明若未见相符的确认事实，标为未获依据并要求人工补证。",
+      "source_url": "https://github.com/scp-xxg/foreign-trade-agent/blob/main/src/backend/core/foreign_trade/review.py",
+      "source_publisher": "foreign-trade-agent deterministic policy",
+      "verified_at": "2026-10-31",
+      "effective_from": "",
+      "scope_note": "未获依据不等于已认定虚假或违法；不伪造认证、授权、品牌例外或法律结论。"
+    }
+  ],
+  "text_annotations": [
+    {
+      "annotation_id": "annotation_ecca6b129c56a601b1e103c2",
+      "rule_id": "quote.commercial_terms",
+      "category": "quotation_terms",
+      "field": "body",
+      "quote": "payment",
+      "severity": "low",
+      "status": "needs_confirmation",
+      "message": "付款条件尚无结构化确认依据",
+      "suggestion": "保留付款条件待确认；涉及具体承诺时由业务人员补充依据后复核。"
+    },
+    {
+      "annotation_id": "annotation_54bb9072eb408b484b03fb6a",
+      "rule_id": "quote.commercial_terms",
+      "category": "quotation_terms",
+      "field": "body",
+      "quote": "validity",
+      "severity": "low",
+      "status": "needs_confirmation",
+      "message": "报价有效期尚无结构化确认依据",
+      "suggestion": "保留报价有效期待确认；涉及具体承诺时由业务人员补充依据后复核。"
+    },
+    {
+      "annotation_id": "annotation_de0d3079c7fd3e2277373525",
+      "rule_id": "quote.commercial_terms",
+      "category": "quotation_terms",
+      "field": "body",
+      "quote": "",
+      "severity": "low",
+      "status": "needs_confirmation",
+      "message": "Incoterm尚无结构化确认依据",
+      "suggestion": "保留Incoterm待确认；涉及具体承诺时由业务人员补充依据后复核。"
+    },
+    {
+      "annotation_id": "annotation_de63671ae972cc15dd546fa3",
+      "rule_id": "quote.unknown_freight_tax",
+      "category": "quotation_terms",
+      "field": "body",
+      "quote": "Free shipping",
+      "severity": "high",
+      "status": "issue",
+      "message": "没有已确认的运费或税费依据，不能承诺免费或已包含",
+      "suggestion": "将费用范围写为不含运费/税费且待确认，除非先补充可靠商务依据。"
+    },
+    {
+      "annotation_id": "annotation_1b826dd9abb99e83216e78a1",
+      "rule_id": "quote.unknown_freight_tax",
+      "category": "quotation_terms",
+      "field": "body",
+      "quote": "Free shipping",
+      "severity": "high",
+      "status": "issue",
+      "message": "没有已确认的运费或税费依据，不能承诺免费或已包含",
+      "suggestion": "将费用范围写为不含运费/税费且待确认，除非先补充可靠商务依据。"
+    }
+  ],
+  "checks": [
+    {
+      "rule_id": "alibaba.rfq_alignment",
+      "status": "passed",
+      "annotation_count": 0
+    },
+    {
+      "rule_id": "quote.amount_consistency",
+      "status": "passed",
+      "annotation_count": 0
+    },
+    {
+      "rule_id": "quote.commercial_terms",
+      "status": "needs_confirmation",
+      "annotation_count": 3
+    },
+    {
+      "rule_id": "quote.simulation_disclosure",
+      "status": "passed",
+      "annotation_count": 0
+    },
+    {
+      "rule_id": "quote.unknown_freight_tax",
+      "status": "issue",
+      "annotation_count": 2
+    },
+    {
+      "rule_id": "quote.unsubstantiated_claims",
+      "status": "passed",
+      "annotation_count": 0
+    }
+  ],
+  "risk_labels": [
+    {
+      "code": "quote.commercial_terms",
+      "label": "付款、有效期与贸易术语待确认",
+      "severity": "low",
+      "count": 3
+    },
+    {
+      "code": "quote.unknown_freight_tax",
+      "label": "未知运费税费不能承诺免费或包含",
+      "severity": "high",
+      "count": 2
+    }
+  ],
+  "summary": {
+    "issue_count": 2,
+    "needs_confirmation_count": 3,
+    "review_status": "needs_revision"
+  },
+  "comparison": null,
+  "scope_note": "确定性规则与来源一致性检查；结果是待审草稿反馈，不是平台全合规、法律结论或对外发布批准。",
+  "not_sent": true,
+  "not_published": true,
+  "review_id": "review_ffffffffffffffffffffffffffffffff",
+  "created_at": "2026-10-31T00:00:00+00:00"
+}

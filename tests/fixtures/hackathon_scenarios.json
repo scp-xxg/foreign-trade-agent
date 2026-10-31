@@ -1,0 +1,513 @@
+{
+  "schema_version": 1,
+  "fixture_kind": "manual_acceptance_script",
+  "execution_status": "not_executed_by_this_fixture",
+  "prepared_at": "2026-10-31",
+  "knowledge_version": "2026-10-31.1",
+  "notes": [
+    "这些是预期行为与负例，不是实际验收日志；必须另存真实工具回执和下载核验结果。",
+    "不含真实账户/记录ID、密钥或本机app-home；ID/revision/附件ID均从本次成功回执绑定。",
+    "英语销售和英语运营两角色/平台场景满足两类目标场景路线；不以西语测试或多账号/多agent宣称替代真实两轮演示。"
+  ],
+  "variables": {
+    "FOLLOWUP_DUE_AT": "操作者填写未来带+08:00偏移的ISO8601日期时间",
+    "TASK_ID": "当前协同回执中的单个任务ID",
+    "REVIEW_NOTE": "操作者实际核对后填写的意见"
+  },
+  "cases": [
+    {
+      "case_id": "A_LYRECO_DESK_ALIBABA_RFQ",
+      "preconditions": [
+        "完成公开项目setup/init或对正确既有app-home安装；已登录且启用当前外贸插件；聊天模型支持真实工具调用。",
+        "选用自己的新演示记录；LYRECO公司资料真实公开，交易/商品目录/价格为团队模拟；网络公开核验失败不作成功。",
+        "已设置FOLLOWUP_DUE_AT为未来明确时间。"
+      ],
+      "turns": [
+        {
+          "turn_id": "A1",
+          "user_input": "请完整读取买家核验与询盘跟进技能，创建“赛题演练 A · LYRECO DESK-001”询盘。LYRECO、注册国 FR、官网 https://www.lyreco.com/group/，邮箱留空。这是团队构造的演示询盘，不是真实邮件、订单或合作关系。\n询盘原文：TEAM-CREATED DEMONSTRATION ONLY. This is not an actual LYRECO inquiry, order or business relationship. Please quote 1000 units of DESK-001 Modular Desk Organizer with custom packaging for delivery to Spain. Production days are not specified. Freight, taxes, duties, shipping time and other commercial terms require separate confirmation.\n请保存明确条件，核验公开资料，查询产品规格、MOQ及模拟阶梯价，计算报价并保存未发送的中英文回复草稿。不要联系客户。金额以本轮工具回执为准，不把公司注册国当目的国。",
+          "expected_assistant_output": [
+            "发生真实保存、公开核验、产品检索、报价及草稿工具调用；给出本次实际询盘ID与当前revision，不能用正文JSON代替执行。",
+            "公开官网自述与登记匹配分别带来源/获取时间；无结果或网络失败标为未核实，不推断信用或来信身份。",
+            "单项DESK-001、1000件、定制包装、Spain；USD4800货值+300包装=5100，不含运费税费；参考生产18天不等于到货时间。",
+            "显示询盘状态卡、模拟标记、中英PDF/Excel报价卡和未发送草稿；无库存、免费运费、认证或实际订单承诺。"
+          ],
+          "operator_checks": [
+            "打开本轮PDF/Excel检查金额、包装、费用范围、来源及DEMO标记；Excel有中文/英文两个工作表。"
+          ]
+        },
+        {
+          "turn_id": "A2",
+          "user_input": "为刚才这条演示询盘添加站内跟进待办：“核对包装图稿和运费，未实际联系客户”。到期时间为 ${FOLLOWUP_DUE_AT}，时区 Asia/Shanghai。请先核对这是未来时间，保存后回显实际时间和待办状态；不要说已发邮件或保证推送。",
+          "expected_assistant_output": [
+            "时间参数由操作者填入明确的未来ISO8601时间，保留时区；调用add_followup并返回真实待办状态。",
+            "如时间缺失或已过期，澄清后再保存；站内待办不是自动通知承诺。"
+          ]
+        },
+        {
+          "turn_id": "A3",
+          "user_input": "现在以销售岗位准备 Alibaba RFQ 英语回复。请完整读取本地化审核技能，重新读取本询盘及当前报价，再检索 channel=alibaba_rfq 的平台规则和报价商务条款知识，报告规则版本与来源。\n下面是我刻意提供的错误测试稿，只供内部审核，请保持原样送审，不可发送，也不要先悄悄纠正：\nTitle: DEMO RFQ reply\nBody: DEMO DESK-001 500 units. Total USD 6000.00. Free shipping, taxes included. Production within 2 days. CE certified.\nItem Highlights: 留空\nBullets: 空数组\nLanguage: en\nLocale: en_US\n请实际调用审核工具，展示原稿风险颜色/标签及逐条文字批注，说明原片段、原因、修改建议和来源。不要把检索到规则说成已经通过平台认证。",
+          "expected_assistant_output": [
+            "使用trade_review knowledge，随后review；source_type=inquiry、source_revision来自最新get，不用模型猜ID/修订号。",
+            "首轮有实际review_id、checks、risk_labels、text_annotations；数量/金额/费用/生产时间矛盾被指出，认证缺依据保留待确认。",
+            "两反馈同时可见：稿件颜色风险标记，以及带片段/原因/建议/来源的文字批注。",
+            "明确此稿是测试负例、未发送未发布；风险报告本身可下载，不代表可对外使用。"
+          ]
+        },
+        {
+          "turn_id": "A4",
+          "user_input": "请按刚才批注修正为适合 Alibaba RFQ 的简洁礼貌销售英语，必须保持以下事实正文，不新增承诺：\nDEMO DESK-001 1000 units with custom packaging for Spain. Goods total USD 4800.00; packaging total USD 300.00; subtotal USD 5100.00. Freight and taxes excluded. Reference production lead time: 18 days, subject to supplier confirmation; shipping time is separate. Payment terms, quotation validity and Incoterm remain pending confirmation. Please confirm the delivery address and packaging artwork. Demo quotation — simulated data, not a binding commercial offer.\n请重新读取来源并实际复审，previous_review_id 使用上一轮真实审核ID，保留旧报告。展示修正前后需修改/待确认数量，以及已解决、仍存在和新增反馈；如果来源或规则改变请单独说明。不要为清零删除真实未知项。",
+          "expected_assistant_output": [
+            "新建第二个不可变review_id，并关联首轮previous_review_id；不是覆盖首轮或口头宣称修复。",
+            "在本fixture来源和规则不变时，数量/金额/免费运税/过短生产承诺等问题消除；付款、有效期和Incoterm仍待确认。",
+            "展示comparison及source_changed/rules_changed；未知商务条件不写成已批准或全合规。",
+            "下载审核Markdown/JSON前重新核验当前来源和用户权限，两个报告ID与各自草稿相符。"
+          ],
+          "operator_checks": [
+            "点击本次审核卡MD/JSON并查看正文、批注、rule_version、previous_review_id和comparison；保留本次真实下载证据。"
+          ]
+        }
+      ],
+      "assertions": [
+        {
+          "id": "A_quote",
+          "expected": {
+            "sku": "DESK-001",
+            "quantity": 1000,
+            "custom_packaging": true,
+            "destination_country": "Spain",
+            "currency": "USD",
+            "merchandise_subtotal": "4800.00",
+            "packaging_subtotal": "300.00",
+            "subtotal": "5100.00",
+            "production_lead_days": 18
+          }
+        },
+        {
+          "id": "A_review_rounds",
+          "expected": {
+            "channel": "alibaba_rfq",
+            "role": "sales",
+            "language": "en",
+            "distinct_review_ids": 2,
+            "second_links_previous": true,
+            "not_sent": true,
+            "not_published": true
+          }
+        },
+        {
+          "id": "A_first_findings",
+          "rule_ids_include": [
+            "alibaba.rfq_alignment",
+            "quote.amount_consistency",
+            "quote.unknown_freight_tax",
+            "quote.unsubstantiated_claims"
+          ]
+        },
+        {
+          "id": "A_second_findings",
+          "expected": "固定正文、同一有效来源和本知识版本下issue_count=0；quote.commercial_terms的三个待确认项保留。实际模型改写须核对，不能直接套计数。"
+        }
+      ],
+      "expected_artifacts": [
+        {
+          "kind": "state",
+          "location": "foreign_trade_inquiries.payload",
+          "content": "买家来源、原文、当前报价、中英草稿、站内跟进；owner_user_id隔离"
+        },
+        {
+          "kind": "download",
+          "filenames": [
+            "<quote_id>-ZH-EN.pdf",
+            "<quote_id>-ZH-EN.xlsx"
+          ],
+          "binding": "本轮真实报价回执快照"
+        },
+        {
+          "kind": "review",
+          "location": "foreign_trade_reviews",
+          "content": "两份不可变审核记录及previous_review_id/comparison"
+        },
+        {
+          "kind": "download",
+          "filenames": [
+            "<review_id>.md",
+            "<review_id>.json"
+          ],
+          "binding": "前端下载名；immutable review_id及当前source版本/指纹"
+        }
+      ],
+      "failure_cases": [
+        {
+          "trigger": "公开官网/GLEIF不可达或无匹配",
+          "expected": "保留未核实及来源状态，不推断信用，不阻止已明确模拟条件的本地报价。"
+        },
+        {
+          "trigger": "报价条件未满足MOQ或包装门槛",
+          "expected": "显示校验失败，无部分总价和成功报价下载。"
+        },
+        {
+          "trigger": "来源修改后下载旧review",
+          "expected": "409/前端过期提示，重新读取并审核；不将最新记录静默替换旧报告。"
+        },
+        {
+          "trigger": "模型超时/工具未执行/只输出JSON",
+          "expected": "判为该聊天步骤未完成，保留已保存记录；不可计入端到端通过。"
+        }
+      ]
+    },
+    {
+      "case_id": "B_PI_AMAZON_LISTING",
+      "preconditions": [
+        "当前聊天实际上传指定CSV与授权照片，附件可由当前用户读取；图片许可由操作者核对。",
+        "中文事实AI路线需要有效模型；英语template备选须另建/明确标记，不能冒充AI翻译成功。",
+        "商品资料已确认并生成后才可作为review来源；Pi不关联DESK模拟价格。"
+      ],
+      "turns": [
+        {
+          "turn_id": "B1",
+          "attachments": [
+            "extensions/foreign_trade/demo_product/product_facts.csv",
+            "extensions/foreign_trade/demo_product/raspberry-pi-5-original.jpg"
+          ],
+          "user_input": "我已把产品事实CSV和许可原图实际附到当前聊天。请完整读取产品内容技能，导入新的“赛题演练 B · Raspberry Pi 5”资料包。产品名称/型号 Raspberry Pi 5，品牌 Raspberry Pi，主要来源 https://www.raspberrypi.com/products/raspberry-pi-5/。\n图片署名：Photo: SimonWaldherr, Raspberry Pi 5.jpg (CC BY 4.0). Layout and text added; original photo retained. Source: https://commons.wikimedia.org/wiki/File:Raspberry_Pi_5.jpg License: https://creativecommons.org/licenses/by/4.0/\n先展示8条候选事实、来源、图片署名和未知商业条件，等待我核对。不要从图片推断RAM、售价、库存、认证或经销授权；Pi不得使用DESK模拟价格。",
+          "expected_assistant_output": [
+            "trade_import_product使用当前聊天实际file_ids，不能读磁盘路径或猜文件ID；成功导入后给出真实pack_id/revision。",
+            "展示8条候选事实，保留数字/单位/来源，尚未确认/尚未生成；等待下一条人工确认。",
+            "原图是许可公开照片，排版保留作者/来源/CC BY4.0及修改声明。"
+          ]
+        },
+        {
+          "turn_id": "B2",
+          "requires_human_confirmation": true,
+          "user_input": "我已逐项对照当前显示的8条候选事实和来源，并核对本次图片使用许可与完整署名，确认采用全部8条。请先确认事实，再以AI翻译与生成模式制作英文商品介绍、FAQ及三张基于原图的排版图。保留全部数字、单位和未知商务条件，不补造RAM容量，不把图片排版说成AI生图。请按实际回执说明翻译是否成功；没有生成的文件不要声称存在。",
+          "expected_assistant_output": [
+            "仅在操作者实际核对后发送本轮；trade_confirm_product_facts成功后用返回的新revision单独generate。",
+            "AI成功标识为method=ai_grounded；generation_mode=ai但method=template代表回退，不能计作AI翻译通过。",
+            "成功且事实均英文时，8条事实对应11条FAQ、三种规定尺寸图片及ZIP；实际数量以回执为准。",
+            "中文未成功翻译时英文图片暂停；原事实和原图保留，提示失败/回退，不擅自改为成功。"
+          ],
+          "operator_checks": [
+            "打开文案、FAQ、三张PNG及ZIP；核对来源、8条事实、数值/单位、图片署名及未发布状态。"
+          ]
+        },
+        {
+          "turn_id": "B2b",
+          "optional": true,
+          "condition": "AI英语术语需要人工修订时执行；若首轮已准确，可跳过，不虚构缺陷。",
+          "requires_human_confirmation": true,
+          "user_input": "我已对照上传双语CSV同一官方来源的英文列，确认显示输出应表述为“Two HDMI outputs supporting 4K at 60fps and HDR”。请读取当前资料包，只将第3条显示输出事实的value更正为这句话，保留其来源、其余7条事实、原图与署名，不补新规格。我明确确认本次更正；保存后以新revision重新AI生成英文资料，并比较前后该术语。旧文件保留历史说明，只提供当前新版本下载。",
+          "expected_assistant_output": [
+            "使用当前ID/revision只修改指定事实，旧输出失效；不以下载文件手工改字冒充已落库。",
+            "明确依据已有双语资料的英文列补充fps单位，不把任意“帧”都猜成帧率。",
+            "在重新确认后的新revision生成并实际检查60fps、数字/单位、FAQ、三图和ZIP；旧revision下载应拒绝，新版可回读。",
+            "AI失败仍如实显示回退；这条可选操作是人工修订流程，不宣称通用翻译缺口已由源码修复。"
+          ]
+        },
+        {
+          "turn_id": "B3",
+          "user_input": "现在改为运营岗位，为美国非媒体类目准备 Amazon Listing 英语文案。请完整读取本地化审核技能，读取刚才已确认并生成的Pi资料包，检索 channel=amazon_listing 的当前平台与报价条款知识，使用 en_US。\n下面是刻意构造的错误测试稿，只供内部检验，保持字段原样送审，不可发布：\nTitle: Raspberry Pi 5! Raspberry Pi 5 Raspberry Pi 5 Single Board Computer for Home Office Education and Everyday Projects\nItem Highlights: Broadcom BCM2712; 2.4GHz; quad-core 64-bit Arm Cortex-A76; two HDMI outputs supporting 4K at 60fps and HDR; two USB 3.0 and two USB 2.0 ports; Gigabit Ethernet\nBody: Free shipping. Official authorized distributor. CE certified.\nBullets: Two USB 3.0 and two USB 2.0 ports; Gigabit Ethernet\n请实际审核，分开显示Title和Item Highlights字符数与批注，解释2026规则的市场/类目/逐步实施范围，同时保留商务未知项；不要沿用历史200字符标题上限。",
+          "expected_assistant_output": [
+            "新建source_type=content_pack的真实review；role=operations/channel=amazon_listing，与RFQ销售语气和结构不同。",
+            "Title超过75、Item Highlights超过125、合计超过200，以及标题字符/重复词产生反馈；数字是当前知识版本的US非媒体基线。",
+            "免费运费与无依据授权/认证被指出；本项目商务规则与Amazon官方来源明确区分。",
+            "显示稿件风险标记和逐条批注；Amazon范围/实际rollout始终待人工确认，不宣称平台批准。"
+          ]
+        },
+        {
+          "turn_id": "B4",
+          "user_input": "请按批注修订这份 Amazon US 非媒体英语Listing，保留如下短字段并以客观规格面向消费者解释，不写B2B询盘报价：\nTitle: Raspberry Pi 5 Single Board Computer\nItem Highlights: 2.4GHz quad-core Arm Cortex-A76; dual 4K60 HDMI; Gigabit Ethernet; USB 3.0\nBody: Product information based on the confirmed Raspberry Pi 5 facts. Confirm the exact variant, included accessories and commercial terms before purchase.\nBullets: Two USB 3.0 and two USB 2.0 ports; Dual-band 802.11ac Wi-Fi; Bluetooth 5.0 with BLE; 5V/5A DC via USB-C with Power Delivery support\n请去掉无依据的免费运费、认证和经销授权承诺，保留范围及商务条件待确认。重新读取来源，实际复审并传上一轮真实previous_review_id，展示两轮风险变化，提供本次Markdown/JSON审核报告入口。不要上架。",
+          "expected_assistant_output": [
+            "生成新审核ID、保持旧稿不可变，previous_review_id和来源关联正确。",
+            "固定测试稿的标题/Item Highlights/合计均在基线内，不再出现超限、限制字符或三次重复词反馈；不是保证所有平台规则通过。",
+            "保留US非媒体范围/rollout及付款、有效期、Incoterm待确认，显示comparison的已解决/持续/新增规则。",
+            "MD/JSON包含此次草稿、证据、批注、比较及未发送未发布状态。"
+          ],
+          "operator_checks": [
+            "对比两轮卡片和下载报告；不要把旧产品ZIP中的基础文案当成已同步更新的Amazon审核稿，两者是独立产物。"
+          ]
+        }
+      ],
+      "assertions": [
+        {
+          "id": "B_source",
+          "expected": {
+            "confirmed_facts": 8,
+            "source": "https://www.raspberrypi.com/products/raspberry-pi-5/",
+            "image_author": "SimonWaldherr",
+            "image_license": "CC BY 4.0",
+            "unknowns_preserved": [
+              "RAM variant",
+              "price",
+              "MOQ",
+              "stock",
+              "warranty",
+              "authorization",
+              "certification"
+            ]
+          }
+        },
+        {
+          "id": "B_generation",
+          "expected": {
+            "successful_ai_method": "ai_grounded",
+            "faq_count": 11,
+            "image_dimensions": [
+              [
+                1200,
+                1200
+              ],
+              [
+                1600,
+                900
+              ],
+              [
+                1200,
+                1600
+              ]
+            ],
+            "zip_entry_count": 8
+          },
+          "condition": "8条事实全部经确认，英文转换成功并有有效原图；三图为原图排版，不是AI生图。"
+        },
+        {
+          "id": "B_review_first",
+          "rule_ids_include": [
+            "amazon.title_length",
+            "amazon.item_highlights_length",
+            "amazon.combined_length",
+            "amazon.title_characters",
+            "amazon.title_repetition",
+            "amazon.scope_confirmation",
+            "quote.unknown_freight_tax"
+          ]
+        },
+        {
+          "id": "B_review_second",
+          "expected": {
+            "channel": "amazon_listing",
+            "role": "operations",
+            "title_max_chars": 75,
+            "item_highlights_max_chars": 125,
+            "combined_max_chars": 200,
+            "previous_link": true,
+            "not_published": true
+          },
+          "condition": "仅knowledge_version=2026-10-31.1的US非媒体基线；范围/rollout与商务待确认仍保留，不承诺全平台合规。"
+        }
+      ],
+      "expected_artifacts": [
+        {
+          "kind": "state",
+          "location": "artifacts + foreign_trade_content_packs.payload",
+          "content": "实际上传附件、候选/确认事实、原图许可、版本化输出"
+        },
+        {
+          "kind": "download",
+          "filenames": [
+            "english-listing.md",
+            "customer-faq.csv",
+            "product-square.png",
+            "product-landscape.png",
+            "product-spec.png",
+            "product-content-pack.zip"
+          ],
+          "zip_additional_entries": [
+            "facts.json",
+            "provenance.txt",
+            "uploaded-sources.json"
+          ],
+          "binding": "当前pack版本及实际输出"
+        },
+        {
+          "kind": "review",
+          "location": "foreign_trade_reviews",
+          "content": "独立Amazon草稿两轮review，不自动覆盖产品ZIP文案"
+        },
+        {
+          "kind": "download",
+          "filenames": [
+            "<review_id>.md",
+            "<review_id>.json"
+          ],
+          "binding": "审核immutable ID及来源新鲜度"
+        }
+      ],
+      "failure_cases": [
+        {
+          "trigger": "没有真实附件ID/附件不属于当前用户",
+          "expected": "要求实际上传/正确引用；不得读服务器任意路径或编造导入成功。"
+        },
+        {
+          "trigger": "候选未展示/未获人工确认",
+          "expected": "停止生成，不把首次委托当作事实确认。"
+        },
+        {
+          "trigger": "AI翻译失败或残留中文",
+          "expected": "如实显示template/warning；英文图片暂停，不声称AI英文/三图齐全。"
+        },
+        {
+          "trigger": "已有英文事实且用户显式选template",
+          "expected": "完全不调用翻译模型，method=template，明确本地原文模板；这是独立降级演示，不是聊天模型成功证据。"
+        },
+        {
+          "trigger": "更新事实/替换原图/文件完整性变化",
+          "expected": "旧产出或review下载失效，需要重新确认/生成/审核。"
+        },
+        {
+          "trigger": "非US范围",
+          "expected": "不套用US长度基线作全平台判定；显示范围待人工确认。"
+        }
+      ]
+    },
+    {
+      "case_id": "C_DESK_ROLE_COORDINATION_OPTIONAL",
+      "preconditions": [
+        "A的当前有效单SKU DESK-001询盘和报价存在。",
+        "所有负责人仅姓名标签；操作者愿意逐任务核对并手动确认。"
+      ],
+      "turns": [
+        {
+          "turn_id": "C1",
+          "user_input": "请完整读取跨岗位协同技能，以工作流A的DESK-001演示询盘建立新的“赛题演练 C · DESK内部协同”。这是同一1000件定制包装订单的模拟材料，请自动准备同DESK的候选产品资料，不关联Pi。销售、采购、设计、运营、合规的负责人分别标为“演示业务岗”“演示采购岗”“演示美工岗”“演示运营岗”“演示合规岗”。先展示六任务、依赖、验收标准和未决事项；不要自动验收，不向这些标签发送通知。",
+          "expected_assistant_output": [
+            "trade_collaboration create绑定当前用户和A的真实询盘ID；自动准备仅适用于单DESK-001，候选资料尚未确认生成。",
+            "scope=current_user_role_coordination；五角色六任务，不是五账号ACL或并行多agent。",
+            "同订单DESK事实/示意图标为模拟，不能混用Pi真实资料。"
+          ]
+        },
+        {
+          "turn_id": "C2",
+          "user_input": "请打开本协同单关联的DESK资料，展示6条候选英语事实、模拟示意图说明及CC0来源。我实际核对后会单独确认。请先等待，不要把本条当作确认。",
+          "expected_assistant_output": [
+            "展示来源及候选，并停在人工确认；实际核对后可按产品内容流程确认并显式选择template生成。",
+            "接受新版资料后refresh_sources只更新依据并重置受影响验收，不直接done。"
+          ]
+        },
+        {
+          "turn_id": "C2b",
+          "requires_human_confirmation": true,
+          "user_input": "我已逐项核对刚才这份同DESK订单资料中的6条候选英语事实、模拟示意图和CC0说明，确认采用当前版本的全部候选。请先确认事实，再明确使用本地原文模板（generation_mode=template，不调用翻译模型）生成资料，保留模拟声明。成功后接受协同单当前来源并展示哪些任务仍待人工验收，不自动验收。",
+          "expected_assistant_output": [
+            "先以最新资料包revision确认事实，再以确认回执的新revision生成；实际输出应明确template/未调用模型。",
+            "同DESK的6条事实、9条FAQ、三种排版图和ZIP按实际assets核对，模拟示意图不能称真实照片。",
+            "refresh_sources接受新依据并重置受影响验收，任务不会因此自动done；之后逐项展示实际结果和未决事项。"
+          ]
+        },
+        {
+          "turn_id": "C3",
+          "operator_instruction": "依次完成六项任务。每一项先展示实际产物/负责人/结果/未决事项，操作者实际核对后填写下一条模板中的两个变量；不得一次复制六个确认。",
+          "user_input": "我已核对当前任务 ${TASK_ID} 的实际产物、来源、依赖及未决事项，确认仅用于本次模拟内部交接。人工验收说明：${REVIEW_NOTE}。请仅验收这一项，不替我确认下一项。",
+          "expected_assistant_output": [
+            "先前状态须为in_review、负责人/结果齐全、必需依赖完成；使用最新revision和真实task_id。",
+            "六次实际人工确认依序推进；有未决事项可以内部交接，但不能删除未知项求通过。",
+            "仅有效验收6/6、没有stale/blocked时提供当前revision绑定的交接MD/JSON。"
+          ]
+        },
+        {
+          "turn_id": "C4",
+          "user_input": "现在演示来源变化：把该DESK询盘原文及结构化数量都改成500件、标准包装，仍为Spain，并重算报价、更新草稿。再读取本协同单解释哪些来源和任务失效；不要自动复用旧验收。请先展示变化，我再决定是否接受新来源。",
+          "expected_assistant_output": [
+            "新模拟报价USD2400；产品事实和来源发生变化，受影响任务及下游标stale/blocked。",
+            "旧revision交接下载拒绝，先refresh_sources再重新人工核对与验收；保留历史快照。"
+          ]
+        },
+        {
+          "turn_id": "C5",
+          "user_input": "我已看到500件标准包装的新模拟报价和来源变化，接受这次新来源。请更新协同来源快照，列出需要重新核对的任务及依赖，保留真实未决事项。先停在待人工验收；我会按C3方式逐项确认，不要沿用旧验收或直接下载旧交接稿。",
+          "expected_assistant_output": [
+            "执行refresh_sources并返回最新revision；受影响验收重置，展示尚需复核的任务。",
+            "按依赖逐项重新核对并获明确确认后，才可下载新的revision绑定MD/JSON；历史已下载文件保持历史快照。"
+          ]
+        }
+      ],
+      "assertions": [
+        {
+          "id": "C_tasks",
+          "expected_order": [
+            "sales_requirements",
+            "procurement_quote",
+            "design_assets",
+            "operations_content",
+            "compliance_review",
+            "sales_handoff"
+          ],
+          "mandatory_dependencies": {
+            "procurement_quote": [
+              "sales_requirements"
+            ],
+            "design_assets": [
+              "sales_requirements"
+            ],
+            "operations_content": [
+              "design_assets"
+            ],
+            "compliance_review": [
+              "procurement_quote",
+              "operations_content"
+            ],
+            "sales_handoff": [
+              "compliance_review"
+            ]
+          }
+        },
+        {
+          "id": "C_boundaries",
+          "expected": {
+            "scope": "current_user_role_coordination",
+            "messages_sent": false,
+            "published": false,
+            "role_count": 5,
+            "task_count": 6
+          }
+        },
+        {
+          "id": "C_stale",
+          "expected": "源变化后受影响验收失效；有风险/未决事项可内部交接，但stale/blocked或未全部人工验收时不能下载。"
+        }
+      ],
+      "expected_artifacts": [
+        {
+          "kind": "state",
+          "location": "foreign_trade_collaborations.payload",
+          "content": "任务依赖、来源版本/指纹、人工审核历史和未决事项"
+        },
+        {
+          "kind": "download",
+          "filenames": [
+            "collaboration-<collaboration_id>-r<revision>.md",
+            "collaboration-<collaboration_id>-r<revision>.json"
+          ],
+          "binding": "当前collaboration_id+revision"
+        }
+      ],
+      "failure_cases": [
+        {
+          "trigger": "尝试直接将status设done/跳过依赖/一次性代替人工验收",
+          "expected": "拒绝，展示缺失依据；任务保持未验收。"
+        },
+        {
+          "trigger": "将Pi作为DESK交易产品资料",
+          "expected": "不能作为transaction绑定，只能明确独立参考，无法替代本单材料。"
+        },
+        {
+          "trigger": "revision冲突",
+          "expected": "409后重新get核对，不盲重试覆盖新状态。"
+        }
+      ]
+    }
+  ],
+  "runtime_profile_example": {
+    "web_default_port": 3001,
+    "local_demo_port": 3002,
+    "plugin_version": "0.4.0",
+    "skill_count": 5,
+    "native_business_tool_count": 8,
+    "catalog_mcp_tool_count": 3,
+    "model_name": "gpt-6.1-sol",
+    "transport": "responses",
+    "context_length": 128000,
+    "scope": "Maintainer gateway connectivity example and conservative working context; not a vendor capacity guarantee or completed workflow receipt.",
+    "credentials": "Supply locally at runtime; never in this fixture."
+  }
+}

@@ -1,25 +1,24 @@
 import { IS_COMMUNITY_EDITION_BUILD } from '../edition';
 import { writeLocal } from '../storage';
+import { resolveLanguage, type Lang } from './defaultLanguage';
+export type { Lang } from './defaultLanguage';
 
 /**
  * 轻量 i18n：中文原文作 key，英文字典翻译，缺失回退中文。
  * 语言偏好存 localStorage；切换语言整页 reload，保证模块级常量
  * （constants.ts 等在 import 时求值的 t() 调用）也按新语言重新求值。
  */
-export type Lang = 'zh-CN' | 'en';
 
 export const LANG_STORAGE_KEY = 'jx_lang';
 
 function detectLang(): Lang {
+  let saved: string | null = null;
   try {
-    const saved = localStorage.getItem(LANG_STORAGE_KEY);
-    if (saved === 'en' || saved === 'zh-CN') return saved;
+    saved = localStorage.getItem(LANG_STORAGE_KEY);
   } catch {
     // localStorage 不可用（隐私模式等）时回退默认语言
   }
-  return IS_COMMUNITY_EDITION_BUILD || import.meta.env.VITE_DEFAULT_LANGUAGE === 'en'
-    ? 'en'
-    : 'zh-CN';
+  return resolveLanguage(saved, import.meta.env.VITE_DEFAULT_LANGUAGE, IS_COMMUNITY_EDITION_BUILD);
 }
 
 const currentLang: Lang = detectLang();

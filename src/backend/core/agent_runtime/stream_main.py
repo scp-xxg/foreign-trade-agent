@@ -227,7 +227,7 @@ async def stream_main(turn: MainTurn):
                     tool_result_json = {"result": tool_content}
 
                 # Skill load: replace the full SKILL.md text with the same curated detail used by the capability center
-                if is_skill_result:
+                if is_skill_result and payload.get("status") == "success":
                     _sid = turn.skill_id_by_tool_id.get(
                         tool_id, ""
                     ) or skills._extract_skill_id_from_path(str(tool_content))

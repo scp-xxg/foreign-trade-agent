@@ -3,7 +3,7 @@
 基于公开 HugAgentOS Community Edition，本目录的外贸业务代码和模拟数据独立编写；上游同步范围见项目变更记录。
 **报价目录中的产品、价格、规格和生产周期均为模拟数据。** 买家核验使用真实公开资料，商品资料示例使用可核验规格和独立许可照片；这三类来源分别标注。
 
-版本 **0.3.0**，安装标识保留 `foreign-trade-demo`。提供四个技能、七个当前用户绑定的原生业务工具；原有三个目录 MCP 工具继续独立保留。聊天为业务主入口，询盘、产品内容和协同工作台显示同一账号的记录。[对话指南](../../docs/CHAT_PLUGIN.md) · [团队部署与更新](../../docs/TEAM_SETUP.md) · [场景三完整示例](../../docs/SCENARIO_THREE.md)
+版本 **0.4.0**，安装标识保留 `foreign-trade-demo`。提供五个技能、八个当前用户绑定的原生业务工具；原有三个目录 MCP 工具继续独立保留。聊天为业务主入口，询盘、产品内容和协同工作台显示同一账号的记录。[对话指南](../../docs/CHAT_PLUGIN.md) · [团队部署与更新](../../docs/TEAM_SETUP.md) · [场景三完整示例](../../docs/SCENARIO_THREE.md)
 
 ## 已实现
 
@@ -11,7 +11,7 @@
 - `search_products`、`get_product`、`calculate_quote` 三个 MCP 工具。
 - 数量阶梯价、MOQ、定制包装门槛与费用、生产周期冲突提示。
 - Decimal 确定性计算；金额返回 USD 两位小数字符串。
-- 四个技能：`inquiry-quote`、`buyer-inquiry-followup`、`product-content`、`cross-role-collaboration`。
+- 五个技能：`inquiry-quote`、`buyer-inquiry-followup`、`product-content`、`cross-role-collaboration`。
 - 当前用户绑定的询盘、报价和产品内容原生工具复用已有工作台服务；不把身份参数交给模型。
 - 常见单 SKU 保存、聊天附件导入和候选事实确认使用显式字段工具，复杂编辑保留通用入口；只有成功工具回执才代表操作完成。
 - 运费始终待确认；金额小计明确不含运费及未核定费用。
@@ -20,7 +20,7 @@
 - 人工确认事实与逐任务审核分别执行；来源变化使相关任务和下游验收失效，全部有效审核后可下载 Markdown/JSON 内部交接稿。
 - 不发邮件，不提交订单，不发布商品，不声称完成平台或目标国合规审查。
 
-## 四个技能与七个原生工具
+## 五个技能与八个原生工具
 
 | 技能 | 业务范围 | 主要工具 |
 |---|---|---|
@@ -28,8 +28,9 @@
 | `buyer-inquiry-followup` | 保存询盘、公开买家核验、报价、草稿与站内跟进 | `trade_save_inquiry`、`trade_inquiry`、`trade_calculate_quote` |
 | `product-content` | 导入附件、确认事实、生成文案/FAQ/图片资料 | `trade_import_product`、`trade_confirm_product_facts`、`trade_product_content` |
 | `cross-role-collaboration` | 岗位任务、依赖、人工审核、内部交接 | `trade_collaboration` |
+| `localization-review` | 阿里RFQ / Amazon US本地化、规则知识、条款校验、两轮反馈 | `trade_review` |
 
-七个原生工具由本公开分支后端按当前认证会话绑定身份，不接受模型指定 owner。它们不由 9120 端口的 MCP 提供，也不意味着产品已发信、上架或通知负责人。负责人姓名是当前账号中的业务标签，不构成多人权限系统。
+八个原生工具由本公开分支后端按当前认证会话绑定身份，不接受模型指定 owner。它们不由 9120 端口的 MCP 提供，也不意味着产品已发信、上架或通知负责人。负责人姓名是当前账号中的业务标签，不构成多人权限系统。
 
 ## 场景三：同一模拟订单协同
 
@@ -79,7 +80,7 @@ PID 和日志位于 `.runtime/`，生成包位于 `dist/`，均已加入本目�
 7. 结果应标注 DEMO，列出资料版本、运费待确认及英语回复草稿。
 
 MCP 使用本机回环地址，无 API Key。适用于同机 CLI/Web 环境；若改用 Docker，须配置容器到服务的网络，容器 localhost 不是宿主机。
-ZIP 同时包含 runtime/ 下的原报价服务、引擎和目录源码，以及四个技能、宿主依赖说明和对话指南。独立运行 runtime/mcp_server.py 仍只提供原三个模拟报价工具；七个原生业务工具依赖本公开项目的配套后端、认证和前端，ZIP 不能单独给未修改的上游实例安装完整能力。宿主端的 `foreign_trade` 包还须包含 `demo_product/` 资源。
+ZIP 同时包含 runtime/ 下的原报价服务、引擎和目录源码，以及五个技能、宿主依赖说明和对话指南。独立运行 runtime/mcp_server.py 仍只提供原三个模拟报价工具；八个原生业务工具依赖本公开项目的配套后端、认证和前端，ZIP 不能单独给未修改的上游实例安装完整能力。宿主端的 `foreign_trade` 包还须包含 `demo_product/` 资源。
 部署前确认 9120 端口未被其他服务占用；管理脚本不会停止不属于本项目的进程。
 
 ## 验收案例
@@ -140,7 +141,7 @@ python extensions/foreign_trade/install.py --app-home "$HOME/.foreign-trade-agen
 
 该选项只替换首页介绍、输入提示与推荐问题；不修改账号权限、导航或开源署名。常规插件更新不带此选项，保留已有首页编辑。前端源码改动后须执行 `VITE_EDITION=ce VITE_DEFAULT_LANGUAGE=zh-CN npm --prefix src/frontend run build` 并刷新网页。
 
-已有实例的默认系统提示词还可能由 `prompt_versions` 的活跃版本或提示词片段覆盖；更新时须通过公开版提示词管理服务同步相应版本，并触发提示词缓存失效。可在上述安装命令追加 `--apply-assistant-prompt`：它会保留原活跃版本，复制其其他片段，仅更新身份、业务事实约束与插件加载步骤，激活带内容摘要的 `foreign-trade-demo-v3-*` 版本。若既有同名版本后来被人工编辑，安装器另建版本保留该编辑。仅更新插件说明/提示词时可关闭再开启“外贸业务助手（演示）”刷新缓存；新增后端原生工具代码后需重启本公开实例。旧会话可能保留历史助手介绍，使用新建对话验收。
+已有实例的默认系统提示词还可能由 `prompt_versions` 的活跃版本或提示词片段覆盖；更新时须通过公开版提示词管理服务同步相应版本，并触发提示词缓存失效。可在上述安装命令追加 `--apply-assistant-prompt`：它会保留原活跃版本，复制其其他片段，仅更新身份、业务事实约束与插件加载步骤，激活带内容摘要的 `foreign-trade-demo-v4-*` 版本。若既有同名版本后来被人工编辑，安装器另建版本保留该编辑。仅更新插件说明/提示词时可关闭再开启“外贸业务助手（演示）”刷新缓存；新增后端原生工具代码后需重启本公开实例。旧会话可能保留历史助手介绍，使用新建对话验收。
 
 
 ## 中英文报价单下载
@@ -168,3 +169,5 @@ VITE_EDITION=ce VITE_DEFAULT_LANGUAGE=zh-CN npm --prefix src/frontend run build
 ~~~
 
 网页验收应实际完成查询、同会话报价、刷新恢复、下载和文件内容核对；场景三还需验证人工审核、内部交接下载与改单失效。CI 和现场验收结果以相应验收记录为准，此说明不证明当前部署已经通过验收。PDF 使用项目现有 html2pdf 浏览器渲染，Excel 使用项目现有 xlsx 库；运行功能不依赖开发机上的文档校验工具。
+
+规则知识与审核记录保存在本机SQLite，包内`knowledge_rules.json`为有版本的公开规则摘要。规则检索及review工具实际调用、两轮脚本和数据链路见[赛题演示手册](../../docs/HACKATHON_DEMO.md)。Amazon US非媒体2026规则使用独立标题与Item Highlights限制；旧200字符标题规则只作历史追溯。
