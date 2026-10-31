@@ -4,7 +4,7 @@
 
 本指南针对团队公开仓库的 Linux / WSL2 本机部署。本次整合版本位于 `codex/sailagent-final-integration`，合入main后可继续使用main。品牌为SailAgent，保留HugAgentOS开源署名；仓库名为foreign-trade-agent。上游原始说明见 [README_UPSTREAM.md](../README_UPSTREAM.md)，安装外贸功能请使用本指南的团队脚本。
 
-首次部署按第 2—5 节执行 `clone main → setup → init → start → check`；已有账号和数据按第 6—7 节更新，不能靠换目录或重新 `init` 来代替升级。
+首次部署按第 2—5 节执行 `clone 整合分支 → setup → init → start → check`；已有账号和数据按第 6—7 节更新，不能靠换目录或重新 `init` 来代替升级。
 
 ## 1. 准备环境
 
@@ -178,12 +178,13 @@ TRADE_USERNAME="YOUR_EXISTING_USERNAME"
 test -f "$TRADE_APP_HOME/data.db"
 ```
 
-路径检查成功、服务已停止、源码改动已保存后，更新团队仓库的 main：
+路径检查成功、服务已停止、源码改动已保存后，更新整合分支（PR #7 合入main后可切回main）：
 
 ```bash
 git status --short
-git switch main
-git pull --ff-only origin main
+git fetch origin
+git switch codex/sailagent-final-integration
+git pull --ff-only origin codex/sailagent-final-integration
 python3.11 extensions/foreign_trade/team.py setup --app-home "$TRADE_APP_HOME"
 .venv/bin/python -c 'import sys, sqlite3; print("Python", sys.version.split()[0], "SQLite", sqlite3.sqlite_version); assert sys.version_info >= (3, 11); assert sqlite3.sqlite_version_info >= (3, 38, 0)'
 ```
@@ -243,8 +244,9 @@ python3.11 extensions/foreign_trade/team.py setup --venv "$TRADE_VENV" --app-hom
 ## 8. 团队提交代码
 
 ```bash
-git switch main
-git pull --ff-only origin main
+git fetch origin
+git switch codex/sailagent-final-integration
+git pull --ff-only origin codex/sailagent-final-integration
 git switch -c codex/your-feature
 # 修改和检查后，只提交本次相关文件
 git add path/to/changed-file
