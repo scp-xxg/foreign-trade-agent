@@ -29,7 +29,7 @@ const money = (v: unknown): v is string => typeof v === 'string' && /^\d{1,12}\.
 const cents = (s: string) => BigInt(s.replace('.', ''));
 export const isTradeQuoteTool = (name: string) => /(?:^|[.:_])calculate_quote$/.test(name);
 
-function validate(value: unknown): TradeQuote | null {
+export function parseTradeQuoteSnapshot(value: unknown): TradeQuote | null {
   if (!record(value) || value.ok !== true || value.is_simulated !== true ||
       !Array.isArray(value.errors) || value.errors.length || !text(value.catalog_version)) return null;
   const d = value.data;
@@ -78,7 +78,7 @@ function unwrap(value: unknown, depth = 0): TradeQuote | null {
     return null;
   }
   if (!record(value) || value.isError === true) return null;
-  const quote = validate(value);
+  const quote = parseTradeQuoteSnapshot(value);
   if (quote) return quote;
   for (const key of ['structuredContent', 'content', 'result', 'output']) {
     if (key in value) { const result = unwrap(value[key], depth + 1); if (result) return result; }

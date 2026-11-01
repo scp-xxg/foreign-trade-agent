@@ -2,6 +2,7 @@
 import type { ToolCall } from '../types';
 import type { ToolCallResultPayload } from '../api';
 import type { InquiryRecord } from './foreignTradeInquiryApi';
+import { parseTradeQuoteSnapshot, type TradeQuote } from './foreignTradeQuote';
 
 export interface TradeInquiryReceipt {
   id: string; revision: number; title: string; buyerCardStatus: string | null;
@@ -86,4 +87,42 @@ export async function readHistoricalTradeInquiry(tool: ToolCall, chatId: string,
     throw new Error('invalid_inquiry_receipt');
   }
   return detail.result;
+}
+
+/** Only a structured current inquiry read can supply this embedded quote. */
+export function currentInquiryQuote(record: unknown): TradeQuote | null {
+  if (!isRecord(record) || !summarizeTradeInquiry(record) || !positiveInt(record.quote_revision) ||
+      !positiveInt(record.revision) || record.quote_revision > record.revision || !Array.isArray(record.items) ||
+      typeof record.destination_country !== 'string' ||
+      !(record.requested_lead_days === null || positiveInt(record.requested_lead_days))) return null;
+  const quote = parseTradeQuoteSnapshot(record.quote);
+  if (!quote || !isRecord(record.quote) || record.quote.stale === true ||
+      quote.data.destination_country.trim() !== record.destination_country.trim() ||
+      quote.data.requested_lead_days !== record.requested_lead_days || quote.data.items.length !== record.items.length) return null;
+  const seen = new Set<string>();
+  for (const item of record.items) {
+    if (!isRecord(item) || typeof item.sku !== 'string' || seen.has(item.sku)) return null;
+    const line = quote.data.items.find(row => row.sku === item.sku);
+    if (!line || line.quantity !== item.quantity || line.custom_packaging !== item.custom_packaging) return null;
+    seen.add(item.sku);
+  }
+  return quote;
+}
+
+function quoteContent(value: unknown): string {
+  const stable = (item: unknown): unknown => Array.isArray(item) ? item.map(stable)
+    : isRecord(item) ? Object.fromEntries(Object.keys(item).sort().map(key => [key, stable(item[key])])) : item;
+  return JSON.stringify(stable(value));
+}
+
+/** A later draft/follow-up revision may keep the same valid quote; business changes may not. */
+export async function readVerifiedInquiryQuote(record: InquiryRecord, read: (id: string) => Promise<InquiryRecord>,
+  onRead?: (latest: InquiryRecord) => void): Promise<TradeQuote> {
+  const expected = currentInquiryQuote(record);
+  if (!expected) throw new Error('invalid_current_quote');
+  const latest = await readCurrentTradeInquiry(record.id, read);
+  onRead?.(latest);
+  const current = currentInquiryQuote(latest);
+  if (!current || current.quoteId !== expected.quoteId || quoteContent(current.data) !== quoteContent(expected.data)) throw new Error('quote_changed');
+  return current;
 }

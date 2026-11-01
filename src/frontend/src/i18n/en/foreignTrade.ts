@@ -1,5 +1,6 @@
 /** English copy for the public foreign-trade quotation export. */
 export const FOREIGN_TRADE_DICT: Record<string, string> = {
+  '当前报价已变化或无权读取，请刷新询盘后重新下载。': 'The current quote changed or is no longer accessible. Refresh the inquiry before downloading again.',
   '询盘报价到商品上品，销售与运营协作。': 'From inquiry and quotation to product listings, with sales and operations working together.',
   "请使用外贸业务助手核验 LYRECO 官网 https://www.lyreco.com/group/，说明公开事实与未知项；询盘由团队模拟，不是真实订单。": "Use the trade assistant to check the LYRECO website https://www.lyreco.com/group/ and distinguish public facts from unknowns. This is a team demo, not a real customer order.",
   "销售场景：创建 DESK-001、500 件、标准包装、发往 Spain 的模拟询盘，查询产品并计算报价，生成 Alibaba RFQ 英文回复。买家为 Demo Office Buyer，其余未知。": "Sales: create a demo inquiry for Demo Office Buyer, DESK-001, 500 units, standard packaging, shipping to Spain. Look up the product, calculate a quote and draft an Alibaba RFQ reply. Keep other details unknown.",

@@ -139,7 +139,9 @@ jobs:
 
       - name: Test quote cards and bilingual document exports
         working-directory: src/frontend
-        run: npm run test:foreign-trade-quote
+        run: |
+          npm run test:foreign-trade-quote
+          npm run test:foreign-trade-inquiry-quote
 
       - name: Test structured content receipts and revision-bound downloads
         working-directory: src/frontend

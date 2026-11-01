@@ -10,7 +10,7 @@ import { exportTradeQuoteExcel, exportTradeQuotePdf } from '../../utils/foreignT
 import './TradeQuoteCard.css';
 
 /** Export the immutable calculation result associated with this message. */
-export const TradeQuoteCard = memo(function TradeQuoteCard({ quote }: { quote: TradeQuote }) {
+export const TradeQuoteCard = memo(function TradeQuoteCard({ quote, resolveForExport }: { quote: TradeQuote; resolveForExport?: () => Promise<TradeQuote> }) {
   const [exporting, setExporting] = useState<'pdf' | 'excel' | null>(null);
   const [error, setError] = useState('');
   const quantity = quote.data.items.reduce((total, item) => total + BigInt(item.quantity), 0n).toString();
@@ -20,8 +20,10 @@ export const TradeQuoteCard = memo(function TradeQuoteCard({ quote }: { quote: T
     setExporting(format);
     setError('');
     try {
-      if (format === 'pdf') await exportTradeQuotePdf(quote);
-      else await exportTradeQuoteExcel(quote);
+      const current = resolveForExport ? await resolveForExport() : quote;
+      if (current.quoteId !== quote.quoteId) throw new Error('quote_changed');
+      if (format === 'pdf') await exportTradeQuotePdf(current);
+      else await exportTradeQuoteExcel(current);
     } catch {
       setError(t('报价单导出失败，请重试。'));
     } finally {

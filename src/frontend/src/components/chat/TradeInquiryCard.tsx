@@ -10,8 +10,21 @@ import { ApiResponseError } from '../../utils/apiError';
 import { getInquiry, type InquiryRecord } from '../../utils/foreignTradeInquiryApi';
 import { canCopyInquiryDraft, extractTradeInquiryReceipts, isTradeInquiryTool, readHistoricalTradeInquiry, readCurrentTradeInquiry, safeInquirySourceUrl,
   summarizeTradeInquiry, type TradeInquiryReceipt } from '../../utils/foreignTradeInquiryReceipt';
+import { currentInquiryQuote, readVerifiedInquiryQuote } from '../../utils/foreignTradeInquiryReceipt';
+import { TradeQuoteCard } from './TradeQuoteCard';
 import './TradeInquiryCard.css';
 
+/** This is rendered only after the expanded card fetched the authenticated current record. */
+export function CurrentInquiryQuoteCard({ record, onRead, onError }: {
+  record: InquiryRecord; onRead?: (record: InquiryRecord) => void; onError?: () => void;
+}) {
+  const quote = currentInquiryQuote(record);
+  if (!quote) return null;
+  return <TradeQuoteCard quote={quote} resolveForExport={async () => {
+    try { return await readVerifiedInquiryQuote(record, getInquiry, onRead); }
+    catch (error) { onError?.(); throw error; }
+  }} />;
+}
 function sourceStatus(status: string | null): string {
   if (status === null) return t('尚未查询公开资料');
   if (status === 'verified_public') return t('网站与登记来源已查询');
@@ -73,6 +86,8 @@ export const TradeInquiryCard = memo(function TradeInquiryCard({ receipt }: { re
       <p className="jx-inquiryStatusNote">{current.revision !== receipt.revision
         ? t('原工具回执为版本 {original}，以下是当前版本 {current}。', { original: receipt.revision, current: current.revision })
         : t('已读取当前版本 {revision}。', { revision: current.revision })}</p>
+      <CurrentInquiryQuoteCard record={current} onRead={setCurrent}
+        onError={() => setError(t('当前报价已变化或无权读取，请刷新询盘后重新下载。'))} />
       <div className="jx-inquiryStatusSection"><h5>{t('买家事实卡')}</h5>
         {!current.buyer_card ? <p>{t('尚未查询公开资料')}</p> : <>
           <p className="jx-inquiryStatusNote">{t('核验时间：{time}', { time: dateText(current.buyer_card.checked_at) })}</p>
