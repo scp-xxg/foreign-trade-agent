@@ -99,6 +99,8 @@ def build() -> dict:
         plugin / "skills/trade-needs-clarification/SKILL.md",
         plugin / "skills/trade-grounded-reply/SKILL.md",
         plugin / "skills/trade-communication-summary/SKILL.md",
+        plugin / "skills/trade-sensitive-word-check/SKILL.md",
+        plugin / "skills/trade-compliance-check/SKILL.md",
         plugin / "skills/trade-procurement-requirements/SKILL.md",
         plugin / "skills/trade-supplier-sourcing/SKILL.md",
         plugin / "skills/trade-supplier-capability/SKILL.md",

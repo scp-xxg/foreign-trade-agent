@@ -15,6 +15,6 @@ export const TRADE_WORKFLOWS = [
 export function workflowSelection(draft: ComposerDraft, id: string): Partial<ComposerDraft> {
   const chosen = TRADE_WORKFLOWS.find(workflow => workflow.id === id);
   if (!chosen) return {};
-  return Object.fromEntries(TRADE_WORKFLOWS.map(workflow => [workflow.field,
-    workflow.id === id && !draft[chosen.field]]));
+  return { materialCheckMode: false, ...Object.fromEntries(TRADE_WORKFLOWS.map(workflow => [workflow.field,
+    workflow.id === id && !draft[chosen.field]])) };
 }

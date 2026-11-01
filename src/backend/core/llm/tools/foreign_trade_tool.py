@@ -681,6 +681,38 @@ def register_foreign_trade_tools(toolkit, *, user_id: str, chat_id: str | None, 
         except Exception as exc:
             return _response(_failure(exc))
 
+    async def trade_material_check(
+        action: Literal["sensitive", "compliance"], data: dict,
+        file_ids: list[str] | None = None,
+    ) -> ToolResponse:
+        """检查当前草稿或本对话附件，返回敏感词标注与合规卡片。
+        sensitive输入fields=[{id,text,placement?}],context?。
+        compliance另需case_id/as_of/product{id,revision,category?,features?}/stage，可补markets/channel/evidence/reviews。
+        先读trade-sensitive-word-check及compliance时的trade-compliance-check技能契约。
+        file_ids只读当前对话授权附件，不执行OCR；未提取文字明确报告。不自动批准、改写、发信或发布。
+        """
+        try:
+            _assert_available(actor, installation)
+            if action not in {"sensitive", "compliance"}: raise InquiryError(422, "不支持的检查类型")
+            if require_skill is not None:
+                require_skill("trade-sensitive-word-check")
+                if action == "compliance": require_skill("trade-compliance-check")
+            if file_ids and (len(file_ids)>10 or len(set(file_ids))!=len(file_ids)):
+                raise InquiryError(422, "附件最多10个且不能重复")
+            attachments=[]
+            if file_ids:
+                from core.foreign_trade.content import parse_upload
+                with SessionLocal() as db:
+                    for fid in file_ids:
+                        filename, content = _attached_file_bytes(db, user_id=actor, chat_id=conversation, file_id=fid)
+                        attachments.append((fid, filename, parse_upload(filename, content)))
+            from core.foreign_trade.material_check import prepare
+            return _response(_success(prepare(action, _data(data), attachments)))
+        except (ValueError, TypeError, KeyError):
+            return _response(_failure(InquiryError(422, "检查资料格式无效，请核对字段、原文长度和时间格式。")))
+        except Exception as exc:
+            return _response(_failure(exc))
+
     async def trade_procurement_prepare(
         action: Literal["requirements", "sourcing", "capability", "comparison", "quality", "delivery", "settlement"],
         data: dict,
@@ -702,7 +734,7 @@ def register_foreign_trade_tools(toolkit, *, user_id: str, chat_id: str | None, 
         except Exception as exc:
             return _response(_failure(exc))
 
-    tools = [trade_procurement_prepare, trade_listing_prepare, trade_buyer_research, trade_buyer_search, trade_inquiry, trade_calculate_quote, trade_product_content,
+    tools = [trade_material_check, trade_procurement_prepare, trade_listing_prepare, trade_buyer_research, trade_buyer_search, trade_inquiry, trade_calculate_quote, trade_product_content,
              trade_save_inquiry, trade_import_product, trade_confirm_product_facts]
     from core.llm.factory.tools.definitions import function_tool
     from core.sandbox.permissions.tool_specs import allow_tool

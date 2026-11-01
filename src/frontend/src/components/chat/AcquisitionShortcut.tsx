@@ -6,6 +6,7 @@ import { t } from '../../i18n';
 export function AcquisitionShortcut({ draftKey }: { draftKey?: string }) {
   const draft = useComposerDraft(draftKey);
   const active = TRADE_WORKFLOWS.find(workflow => draft[workflow.field]);
+  if (draft.materialCheckMode) return <button type="button" role="switch" aria-checked={true} className="jx-composerChip active" aria-label={t('检查资料')} onClick={() => draft.patch({materialCheckMode:false})}>{t('检查资料')} · {t('已开启')} ×</button>;
   if (!active) return null;
   return <button type="button" role="switch" aria-checked={true}
     className="jx-composerChip active" aria-label={t(active.label)}
@@ -16,6 +17,11 @@ export function AcquisitionShortcut({ draftKey }: { draftKey?: string }) {
 
 export function AcquisitionGuide({ draftKey }: { draftKey: string }) {
   const draft = useComposerDraft(draftKey);
+  if (draft.materialCheckMode) return <details className="jx-acquisitionGuide" open>
+    <summary>{t('资料检查：敏感词标注与合规清单')}</summary>
+    <p>{t('粘贴文字或上传文件。可补充目标市场、产品用途和平台；缺少信息时先检查文字，再提示补充。')}</p>
+    <p>{t('结果显示原文标注和合规卡片。图片需先提取文字，未识别内容会明确提示。')}</p>
+  </details>;
   if (draft.procurementMode) return <details className="jx-acquisitionGuide" open>
     <summary>{t('采购已开启：需求拆解 → 供应商寻源 → 能力评估 → 成本比选 → 质量策划 → 交期跟踪 → 验收结算')}</summary>
     <p>{t('请提供：产品规格与版本、数量与单位、需求日期与交付地；已有供应商、报价、库存、质量标准、采购订单和验收付款记录可分阶段补充。')}</p>

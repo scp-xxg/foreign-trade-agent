@@ -1,0 +1,4 @@
+interface:
+  display_name: "外贸合规范围与证据校验"
+  short_description: "按市场、品类和业务阶段筛选检查项，复用有效证据，并提示过期审核与规则覆盖缺口"
+  default_prompt: "使用 $trade-compliance-check 检查这笔业务适用哪些合规主题，列出问题、缺少的证明、已检查范围及需专项复核的事项。"

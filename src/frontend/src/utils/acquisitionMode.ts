@@ -39,14 +39,26 @@ export function diligenceMessage(text: string, enabled: boolean): string {
 [/客户背调]`;
 }
 
-export function tradeWorkflowMessage(text: string, acquisition: boolean, diligence: boolean, communication = false, negotiation = false, retrospective = false, closing = false, listing = false, procurement = false): string {
-  if (procurement) return procurementMessage(text, true);
-  if (listing) return listingMessage(text, true);
-  if (closing) return closingMessage(text, true);
-  if (retrospective) return retrospectiveMessage(text, true);
-  if (negotiation) return negotiationMessage(text, true);
-  if (communication) return communicationMessage(text, true);
-  return diligence ? diligenceMessage(text, true) : acquisitionMessage(text, acquisition);
+export function tradeWorkflowMessage(text: string, acquisition: boolean, diligence: boolean, communication = false, negotiation = false, retrospective = false, closing = false, listing = false, procurement = false, materialCheck = false): string {
+  if (!text.trim() || text.trim().startsWith('/')) return text;
+  if (materialCheck) return materialCheckMessage(text);
+  const workflow = procurement ? procurementMessage(text, true) : listing ? listingMessage(text, true) : closing ? closingMessage(text, true) : retrospective ? retrospectiveMessage(text, true) : negotiation ? negotiationMessage(text, true) : communication ? communicationMessage(text, true) : diligence ? diligenceMessage(text, true) : acquisitionMessage(text, acquisition);
+  return [acquisition,diligence,communication,negotiation,retrospective,closing,listing,procurement].some(Boolean) ? workflow + MATERIAL_CHECK_GUIDANCE : workflow;
+}
+
+export const MATERIAL_CHECK_GUIDANCE = `
+[共享资料检查]
+仅在本轮生成了拟对外使用的开发信、回复、商品文案、报价或合同草稿时，在最终交付前读取trade-sensitive-word-check并实际调用trade_material_check(action="sensitive",data={fields:[{id,text,placement}],context})；传最终原文，不用摘要替代。一般解释、内部统计和纯提问不强制检查。关键事实不足可以交付带待核实标记的内部草稿。
+若已有产品标识/版本、目标市场与当前业务阶段，或用户要求合规检查，再读取trade-compliance-check调用action="compliance"，按其输入契约提供case_id/as_of/product/stage/markets/channel/fields；该动作已包含敏感词扫描，不需重复扫描。未知用途保持null，不编造审核记录。先复用本对话已有资料，缺项集中追问。
+工具真实结果会显示两种检查卡片：原文敏感词标注和合规清单。不得用模型文字伪造卡片或称未命中即合规。修改后重跑，不自动采纳建议、发送或发布；官方入口不等于已查询最新法规。
+[/共享资料检查]`;
+export function materialCheckMessage(text: string): string {
+  return `${text}
+[检查资料]
+本轮以资料检查为目标，先读取trade-sensitive-word-check和trade-compliance-check。使用trade_material_check，不能以普通文字自查冒充执行。优先使用已有对话资料和原文，上传附件可通过file_ids传入，工具核验当前对话附件权限并提取文字。图片无OCR文字要明确未检查，不把文件名当原文。
+仅有文字先执行sensitive；有产品、阶段等必要资料再执行compliance，缺市场或用途保持未知并提示缺口，不猜国家或生产用途。字段、金额、证书和日期均以实际资料为依据。as_of用当前带时区时间。用户补充证据或修改稿后根据最新资料重跑，保留历史快照，不自行把reviewed/confirmed设真。
+结果简要说明发现的问题、缺少的证明和下一步；真实工具回执展示原文标注与合规卡。修改建议先展示原文与改写对照，由用户决定采纳，不能补造参数或承诺。
+[/检查资料]`;
 }
 
 export const COMMUNICATION_SKILLS = ['trade-personalized-outreach', 'trade-reply-triage', 'trade-needs-clarification', 'trade-grounded-reply', 'trade-followup-cadence', 'trade-communication-summary'] as const;

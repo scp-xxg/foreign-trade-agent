@@ -14,6 +14,7 @@ import { ProductContentCards } from './ProductContentCard';
 import { TradeInquiryCards } from './TradeInquiryCard';
 import { CollaborationCards } from './CollaborationCard';
 import { TradeReviewCards } from './TradeReviewCard';
+import { MaterialCheckCards } from './MaterialCheckCards';
 import { MessageInheritedCards } from './MessageInheritedCards';
 import { useMessageSelection } from './useMessageSelection';
 import { useChatStore } from '../../stores';
@@ -108,6 +109,7 @@ export const MessageBubble = memo(function MessageBubble({ m, messageIndex, curr
           <ProductContentCards tools={m.toolCalls} chatId={currentChatId} messageId={m.messageId} />
           <TradeInquiryCards tools={m.toolCalls} chatId={currentChatId} messageId={m.messageId} />
           <CollaborationCards tools={m.toolCalls} chatId={currentChatId} messageId={m.messageId} />
+          <MaterialCheckCards tools={m.toolCalls} chatId={currentChatId} />
           <TradeReviewCards tools={m.toolCalls} chatId={currentChatId} messageId={m.messageId} />
         </>}
         {/* Artifact cards */}

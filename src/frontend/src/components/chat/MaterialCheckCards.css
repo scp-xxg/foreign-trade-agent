@@ -1,0 +1,14 @@
+.jx-materialCheck { margin:16px 0; padding:16px; border:1px solid var(--color-border); border-radius:12px; background:var(--color-bg-container); color:var(--color-text); }
+.jx-materialCheck header,.jx-materialCheck footer { display:flex; flex-wrap:wrap; align-items:center; gap:8px; }
+.jx-materialCheck footer { margin-top:16px; }
+.jx-materialCheck footer span,.jx-materialRow p { color:var(--color-text-secondary); font-size:12px; }
+.jx-materialCheck details { margin:12px 0; }
+.jx-materialCheck summary { cursor:pointer; }
+.jx-materialText > div { margin-top:8px; white-space:pre-wrap; overflow-wrap:anywhere; line-height:1.8; max-height:360px; overflow:auto; }
+.jx-materialMark { padding:0; border:0; border-bottom:2px solid var(--color-warning); background:var(--color-warning-light); color:inherit; font:inherit; cursor:pointer; white-space:pre-wrap; text-align:inherit; }
+.jx-materialMark:focus-visible { outline:2px solid var(--color-primary); outline-offset:2px; }
+.jx-materialPopover { max-width:min(360px,80vw); overflow-wrap:anywhere; }
+.jx-materialCompliance { border-top:1px solid var(--color-border); margin-top:16px; padding-top:16px; }
+.jx-materialRow { padding:10px 0; border-bottom:1px solid var(--color-border); }
+.jx-materialCheck pre { white-space:pre-wrap; overflow-wrap:anywhere; font-size:12px; }
+.jx-materialCheck .ant-alert { margin:8px 0; }

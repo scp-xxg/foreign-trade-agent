@@ -1,0 +1,16 @@
+{
+  "case_id": "DE-BOTTLE-DEMO",
+  "as_of": "2026-11-01T12:00:00+08:00",
+  "markets": ["DE"],
+  "product": {
+    "id": "BOTTLE-DEMO",
+    "revision": "1",
+    "category": "drinkware",
+    "features": {"food_contact": true, "children": false, "medical": false, "environmental_claim": false}
+  },
+  "channel": "amazon",
+  "stage": "listing",
+  "fields": [{"id": "title", "placement": "商品标题", "text": "Stainless steel bottle"}],
+  "evidence": [],
+  "reviews": []
+}

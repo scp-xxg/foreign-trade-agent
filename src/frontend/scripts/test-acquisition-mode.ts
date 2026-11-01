@@ -150,3 +150,16 @@ store.activate('chat:procurement-other');assert.equal(readComposer('chat:procure
 readComposer('chat:procurement').patch({procurementMode:true});store.transfer('chat:procurement','chat:procurement-moved');assert.equal(readComposer('chat:procurement-moved').procurementMode,true);
 store.resetForUser('procurement-new-user');assert.equal(readComposer('chat:procurement-moved').procurementMode,false);
 console.log('Procurement composition, captured queue, transfer, mutual exclusion and isolation passed');
+
+store.activate('chat:material');
+readComposer('chat:material').patch({input:'检查上传资料',materialCheckMode:true});
+const ms=readComposer('chat:material');
+const mc=tradeWorkflowMessage(ms.input,false,false,false,false,false,false,false,false,ms.materialCheckMode);
+assert.ok(mc.includes('[检查资料]'));assert.ok(mc.includes('trade_material_check'));
+ms.consume(ms);assert.equal(readComposer('chat:material').materialCheckMode,true);
+ms.patch(workflowSelection(readComposer('chat:material'),'acquisition'));assert.equal(readComposer('chat:material').materialCheckMode,false);
+assert.ok(tradeWorkflowMessage('生成开发信',true,false).includes('[共享资料检查]'));
+assert.equal(tradeWorkflowMessage('/compact',true,false,false,false,false,false,false,false,true),'/compact');
+store.activate('chat:material-other');assert.equal(readComposer('chat:material-other').materialCheckMode,false);
+store.resetForUser('material-other-user');assert.equal(readComposer('chat:material').materialCheckMode,false);
+console.log('Material checks: explicit routing, workflow reuse, commands and user isolation passed');

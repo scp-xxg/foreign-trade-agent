@@ -1,0 +1,4 @@
+interface:
+  display_name: "外贸敏感词检测"
+  short_description: "检测外贸文案敏感表述，标注原文位置、风险等级与依据，给出待审修改建议"
+  default_prompt: "使用 $trade-sensitive-word-check 检查这份外贸文案，列出敏感表述、原文位置、风险等级、待核实项和修改建议。"

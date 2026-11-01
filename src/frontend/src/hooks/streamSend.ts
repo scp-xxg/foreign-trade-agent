@@ -58,7 +58,7 @@ export function createStreamSend(ctx: Pick<StreamingContext, 'abortControllersRe
     // 命令 chip（/init）不产生编辑器文本，发送时在这里还原成命令原文；directMessage 是别处
     // 直接指定的整条消息，不受输入框里的 chip 影响。
     const currentCommand = directMessage ? null : activeCommand;
-    const msg = directMessage?.trim() || tradeWorkflowMessage(composeCommandMessage(input, currentCommand), usesDraft && draft.acquisitionMode, usesDraft && draft.diligenceMode, usesDraft && draft.communicationMode, usesDraft && draft.negotiationMode, usesDraft && draft.retrospectiveMode, usesDraft && draft.closingMode, usesDraft && draft.listingMode, usesDraft && draft.procurementMode);
+    const msg = directMessage?.trim() || tradeWorkflowMessage(composeCommandMessage(input, currentCommand), usesDraft && draft.acquisitionMode, usesDraft && draft.diligenceMode, usesDraft && draft.communicationMode, usesDraft && draft.negotiationMode, usesDraft && draft.retrospectiveMode, usesDraft && draft.closingMode, usesDraft && draft.listingMode, usesDraft && draft.procurementMode, usesDraft && draft.materialCheckMode);
     if (!msg || sending) return;
     if (!ctx.effectiveApiUrl) {
       message.error(t('请先在设置中配置 API 地址。'));

@@ -68,3 +68,7 @@ from typing import Literal
 async def diligence_stage(stage: Literal['identity-check','business-fit','decision-chain','transaction-risk'],
                           req: DiligenceInput, user: UserContext=Depends(get_current_user)):
     return success_response(data=await run_stage(req, stage))
+
+# Direct composer checks use the same authenticated route family.
+from api.routes.v1.foreign_trade_material_check import router as material_check_router
+router.include_router(material_check_router)

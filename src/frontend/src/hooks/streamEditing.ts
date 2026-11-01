@@ -156,7 +156,7 @@ export function createStreamEditing(ctx: Pick<StreamingContext, 'abortController
     if (compactCommand) {
       return ctx.send(directMessage, invocationOverride);
     }
-    if ((draft.acquisitionMode || draft.diligenceMode || draft.communicationMode || draft.negotiationMode || draft.retrospectiveMode || draft.closingMode || draft.listingMode || draft.procurementMode) && directMessage === undefined && invocationOverride === undefined) {
+    if ((draft.acquisitionMode || draft.diligenceMode || draft.communicationMode || draft.negotiationMode || draft.retrospectiveMode || draft.closingMode || draft.listingMode || draft.procurementMode || draft.materialCheckMode) && directMessage === undefined && invocationOverride === undefined) {
       return ctx.send(directMessage, invocationOverride);
     }
     if (planMode) {

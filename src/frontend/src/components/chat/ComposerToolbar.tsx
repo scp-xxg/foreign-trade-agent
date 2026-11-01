@@ -10,6 +10,7 @@ import { ComposerAttachmentMenu } from './ComposerAttachmentMenu';
 import { ComposerProjectMenu } from './ComposerProjectMenu';
 import { VoiceInput } from '../voice/VoiceInput';
 import type { VoiceInputState } from '../voice/useVoiceInput';
+import { ComposerMaterialCheck } from './ComposerMaterialCheck';
 import { AcquisitionShortcut } from './AcquisitionShortcut';
 import { t } from '../../i18n';
 import type { InputAreaProps, ComposerOptions } from './composerTypes';
@@ -30,6 +31,7 @@ export function ComposerToolbar({ state, editor, options, fileInputRef, showStop
       <div className="jx-composerBar" ref={toolbarRef}>
         <div className="jx-composerTools">
           <ComposerAttachmentMenu state={state} editor={editor} options={options} fileInputRef={fileInputRef} />
+          <ComposerMaterialCheck key={state.draftKey} draftKey={state.draftKey} />
           {/* 提示词中心：社区版没有这个能力；商业版按 Config「权限配置 → 应用可见范围」
               的 prompt_hub 位放行（allowed_apps 为空 = 不限制，等同全员可见）。 */}
           {!isCE && isAppAllowed('prompt_hub') && (

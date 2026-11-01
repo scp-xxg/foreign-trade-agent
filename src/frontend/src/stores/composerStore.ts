@@ -23,6 +23,7 @@ export interface ComposerDraft {
   closingMode: boolean;
   listingMode: boolean;
   procurementMode: boolean;
+  materialCheckMode: boolean;
   input: string;
   document: JSONContent | null;
   quotedFollowUp: QuotedFollowUp | null;
@@ -41,7 +42,7 @@ export interface ComposerDraft {
 }
 function emptyDraft(): ComposerDraft {
   return {
-    acquisitionMode: false, diligenceMode: false, communicationMode: false, negotiationMode: false, retrospectiveMode: false, closingMode: false, listingMode: false, procurementMode: false, input: '', document: null, quotedFollowUp: null,
+    acquisitionMode: false, diligenceMode: false, communicationMode: false, negotiationMode: false, retrospectiveMode: false, closingMode: false, listingMode: false, procurementMode: false, materialCheckMode: false, input: '', document: null, quotedFollowUp: null,
     activeSkill: null, activePlugin: null, activeConnector: null, activeMention: null,
     activeCommand: null, referencedChats: [], uploadedFiles: [], uploadedArtifacts: new Map(),
     uploadingFiles: new Set(), uploadErrors: new Map(), importedSpaceFiles: [], uploads: new Map(),

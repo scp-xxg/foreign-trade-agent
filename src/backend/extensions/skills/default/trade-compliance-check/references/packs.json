@@ -1,0 +1,500 @@
+{
+  "version": "starter-1",
+  "notice": "官方网址仅为研究入口，未实时读取或核验；所有条目是内部待核查清单，不是完整法规。",
+  "supported_markets": [
+    "EU",
+    "DE",
+    "US",
+    "GB",
+    "CN"
+  ],
+  "rules": [
+    {
+      "id": "BASE-CLAIMS",
+      "title": "产品及商业声明有据可查",
+      "version": "1",
+      "basis": "internal_review_checklist",
+      "official_rule_verified": false,
+      "markets": [
+        "*"
+      ],
+      "categories": [
+        "*"
+      ],
+      "stages": [
+        "*"
+      ],
+      "channels": [
+        "*"
+      ],
+      "features": {},
+      "depends_on_text": true,
+      "evidence_request": "逐条核对认证、参数、产能、客户案例、价格和交期声明与当前产品资料。",
+      "official_research_entry": ""
+    },
+    {
+      "id": "BASE-ORIGIN",
+      "title": "主体、产地与授权一致",
+      "version": "1",
+      "basis": "internal_review_checklist",
+      "official_rule_verified": false,
+      "markets": [
+        "*"
+      ],
+      "categories": [
+        "*"
+      ],
+      "stages": [
+        "listing",
+        "contract",
+        "procurement",
+        "shipment"
+      ],
+      "channels": [
+        "*"
+      ],
+      "features": {},
+      "depends_on_text": false,
+      "evidence_request": "主体、产地和品牌授权的当前证明；不能把品牌所在地当生产地。",
+      "official_research_entry": ""
+    },
+    {
+      "id": "BASE-CONTRACT",
+      "title": "订单条款和责任边界审核",
+      "version": "1",
+      "basis": "internal_review_checklist",
+      "official_rule_verified": false,
+      "markets": [
+        "*"
+      ],
+      "categories": [
+        "*"
+      ],
+      "stages": [
+        "contract",
+        "procurement"
+      ],
+      "channels": [
+        "*"
+      ],
+      "features": {},
+      "depends_on_text": true,
+      "evidence_request": "当前PO/报价/合同、付款交期、贸易术语地点版本、责任限制及争议解决条款。",
+      "official_research_entry": ""
+    },
+    {
+      "id": "BASE-SHIP",
+      "title": "交付前文件与产品一致",
+      "version": "1",
+      "basis": "internal_review_checklist",
+      "official_rule_verified": false,
+      "markets": [
+        "*"
+      ],
+      "categories": [
+        "*"
+      ],
+      "stages": [
+        "shipment"
+      ],
+      "channels": [
+        "*"
+      ],
+      "features": {},
+      "depends_on_text": false,
+      "evidence_request": "实际型号、材料、用途、标签、报告、目的地及进口方要求。",
+      "official_research_entry": ""
+    },
+    {
+      "id": "BASE-OUTREACH",
+      "title": "营销触达与个人数据处理适用性",
+      "version": "1",
+      "basis": "internal_review_checklist",
+      "official_rule_verified": false,
+      "markets": [
+        "*"
+      ],
+      "categories": [
+        "*"
+      ],
+      "stages": [
+        "outreach",
+        "communication"
+      ],
+      "channels": [
+        "*"
+      ],
+      "features": {},
+      "depends_on_text": true,
+      "evidence_request": "接收方类型、渠道来源、触达依据、退订和停止联系记录；公开邮箱不自动等于营销许可。",
+      "official_research_entry": ""
+    },
+    {
+      "id": "EU-MARKET",
+      "title": "欧盟市场适用规则核实",
+      "version": "1",
+      "basis": "internal_review_checklist",
+      "official_rule_verified": false,
+      "markets": [
+        "EU"
+      ],
+      "categories": [
+        "*"
+      ],
+      "stages": [
+        "listing",
+        "contract",
+        "procurement",
+        "shipment"
+      ],
+      "channels": [
+        "*"
+      ],
+      "features": {},
+      "depends_on_text": false,
+      "evidence_request": "确定制造商/进口商角色、产品用途、产品安全及标签要求；仅为待核查主题。",
+      "official_research_entry": "https://eur-lex.europa.eu/"
+    },
+    {
+      "id": "EU-FOOD",
+      "title": "食品接触材料适用要求",
+      "version": "1",
+      "basis": "internal_review_checklist",
+      "official_rule_verified": false,
+      "markets": [
+        "EU"
+      ],
+      "categories": [
+        "*"
+      ],
+      "stages": [
+        "listing",
+        "contract",
+        "procurement",
+        "shipment"
+      ],
+      "channels": [
+        "*"
+      ],
+      "features": {
+        "food_contact": true
+      },
+      "depends_on_text": false,
+      "evidence_request": "接触材料、食品类型、温度时间、测试报告及适用材料措施；不能只凭“食品级”。",
+      "official_research_entry": "https://food.ec.europa.eu/food-safety/chemical-safety/food-contact-materials_en"
+    },
+    {
+      "id": "EU-ELECTRICAL",
+      "title": "电气／无线产品合格评定路径",
+      "version": "1",
+      "basis": "internal_review_checklist",
+      "official_rule_verified": false,
+      "markets": [
+        "EU"
+      ],
+      "categories": [
+        "electronics",
+        "lighting",
+        "machinery"
+      ],
+      "stages": [
+        "listing",
+        "contract",
+        "procurement",
+        "shipment"
+      ],
+      "channels": [
+        "*"
+      ],
+      "features": {},
+      "depends_on_text": false,
+      "evidence_request": "电压、无线功能、用途、适用法规和评定路径，DoC及技术文件；不预设所有产品都要CE。",
+      "official_research_entry": "https://single-market-economy.ec.europa.eu/single-market/ce-marking_en"
+    },
+    {
+      "id": "DE-LOCAL",
+      "title": "德国本地要求补充核查",
+      "version": "1",
+      "basis": "internal_review_checklist",
+      "official_rule_verified": false,
+      "markets": [
+        "DE"
+      ],
+      "categories": [
+        "*"
+      ],
+      "stages": [
+        "listing",
+        "contract",
+        "procurement",
+        "shipment"
+      ],
+      "channels": [
+        "*"
+      ],
+      "features": {},
+      "depends_on_text": false,
+      "evidence_request": "根据商品与销售角色核查德国本地语言、包装和相关经营者义务；确认适用性。",
+      "official_research_entry": "https://www.gesetze-im-internet.de/"
+    },
+    {
+      "id": "US-MARKET",
+      "title": "美国联邦及州要求范围确认",
+      "version": "1",
+      "basis": "internal_review_checklist",
+      "official_rule_verified": false,
+      "markets": [
+        "US"
+      ],
+      "categories": [
+        "*"
+      ],
+      "stages": [
+        "listing",
+        "contract",
+        "procurement",
+        "shipment"
+      ],
+      "channels": [
+        "*"
+      ],
+      "features": {},
+      "depends_on_text": false,
+      "evidence_request": "目的州、产品用途和责任主体，识别适用联邦/州要求；国家粒度不足以完成审查。",
+      "official_research_entry": "https://www.cpsc.gov/Business--Manufacturing"
+    },
+    {
+      "id": "US-FOOD",
+      "title": "美国食品接触材料依据核对",
+      "version": "1",
+      "basis": "internal_review_checklist",
+      "official_rule_verified": false,
+      "markets": [
+        "US"
+      ],
+      "categories": [
+        "*"
+      ],
+      "stages": [
+        "listing",
+        "contract",
+        "procurement",
+        "shipment"
+      ],
+      "channels": [
+        "*"
+      ],
+      "features": {
+        "food_contact": true
+      },
+      "depends_on_text": false,
+      "evidence_request": "材料及使用条件对应的适用依据，报告与产品匹配；不泛称FDA批准。",
+      "official_research_entry": "https://www.fda.gov/food/food-ingredients-packaging/food-contact-substances-fcs"
+    },
+    {
+      "id": "GB-MARKET",
+      "title": "英国市场范围与产品要求核查",
+      "version": "1",
+      "basis": "internal_review_checklist",
+      "official_rule_verified": false,
+      "markets": [
+        "GB"
+      ],
+      "categories": [
+        "*"
+      ],
+      "stages": [
+        "listing",
+        "contract",
+        "procurement",
+        "shipment"
+      ],
+      "channels": [
+        "*"
+      ],
+      "features": {},
+      "depends_on_text": false,
+      "evidence_request": "区分Great Britain与Northern Ireland及产品类别，核对相应规则，不凭UK简称推定统一。",
+      "official_research_entry": "https://www.gov.uk/guidance/product-safety-advice-for-businesses"
+    },
+    {
+      "id": "CN-MARKET",
+      "title": "中国适用宣传及产品要求核查",
+      "version": "1",
+      "basis": "internal_review_checklist",
+      "official_rule_verified": false,
+      "markets": [
+        "CN"
+      ],
+      "categories": [
+        "*"
+      ],
+      "stages": [
+        "outreach",
+        "communication",
+        "listing",
+        "contract",
+        "procurement",
+        "shipment"
+      ],
+      "channels": [
+        "*"
+      ],
+      "features": {},
+      "depends_on_text": true,
+      "evidence_request": "宣传面向受众、产品类别及适用法律条文；绝对化词命中不自动等于违法。",
+      "official_research_entry": "https://flk.npc.gov.cn/"
+    },
+    {
+      "id": "RISK-CHILD",
+      "title": "儿童用途专项复核",
+      "version": "1",
+      "basis": "internal_review_checklist",
+      "official_rule_verified": false,
+      "markets": [
+        "*"
+      ],
+      "categories": [
+        "*"
+      ],
+      "stages": [
+        "listing",
+        "contract",
+        "procurement",
+        "shipment"
+      ],
+      "channels": [
+        "*"
+      ],
+      "features": {
+        "children": true
+      },
+      "depends_on_text": false,
+      "evidence_request": "年龄分级、实际用途、适用产品类别、测试和警告要求；不把普通产品结论复用于儿童。",
+      "official_research_entry": ""
+    },
+    {
+      "id": "RISK-MEDICAL",
+      "title": "医疗或治疗用途专项复核",
+      "version": "1",
+      "basis": "internal_review_checklist",
+      "official_rule_verified": false,
+      "markets": [
+        "*"
+      ],
+      "categories": [
+        "*"
+      ],
+      "stages": [
+        "*"
+      ],
+      "channels": [
+        "*"
+      ],
+      "features": {
+        "medical": true
+      },
+      "depends_on_text": true,
+      "evidence_request": "用途、功效声明、监管分类与授权依据，转相应专业审核。",
+      "official_research_entry": ""
+    },
+    {
+      "id": "CLAIM-GREEN",
+      "title": "环保声明证据与表达核对",
+      "version": "1",
+      "basis": "internal_review_checklist",
+      "official_rule_verified": false,
+      "markets": [
+        "*"
+      ],
+      "categories": [
+        "*"
+      ],
+      "stages": [
+        "*"
+      ],
+      "channels": [
+        "*"
+      ],
+      "features": {
+        "environmental_claim": true
+      },
+      "depends_on_text": true,
+      "evidence_request": "明确声明范围、比较基线、比例/核算方法和证据；不以模糊绿色词替代事实。",
+      "official_research_entry": ""
+    },
+    {
+      "id": "PLATFORM-AMAZON",
+      "title": "Amazon站点类目规则",
+      "version": "1",
+      "basis": "internal_review_checklist",
+      "official_rule_verified": false,
+      "markets": [
+        "*"
+      ],
+      "categories": [
+        "*"
+      ],
+      "stages": [
+        "listing"
+      ],
+      "channels": [
+        "amazon"
+      ],
+      "features": {},
+      "depends_on_text": true,
+      "evidence_request": "目标站点、类目、规则版本和当前来源，标题/图片/禁限售审核；复用发品检查。",
+      "official_research_entry": "https://sellercentral.amazon.com/"
+    },
+    {
+      "id": "PLATFORM-ALIBABA",
+      "title": "阿里国际站场景规则",
+      "version": "1",
+      "basis": "internal_review_checklist",
+      "official_rule_verified": false,
+      "markets": [
+        "*"
+      ],
+      "categories": [
+        "*"
+      ],
+      "stages": [
+        "listing",
+        "outreach",
+        "communication"
+      ],
+      "channels": [
+        "alibaba"
+      ],
+      "features": {},
+      "depends_on_text": true,
+      "evidence_request": "具体场景与当前平台规则，宣传及站外联系适用性，不能把历史规则当最新。",
+      "official_research_entry": "https://rulechannel.alibaba.com/icbu"
+    },
+    {
+      "id": "CHANNEL-SOCIAL",
+      "title": "社媒平台政策核对",
+      "version": "1",
+      "basis": "internal_review_checklist",
+      "official_rule_verified": false,
+      "markets": [
+        "*"
+      ],
+      "categories": [
+        "*"
+      ],
+      "stages": [
+        "listing",
+        "outreach",
+        "communication"
+      ],
+      "channels": [
+        "social"
+      ],
+      "features": {},
+      "depends_on_text": true,
+      "evidence_request": "实际平台、投放国家、广告/自然内容以及相关平台政策。",
+      "official_research_entry": ""
+    }
+  ]
+}
