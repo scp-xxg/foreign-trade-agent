@@ -389,6 +389,15 @@ class ContentPackService:
         result = await generate_pack(deepcopy(record), image, generation_mode)
         if not isinstance(result, dict) or not isinstance(result.get("listing"), dict):
             raise ContentPackError(502, "生成结果格式无效，请重试")
+        from core.foreign_trade.lexicon_hooks import scan_output, attach_notice
+        listing = result["listing"]
+        fields = {"title":str(listing.get("title") or ""), "body":str(listing.get("description") or "")}
+        fields.update({f"bullets[{i}]":str(value) for i,value in enumerate(listing.get("bullets") or [])})
+        for i, faq in enumerate(result.get("faq") or []):
+            fields[f"faq[{i}].question"] = str(faq.get("question") or "")
+            fields[f"faq[{i}].answer"] = str(faq.get("answer") or "")
+        report, notice = scan_output(self.db, user_id, fields)
+        attach_notice(result, report, notice)
         record["outputs"] = deepcopy(result)
         record["outputs"].update(source_revision=revision, not_published=True)
         return self._save(user_id, pack_id, revision, record)

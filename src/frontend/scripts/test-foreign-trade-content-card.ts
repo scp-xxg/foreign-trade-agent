@@ -56,6 +56,11 @@ await test('untrusted prose URLs and extra output data are discarded', () => {
   assert.ok(!JSON.stringify(parsed).includes('malicious.example'));
   assert.ok(!JSON.stringify(parsed).includes('not-a-real-secret'));
 });
+await test('bounded sensitive term warnings remain visible without changing old receipts', () => {
+  const value = { ...clone(envelope), data: { ...clone(data), warnings: ['敏感词提示：L2，需人工复核', 2, 'x'.repeat(20001)] } };
+  assert.deepEqual(extract(value)[0].warnings, ['敏感词提示：L2，需人工复核']);
+  assert.equal(receipt().warnings, undefined);
+});
 await test('error envelopes and incomplete historical outputs do not create cards', () => {
   assert.equal(extract({ ...envelope, ok: false }).length, 0);
   assert.equal(extract({ ...envelope, errors: ['failed'] }).length, 0);

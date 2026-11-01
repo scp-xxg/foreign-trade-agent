@@ -39,6 +39,7 @@ export const ProductContentCard = memo(function ProductContentCard({ receipt }: 
     <h4>{receipt.product_name}</h4>
     <div className="jx-contentDownloadMeta"><span>{receipt.title}</span><span>{t('版本 {revision}', { revision: receipt.revision })} · {new Date(receipt.generated_at).toLocaleString(undefined, { hour12: false })}</span></div>
     <p>{t('文案、FAQ 与 {count} 张图片；下载前核对当前账号权限和资料版本。', { count: receipt.assets.length })}</p>
+    {!!receipt.warnings?.length && <div role="status">{receipt.warnings.map((warning,index)=><p key={index} style={{whiteSpace:'pre-wrap'}}>{warning}</p>)}</div>}
     <div className="jx-contentDownloadButtons" aria-busy={downloading !== null}>
       {(['zip', 'listing', 'faq'] as const).map((kind) => <Button key={kind} type={kind === 'zip' ? 'primary' : 'default'} icon={<DownloadOutlined />} loading={downloading === kind} disabled={unavailable || (downloading !== null && downloading !== kind)} onClick={() => void download(kind)}>{downloadLabel(kind)}</Button>)}
       {receipt.assets.map((asset) => <Button key={asset.kind} icon={<FileImageOutlined />} loading={downloading === asset.kind} disabled={unavailable || (downloading !== null && downloading !== asset.kind)} onClick={() => void download(asset.kind)}>{downloadLabel(asset.kind)}</Button>)}

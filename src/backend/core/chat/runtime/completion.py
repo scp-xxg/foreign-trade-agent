@@ -25,6 +25,8 @@ logger = get_logger(__name__)
 
 async def complete_turn(turn, chunk):
     snapshots._flush_thinking(turn)
+    from core.foreign_trade.lexicon_hooks import finish_chat_notice
+    sensitive_terms = await finish_chat_notice(turn, chunk)
     internal_budget = chunk.get("_compaction_budget_inputs")
     if isinstance(internal_budget, dict):
         turn.compaction_budget_inputs = dict(internal_budget)
@@ -53,6 +55,7 @@ async def complete_turn(turn, chunk):
         "sources": chunk.get("sources", []),
         "artifacts": _ws_pinned,
         "warnings": chunk.get("warnings", []),
+        "sensitive_terms": sensitive_terms,
         "is_markdown": chunk.get("is_markdown", False),
         "chat_id": turn.chat_id,
         "message_id": turn.current_message_id,
@@ -74,6 +77,7 @@ async def complete_turn(turn, chunk):
         "sources": turn.metadata.get("sources", []),
         "artifacts": turn.metadata.get("artifacts", []),
         "warnings": turn.metadata.get("warnings", []),
+        "sensitive_terms": turn.metadata.get("sensitive_terms"),
         "citations": turn.metadata.get("citations", []),
         "message_id": turn.current_message_id,
         "workspace_files": _ws_files,

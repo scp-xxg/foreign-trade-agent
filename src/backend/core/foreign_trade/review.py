@@ -419,6 +419,12 @@ class ReviewService:
         rows = self.db.query(ForeignTradeKnowledgeRule).filter_by(knowledge_version=version, status="active").order_by(ForeignTradeKnowledgeRule.rule_id).all()
         rules = [deepcopy(row.payload) for row in rows if values["channel"] in row.payload["channels"]]
         feedback = _evaluate(values["draft"], values["channel"], source, rules)
+        from core.foreign_trade.lexicon_hooks import scan_output, append_review_feedback
+        lexicon_report, lexicon_notice = scan_output(self.db, user_id, dict(_fields(values["draft"])))
+        append_review_feedback(feedback, rules, lexicon_report, values["channel"])
+        review_version = version
+        if lexicon_report.get("status") != "not_configured":
+            review_version += "+lexicon:" + str(lexicon_report.get("version") or "unavailable") + ":" + str(lexicon_report.get("source_sha256") or "")[:12]
         comparison = None
         if previous:
             old_rules = {item["rule_id"] for item in previous["text_annotations"]}
@@ -426,7 +432,7 @@ class ReviewService:
             comparison = {"previous_review_id": values["previous_review_id"], "resolved_rule_ids": sorted(old_rules - new_rules),
                 "persisting_rule_ids": sorted(old_rules & new_rules), "new_rule_ids": sorted(new_rules - old_rules),
                 "previous_summary": deepcopy(previous["summary"]),
-                "source_changed": previous["source"] != snapshot, "rules_changed": previous["rule_version"] != version,
+                "source_changed": previous["source"] != snapshot, "rules_changed": previous["rule_version"] != review_version,
                 "language_changed": previous["draft"]["language"] != values["draft"]["language"]}
         current, _ = self._source(user_id, snapshot["type"], snapshot["id"])
         if current != snapshot:
@@ -435,9 +441,12 @@ class ReviewService:
         identifier, timestamp = "review_" + uuid4().hex, now_iso()
         payload = {"document_type": "foreign_trade_review", "document_version": 1,
             "previous_review_id": values["previous_review_id"], "channel": values["channel"], "role": role,
-            "source": snapshot, "draft": deepcopy(values["draft"]), "rule_version": version,
-            "rule_evidence": rules, **feedback, "comparison": comparison, "scope_note": REVIEW_SCOPE,
-            "not_sent": True, "not_published": True}
+            "source": snapshot, "draft": deepcopy(values["draft"]), "rule_version": review_version,
+            "rule_evidence": rules, **feedback, "comparison": comparison, "scope_note": REVIEW_SCOPE + (
+                " " + str(lexicon_report.get("review_notice") or "敏感词检查存在未展示项，请查看审核JSON中的sensitive_terms。")
+                if lexicon_report.get("review_truncated") else ""),
+            "not_sent": True, "not_published": True, "sensitive_terms": lexicon_report,
+            "warnings": [lexicon_notice] if lexicon_notice else []}
         self.db.add(ForeignTradeReview(review_id=identifier, owner_user_id=user_id, source_type=snapshot["type"],
             source_id=snapshot["id"], channel=values["channel"], previous_review_id=values["previous_review_id"],
             payload=payload, created_at=timestamp))

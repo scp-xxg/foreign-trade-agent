@@ -290,6 +290,7 @@ export function InquiryWorkspace() {
             <div className="jx-inquiryCardHeading"><Select aria-label={t('回复语言')} value={draftLanguage} onChange={setDraftLanguage} options={[{ value: 'en', label: 'English' }, { value: 'zh', label: t('中文') }]} />
               <Button icon={<CopyOutlined />} disabled={draftStale} onClick={() => void run('copy', async () => { await navigator.clipboard.writeText(record.drafts![draftLanguage]); setNotice(t('草稿已复制，请审阅后自行发送。')); })}>{t('复制草稿')}</Button></div>
             <p className="jx-inquiryMuted">{record.drafts.method === 'deterministic_template' ? t('根据已保存资料套用业务模板生成，未经人工审阅不得作为最终承诺。') : t('根据已保存资料生成的回复草稿，未经人工审阅不得作为最终承诺。')}</p>
+            {!!record.drafts.warnings?.length && <div role="status">{record.drafts.warnings.map((warning,index)=><p key={index} style={{whiteSpace:'pre-wrap'}}>{warning}</p>)}</div>}
             <pre>{record.drafts[draftLanguage]}</pre>
           </div>}
           <div className="jx-inquiryFollowups"><div className="jx-inquiryCardHeading"><h4>{t('跟进待办')}</h4>

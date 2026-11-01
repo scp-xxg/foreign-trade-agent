@@ -1,5 +1,7 @@
 /** English copy for the public foreign-trade quotation export. */
 export const FOREIGN_TRADE_DICT: Record<string, string> = {
+  '敏感词提示': 'Sensitive wording notice',
+  '原文第 {line} 行': 'Source line {line}',
   '当前记录有未保存修改或操作正在进行，请完成后再切换。': 'This record has unsaved changes or an operation in progress. Finish it before switching records.',
   '记录版本已变化，请刷新后重试。': 'The record version changed. Refresh and retry.',
   '外贸业务，对话即入口': 'Foreign trade, through conversation',

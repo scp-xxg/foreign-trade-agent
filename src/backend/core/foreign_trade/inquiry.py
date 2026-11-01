@@ -175,6 +175,22 @@ class InquiryService:
         result = calculate_quote(record["items"], record["destination_country"], record["requested_lead_days"])
         if not result.get("ok"):
             raise InquiryError(422, "报价条件未通过校验，请确认产品、数量和包装条件", result)
+        # Quote scanning belongs to the owner-scoped service, never the shared MCP engine.
+        from core.foreign_trade.lexicon_hooks import scan_output
+        quote_data = result["data"]
+        fields = {
+            f"items[{i}].name": "\n".join(str(line.get(key) or "") for key in ("name", "name_zh"))
+            for i, line in enumerate(quote_data.get("items") or [])
+        }
+        fields.update({key: str(quote_data.get(key) or "")
+                       for key in ("destination_country", "production_lead_basis")})
+        fields["price_basis"] = "\n".join(str(value) for value in (quote_data.get("price_basis") or {}).values())
+        report, notice = scan_output(self.db, user_id, fields)
+        result["sensitive_terms"] = report
+        if notice:
+            # Quote receipts require {code, message}; keep this within their 2,000-character bound.
+            message = notice if len(notice) <= 1900 else notice[:1800] + "\n提示已节选；完整命中见询盘报价记录的 sensitive_terms。"
+            result["warnings"].append({"code": "SENSITIVE_TERMS", "message": message})
         if record.get("quote"):
             record["history"].append({"revision": revision + 1, "event": "quote_superseded",
                                       "at": now_iso(), "quote_revision": record["quote_revision"],
@@ -190,6 +206,9 @@ class InquiryService:
     def draft(self, user_id: str, inquiry_id: str, revision: int) -> dict:
         record = self._load(user_id, inquiry_id, revision)
         record["drafts"] = build_drafts(record)
+        from core.foreign_trade.lexicon_hooks import scan_output, attach_notice
+        report, notice = scan_output(self.db, user_id, {k:record["drafts"][k] for k in ("zh","en")})
+        attach_notice(record["drafts"], report, notice)
         return self._save(user_id, inquiry_id, revision, record, "draft_generated")
 
     def update_drafts(self, user_id: str, inquiry_id: str, revision: int, drafts: dict) -> dict:
@@ -200,6 +219,9 @@ class InquiryService:
                 raise InquiryError(422, "回复草稿内容无效")
         record["drafts"] = {**drafts, "stale": False, "not_sent": True,
                             "generated_at": now_iso(), "quote_revision": record.get("quote_revision")}
+        from core.foreign_trade.lexicon_hooks import scan_output, attach_notice
+        report, notice = scan_output(self.db, user_id, {k:record["drafts"][k] for k in ("zh","en")})
+        attach_notice(record["drafts"], report, notice)
         return self._save(user_id, inquiry_id, revision, record, "draft_generated")
 
     def create_followup(self, user_id: str, inquiry_id: str, revision: int,

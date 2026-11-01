@@ -4,6 +4,7 @@ from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import pytest
+from core.db.models.foreign_trade_lexicon import ForeignTradeLexicon
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
@@ -18,6 +19,7 @@ from api.routes.v1 import foreign_trade as routes
 @pytest.fixture
 def db_engine():
     engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+    ForeignTradeLexicon.__table__.create(bind=engine)
     ForeignTradeInquiry.__table__.create(bind=engine)
     yield engine
     engine.dispose()

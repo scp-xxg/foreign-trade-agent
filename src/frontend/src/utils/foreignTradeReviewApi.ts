@@ -4,7 +4,7 @@ import { createApiResponseError } from './apiError';
 export type TradeReviewChannel = 'alibaba_rfq' | 'amazon_listing';
 export type TradeReviewSeverity = 'high' | 'medium' | 'low' | 'info';
 export type TradeReviewStatus = 'needs_revision' | 'needs_confirmation' | 'no_issues_detected';
-export type TradeReviewCategory = 'platform_rules' | 'quotation_terms';
+export type TradeReviewCategory = 'platform_rules' | 'quotation_terms' | 'sensitive_terms';
 export interface TradeReviewDraft { title: string; item_highlights: string; body: string; bullets: string[]; language: 'en' | 'es'; locale: string }
 export interface TradeReviewSummary { issue_count: number; needs_confirmation_count: number; review_status: TradeReviewStatus }
 export interface TradeReviewEvidence {
@@ -13,6 +13,7 @@ export interface TradeReviewEvidence {
 }
 export interface TradeReviewAnnotation {
   annotation_id: string; rule_id: string; category: TradeReviewCategory; field: string; quote: string;
+  level?: 'L1' | 'L2' | 'L3' | 'L4'; source_rule_id?: string; source_section?: string; source_line?: number | null; start?: number | null; end?: number | null;
   severity: TradeReviewSeverity; status: 'issue' | 'needs_confirmation'; message: string; suggestion: string;
 }
 export interface TradeReviewRecord {

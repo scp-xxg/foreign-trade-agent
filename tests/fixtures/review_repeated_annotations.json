@@ -238,5 +238,11 @@
   "not_sent": true,
   "not_published": true,
   "review_id": "review_ffffffffffffffffffffffffffffffff",
-  "created_at": "2026-10-31T00:00:00+00:00"
+  "created_at": "2026-10-31T00:00:00+00:00",
+  "sensitive_terms": {
+    "status": "not_configured",
+    "matches": [],
+    "match_count": 0
+  },
+  "warnings": []
 }

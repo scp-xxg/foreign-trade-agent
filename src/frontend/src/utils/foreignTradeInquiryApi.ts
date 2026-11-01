@@ -17,7 +17,7 @@ export interface InquiryFollowup {
 }
 export interface InquiryRecord extends InquiryInput {
   id: string; revision: number; buyer_card: BuyerCard | null; quote: unknown | null; quote_revision: number | null;
-  drafts: { zh: string; en: string; kind: string; method?: string; not_sent?: boolean; quote_revision: number | null; stale: boolean } | null;
+  drafts: { zh: string; en: string; warnings?: string[]; kind: string; method?: string; not_sent?: boolean; quote_revision: number | null; stale: boolean } | null;
   followups: InquiryFollowup[]; history: { revision: number; event: string; at: string }[];
   created_at: string; updated_at: string; replied_at: string | null;
 }

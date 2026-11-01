@@ -6,6 +6,7 @@ import json
 import socket
 
 import pytest
+from core.db.models.foreign_trade_lexicon import ForeignTradeLexicon
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
@@ -31,7 +32,7 @@ class Storage:
 def env(monkeypatch):
     import core.files.storage
     engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
-    for model in (Artifact, UserFolder, UserShadow, ForeignTradeInquiry, ForeignTradeContentPack, ForeignTradeCollaboration):
+    for model in (ForeignTradeLexicon, Artifact, UserFolder, UserShadow, ForeignTradeInquiry, ForeignTradeContentPack, ForeignTradeCollaboration):
         model.__table__.create(engine)
     sessions = sessionmaker(bind=engine)
     storage = Storage()

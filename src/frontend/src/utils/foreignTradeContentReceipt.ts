@@ -5,7 +5,7 @@ import type { ContentAssetKind, ContentDownloadKind } from './foreignTradeConten
 export interface ProductContentReceipt {
   document_type: 'foreign_trade_content_pack'; document_version: 1;
   pack_id: string; revision: number; title: string; product_name: string;
-  generated_at: string; not_published: true;
+  generated_at: string; not_published: true; warnings?: string[];
   assets: { kind: ContentAssetKind; filename: string; width: number; height: number }[];
 }
 const record = (value: unknown): value is Record<string, unknown> => !!value && typeof value === 'object' && !Array.isArray(value);
@@ -33,11 +33,13 @@ function validate(value: unknown): ProductContentReceipt | null {
     typeof data.pack_id !== 'string' || !/^pack_[0-9a-f]{32}$/.test(data.pack_id) || !positiveInt(data.revision) ||
     !text(data.title) || !text(data.product_name) || data.not_published !== true || !text(data.generated_at, 80) ||
     !/^\d{4}-\d{2}-\d{2}T/.test(data.generated_at) || !Number.isFinite(Date.parse(data.generated_at)) || !validAssets(data.assets)) return null;
+  const warnings = Array.isArray(data.warnings) ? data.warnings.filter((w): w is string => typeof w === 'string' && w.length <= 20000).slice(0, 30) : [];
   // Keep only the bounded typed receipt. Tool-provided URLs and model prose are never used.
   return {
     document_type: 'foreign_trade_content_pack', document_version: 1,
     pack_id: data.pack_id, revision: data.revision, title: data.title, product_name: data.product_name,
     generated_at: data.generated_at, not_published: true,
+    ...(warnings.length ? { warnings } : {}),
     assets: data.assets.map((asset) => ({ kind: asset.kind, filename: asset.filename, width: asset.width, height: asset.height })),
   };
 }

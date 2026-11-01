@@ -15,6 +15,9 @@ PR #7已合并main：[现场具体步骤与示例问答](docs/LIVE_DEMO_PLAYBOOK
 
 ## 已实现
 
+- 私有敏感词库：生成后自动提示、审核卡风险高亮与原文出处；按账号配置，不随代码分享词库。[使用说明](docs/SENSITIVE_TERMS.md)
+
+
 - 三个核心岗位子智能体：外贸业务员、采购跟单员、商品运营专员；随init/install按账号安装，支持真实委派与同记录交接。[职责与模拟协作对话](docs/CORE_ROLE_AGENTS.md)
 
 

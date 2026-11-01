@@ -8,11 +8,13 @@ const nonempty = (value: unknown, max = 300): value is string => text(value, max
 const integer = (value: unknown, max = 1000): value is number => typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 && value <= max;
 const revision = (value: unknown): value is number => integer(value, Number.MAX_SAFE_INTEGER) && value > 0;
 const strings = (value: unknown, max = 100, maxText = 10000): value is string[] => Array.isArray(value) && value.length <= max && value.every(v => text(v, maxText));
-const categories = ['platform_rules', 'quotation_terms'];
+const categories = ['platform_rules', 'quotation_terms', 'sensitive_terms'];
 const severities = ['high','medium','low','info'];
 export const validTradeReviewId = (value: unknown): value is string => typeof value === 'string' && /^review_[a-f0-9]{32}$/.test(value);
 export function safeReviewSourceUrl(value: unknown): string | undefined {
   if (!text(value, 4000) || !value) return undefined;
+  // Only the owner-authenticated knowledge-document endpoint is allowed as a relative source.
+  if (/^\/api\/v1\/catalog\/kb\/kb_[a-f0-9]{16,32}\/documents\/doc_[a-f0-9]{16,32}$/.test(value)) return value;
   try { const url = new URL(value); return ['https:','http:'].includes(url.protocol) && !url.username && !url.password ? url.href : undefined; } catch { return undefined; }
 }
 function validSummary(value: unknown): value is TradeReviewSummary {
@@ -51,6 +53,11 @@ export function parseTradeReview(value: unknown): TradeReviewRecord | null {
       !nonempty(annotation.rule_id, 200) || !ruleIds.has(annotation.rule_id) || !categories.includes(String(annotation.category)) ||
       !nonempty(annotation.field, 200) || !text(annotation.quote, 20000) || !severities.includes(String(annotation.severity)) ||
       !['issue','needs_confirmation'].includes(String(annotation.status)) || !text(annotation.message, 20000) || !text(annotation.suggestion, 20000)) return null;
+    if (annotation.level !== undefined && !['L1','L2','L3','L4'].includes(String(annotation.level))) return null;
+    if (annotation.source_rule_id !== undefined && !text(annotation.source_rule_id,200)) return null;
+    if (annotation.source_section !== undefined && !text(annotation.source_section,1000)) return null;
+    if (annotation.source_line != null && !revision(annotation.source_line)) return null;
+    if ((annotation.start != null || annotation.end != null) && (!integer(annotation.start,1000000) || !integer(annotation.end,1000000) || Number(annotation.end)<Number(annotation.start))) return null;
     annotationIds.add(annotation.annotation_id);
     if (annotation.status === 'issue') issues++; else confirmations++;
   }
@@ -139,6 +146,15 @@ export function highlightedReviewText(value: string, field: string, annotations:
   const ranges: { start: number; end: number; id: string; severity: TradeReviewSeverity }[] = [];
   for (const annotation of annotations) {
     if (annotation.field !== field || !annotation.quote) continue;
+    if (annotation.category === 'sensitive_terms' && annotation.start != null && annotation.end != null) {
+      // Python lexicon offsets are Unicode code points; DOM slicing uses UTF-16.
+      const points = Array.from(value);
+      if (points.slice(annotation.start,annotation.end).join('') === annotation.quote) {
+        const start=points.slice(0,annotation.start).join('').length;
+        ranges.push({start,end:start+annotation.quote.length,id:annotation.annotation_id,severity:annotation.severity});
+      }
+      continue;
+    }
     let from = 0;
     for (let count = 0; count < 50; count++) {
       const at = value.indexOf(annotation.quote, from); if (at < 0) break;

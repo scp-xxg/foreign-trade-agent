@@ -5,6 +5,7 @@ from unittest.mock import AsyncMock
 import zipfile
 
 import pytest
+from core.db.models.foreign_trade_lexicon import ForeignTradeLexicon
 from PIL import Image, PngImagePlugin
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -31,6 +32,7 @@ class MemoryStorage:
 def context(monkeypatch):
     import core.files.storage
     engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+    ForeignTradeLexicon.__table__.create(bind=engine)
     ForeignTradeContentPack.__table__.create(bind=engine)
     Artifact.__table__.create(bind=engine)
     UserFolder.__table__.create(bind=engine)

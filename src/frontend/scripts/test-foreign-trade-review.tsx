@@ -89,3 +89,22 @@ if (process.argv[2]) {
   console.log('service-generated review fixture PASS: parser, tool envelope and rendered feedback');
 }
 console.log('foreign-trade review PASS: two feedback formats, separate field counts, comparison scope, XSS-safe text, exact historical IDs and authenticated source-bound exports');
+
+// Account lexicon findings retain source detail and mark exact Unicode occurrences.
+const lexicon = fixture();
+lexicon.draft.body='😀 best then best';
+lexicon.rule_evidence[0].category='sensitive_terms';
+lexicon.rule_evidence[0].source_url='/api/v1/catalog/kb/kb_aaaaaaaaaaaaaaaa/documents/doc_bbbbbbbbbbbbbbbb';
+lexicon.text_annotations[0]={...lexicon.text_annotations[0],category:'sensitive_terms',quote:'best',status:'needs_confirmation',severity:'low',level:'L2',source_rule_id:'en.best',source_section:'第3章',source_line:12,start:12,end:16};
+lexicon.summary={issue_count:0,needs_confirmation_count:1,review_status:'needs_confirmation'};
+lexicon.checks=[{rule_id:'fixture-rule',status:'needs_confirmation',annotation_count:1}];
+assert.ok(parseTradeReview(lexicon));
+const lexSegments=highlightedReviewText(lexicon.draft.body,'body',lexicon.text_annotations);
+assert.equal(lexSegments.map(x=>x.text).join(''),lexicon.draft.body);
+assert.equal(lexSegments.filter(x=>x.severity).length,1);
+assert.equal(lexSegments.find(x=>x.severity)?.start,13,'Python codepoint index is translated to UTF-16');
+const lexHtml=renderToStaticMarkup(<TradeReviewDetails record={lexicon}/>);
+assert.match(lexHtml,/敏感词提示/);assert.match(lexHtml,/L2/);assert.match(lexHtml,/第3章/);assert.match(lexHtml,/原文第 12 行/);
+assert.equal(safeReviewSourceUrl(lexicon.rule_evidence[0].source_url),lexicon.rule_evidence[0].source_url);
+assert.equal(safeReviewSourceUrl('/api/v1/catalog/kb/kb_aaaaaaaaaaaaaaaa/documents/../auth'),undefined);
+console.log('lexicon review category, source link, risk level and Unicode highlight PASS');

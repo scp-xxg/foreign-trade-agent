@@ -311,6 +311,8 @@ def _run_subagent_in_thread(
                 # No listener (non-interactive / batch / main stream not registered): take the original one-shot path.
                 result = await agent.reply(inputs=user_msg)
                 response_text = result.get_text_content() or ""
+                from core.foreign_trade.lexicon_hooks import finish_child_notice
+                response_text = await finish_child_notice(current_user_id, response_text)
                 return (
                     True,
                     response_text,
@@ -347,6 +349,8 @@ def _run_subagent_in_thread(
                 for sub in mapper.feed(kind, payload):
                     emit(sub)
             response_text = (final_msg.get_text_content() if final_msg else "") or ""
+            from core.foreign_trade.lexicon_hooks import finish_child_notice
+            response_text = await finish_child_notice(current_user_id, response_text, emit)
             return (
                 True,
                 response_text,

@@ -86,6 +86,7 @@ export const TradeInquiryCard = memo(function TradeInquiryCard({ receipt }: { re
       <div className="jx-inquiryStatusSection"><div className="jx-inquiryStatusDraftHeading"><h5>{t('回复草稿')}</h5>{current.drafts && <div className="jx-inquiryStatusActions"><Select aria-label={t('回复语言')} value={language} onChange={setLanguage} options={[{ value: 'en', label: 'English' }, { value: 'zh', label: t('中文') }]} /><Button icon={<CopyOutlined />} loading={busy === 'copy'} disabled={!!busy || !canCopyInquiryDraft(current, language)} onClick={() => void copy()}>{t('复制当前草稿')}</Button></div>}</div>
         {!current.drafts ? <p>{t('工具尚未生成回复草稿。可继续告诉助手：请生成这条询盘的中英文回复草稿。')}</p> : <>
           {current.drafts.stale && <p className="jx-inquiryStatusWarnings">{t('报价条件已修改，此草稿已过期。请重新计算报价并生成草稿。')}</p>}
+          {!!current.drafts.warnings?.length && <div role="status">{current.drafts.warnings.map((warning,index)=><p key={index} style={{whiteSpace:'pre-wrap'}}>{warning}</p>)}</div>}
           <pre>{current.drafts[language]}</pre><small>{t('草稿供人工审阅和复制，系统不会自动发邮件。')}</small>
         </>}
       </div>

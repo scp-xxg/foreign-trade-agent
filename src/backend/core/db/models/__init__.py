@@ -169,3 +169,5 @@ __all__ = [
 from .plugin_resource import PluginResource, PluginResourceTicket, PluginResourceCheckpoint
 
 __all__ = [name for name in __all__ if name in globals() or name in EDITION_MODEL_NAMES]
+
+from core.db.models.foreign_trade_lexicon import ForeignTradeLexicon

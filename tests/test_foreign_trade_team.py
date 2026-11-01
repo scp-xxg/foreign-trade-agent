@@ -197,7 +197,7 @@ class IsolatedUpgradeTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp:
             home = Path(temp) / 'fresh'
             report = self.call_helper(home, '--allow-create')
-            self.assertEqual(report['revision'], 'ft_0001')
+            self.assertEqual(report['revision'], 'ft_0002')
             self.assertIsNone(report['backup'])
             self.assertEqual(stat.S_IMODE((home / 'data.db').stat().st_mode), 0o600)
             with sqlite3.connect(home / 'data.db') as db:
@@ -307,7 +307,7 @@ class IsolatedUpgradeTests(unittest.TestCase):
             self.assertTrue(snapshot.is_relative_to(home / 'upgrade-backups'))
             self.assertEqual(stat.S_IMODE(snapshot.stat().st_mode), 0o600)
             self.assertEqual(report['from_revision'],'ce_0012')
-            self.assertEqual(report['revision'],'ft_0001')
+            self.assertEqual(report['revision'],'ft_0002')
             with sqlite3.connect(home / 'data.db') as db:
                 self.assertIn('user_center_id',{row[1] for row in db.execute('PRAGMA table_info(users_shadow)')})
                 self.assertEqual(db.execute("SELECT username FROM users_shadow WHERE user_id='test-owner'").fetchone()[0],'teammate')
