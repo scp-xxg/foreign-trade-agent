@@ -20,7 +20,7 @@ export function createStreamQueue(ctx: Pick<StreamingContext, 'abortControllersR
   ) {
     const state = useChatStore.getState();
     const draft = readComposer(chatDraftKey(state.currentChatId));
-    const content = directMessage?.trim() || tradeWorkflowMessage(draft.input.trim(), invocationOverride === undefined && draft.acquisitionMode, invocationOverride === undefined && draft.followupMode);
+    const content = directMessage?.trim() || tradeWorkflowMessage(draft.input.trim(), invocationOverride === undefined && draft.acquisitionMode, invocationOverride === undefined && draft.diligenceMode, invocationOverride === undefined && draft.communicationMode, invocationOverride === undefined && draft.negotiationMode, invocationOverride === undefined && draft.retrospectiveMode, invocationOverride === undefined && draft.closingMode, invocationOverride === undefined && draft.listingMode, invocationOverride === undefined && draft.procurementMode);
     if (!content) return;
     if (state.planMode || state.loopMode) {
       message.info(t('当前运行模式暂不支持追加消息'));

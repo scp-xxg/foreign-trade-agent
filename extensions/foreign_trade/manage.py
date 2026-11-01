@@ -92,11 +92,51 @@ def build() -> dict:
         plugin / "skills/trade-lead-prioritization/SKILL.md",
         plugin / "skills/trade-personalized-outreach/SKILL.md",
         plugin / "skills/trade-followup-cadence/SKILL.md",
+        plugin / "skills/trade-company-identity/SKILL.md",
+        plugin / "skills/trade-business-fit/SKILL.md",
+        plugin / "skills/trade-contact-verification/SKILL.md",
+        plugin / "skills/trade-transaction-risk/SKILL.md",
+        plugin / "skills/trade-needs-clarification/SKILL.md",
+        plugin / "skills/trade-grounded-reply/SKILL.md",
+        plugin / "skills/trade-communication-summary/SKILL.md",
+        plugin / "skills/trade-procurement-requirements/SKILL.md",
+        plugin / "skills/trade-supplier-sourcing/SKILL.md",
+        plugin / "skills/trade-supplier-capability/SKILL.md",
+        plugin / "skills/trade-procurement-cost-comparison/SKILL.md",
+        plugin / "skills/trade-procurement-quality-planning/SKILL.md",
+        plugin / "skills/trade-procurement-delivery-tracking/SKILL.md",
+        plugin / "skills/trade-procurement-acceptance-settlement/SKILL.md",
+        plugin / "skills/trade-product-normalization/SKILL.md",
+        plugin / "skills/trade-listing-taxonomy/SKILL.md",
+        plugin / "skills/trade-listing-keyword-planning/SKILL.md",
+        plugin / "skills/trade-listing-content-composition/SKILL.md",
+        plugin / "skills/trade-listing-media-adaptation/SKILL.md",
+        plugin / "skills/trade-listing-preflight/SKILL.md",
+        plugin / "skills/trade-closing-readiness/SKILL.md",
+        plugin / "skills/trade-order-reconciliation/SKILL.md",
+        plugin / "skills/trade-sales-document-drafting/SKILL.md",
+        plugin / "skills/trade-order-confirmation/SKILL.md",
+        plugin / "skills/trade-payment-verification/SKILL.md",
+        plugin / "skills/trade-order-handoff/SKILL.md",
+        plugin / "skills/trade-deal-timeline/SKILL.md",
+        plugin / "skills/trade-funnel-analysis/SKILL.md",
+        plugin / "skills/trade-win-loss-analysis/SKILL.md",
+        plugin / "skills/trade-improvement-planning/SKILL.md",
+        plugin / "skills/trade-playbook-learning/SKILL.md",
+        plugin / "skills/trade-negotiation-strategy/SKILL.md",
+        plugin / "skills/trade-objection-resolution/SKILL.md",
+        plugin / "skills/trade-concession-planning/SKILL.md",
+        plugin / "skills/trade-sample-trial/SKILL.md",
         plugin / "skills/trade-reply-triage/SKILL.md",
         plugin / "skills/trade-buyer-search/references/evaluation.md",
         plugin / "HOST_REQUIREMENTS.md",
         HERE.parents[1] / "docs/CHAT_PLUGIN.md",
         HERE.parents[1] / "docs/ACQUISITION_WORKFLOW.md",
+        HERE.parents[1] / "docs/NEGOTIATION_WORKFLOW.md",
+        HERE.parents[1] / "docs/RETROSPECTIVE_WORKFLOW.md",
+        HERE.parents[1] / "docs/CLOSING_WORKFLOW.md",
+        HERE.parents[1] / "docs/LISTING_PREPARATION.md",
+        HERE.parents[1] / "docs/PROCUREMENT_WORKFLOW.md",
         HERE.parents[1] / "docs/CHAT_PLUGIN_ACCEPTANCE.md",
         HERE.parents[1] / "docs/SCENARIO_THREE.md",
         HERE.parents[1] / "docs/ACCEPTANCE_20261028.md",
@@ -120,6 +160,11 @@ def build() -> dict:
             archive.write(HERE / "README.md", "README.md")
         archive.write(HERE.parents[1] / "docs/CHAT_PLUGIN.md", "CHAT_PLUGIN.md")
         archive.write(HERE.parents[1] / "docs/ACQUISITION_WORKFLOW.md", "ACQUISITION_WORKFLOW.md")
+        archive.write(HERE.parents[1] / "docs/NEGOTIATION_WORKFLOW.md", "NEGOTIATION_WORKFLOW.md")
+        archive.write(HERE.parents[1] / "docs/RETROSPECTIVE_WORKFLOW.md", "RETROSPECTIVE_WORKFLOW.md")
+        archive.write(HERE.parents[1] / "docs/CLOSING_WORKFLOW.md", "CLOSING_WORKFLOW.md")
+        archive.write(HERE.parents[1] / "docs/LISTING_PREPARATION.md", "LISTING_PREPARATION.md")
+        archive.write(HERE.parents[1] / "docs/PROCUREMENT_WORKFLOW.md", "PROCUREMENT_WORKFLOW.md")
         archive.write(HERE.parents[1] / "docs/CHAT_PLUGIN_ACCEPTANCE.md", "CHAT_PLUGIN_ACCEPTANCE.md")
         archive.write(HERE.parents[1] / "docs/SCENARIO_THREE.md", "SCENARIO_THREE.md")
         archive.write(HERE.parents[1] / "docs/ACCEPTANCE_20261028.md", "ACCEPTANCE_20261028.md")

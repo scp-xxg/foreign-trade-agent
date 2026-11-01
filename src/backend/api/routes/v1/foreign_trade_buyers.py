@@ -59,3 +59,12 @@ def cadence(req: CadenceInput, user: UserContext=Depends(get_current_user)):
 @router.post('/reply-triage')
 def reply_triage(req: ReplyInput, user: UserContext=Depends(get_current_user)):
     return success_response(data=triage_reply(req))
+
+
+from core.foreign_trade.diligence import DiligenceInput, run_stage
+from typing import Literal
+
+@router.post('/diligence/{stage}')
+async def diligence_stage(stage: Literal['identity-check','business-fit','decision-chain','transaction-risk'],
+                          req: DiligenceInput, user: UserContext=Depends(get_current_user)):
+    return success_response(data=await run_stage(req, stage))

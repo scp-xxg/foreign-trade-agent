@@ -1,3 +1,5 @@
+import { useComposerDraft } from '../../stores/composerStore';
+import { TRADE_WORKFLOWS, workflowSelection } from '../../utils/tradeWorkflows';
 import { Dropdown } from 'antd';
 import { FileImageOutlined, FileTextOutlined, CloudDownloadOutlined, AppstoreOutlined,
   RobotOutlined, OrderedListOutlined, ApiOutlined, SyncOutlined, PartitionOutlined, LinkOutlined } from '@ant-design/icons';
@@ -16,6 +18,7 @@ export function ComposerAttachmentMenu({ state, editor, options, fileInputRef }:
   state: ComposerState; editor: ComposerEditor; options: ComposerOptions;
   fileInputRef: InputAreaProps['fileInputRef'];
 }) {
+  const draft = useComposerDraft(state.draftKey);
   const { disableMention } = options;
   const { isModeOn, isAppAllowed, onEnterMode, canReadImage, imageInputRef, showLoopEntry,
     loopMode, setLoopMode, agents, skills, connectors, installedPlugins, activeLocalMode,
@@ -132,6 +135,17 @@ export function ComposerAttachmentMenu({ state, editor, options, fileInputRef }:
           onClick: () => onPickPluginFromMenu(p),
         }));
       })(),
+    },
+    {
+      key: 'trade-workflows',
+      icon: <PartitionOutlined />,
+      label: t('工作流'),
+      children: TRADE_WORKFLOWS.map(workflow => ({
+        key: `trade-workflow-${workflow.id}`,
+        icon: <PartitionOutlined />,
+        label: draft[workflow.field] ? `${t(workflow.label)}${activeSuffix}` : t(workflow.label),
+        onClick: () => draft.patch(workflowSelection(draft, workflow.id)),
+      })),
     },
     ...(activeLocalMode
       ? []
