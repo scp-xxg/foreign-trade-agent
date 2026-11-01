@@ -1,0 +1,189 @@
+{
+  "company_id": "buyer-63052d674bde7c6bf723",
+  "stage": "identity-check",
+  "status": "insufficient_data",
+  "report_version": "b5dacce5fa384dc7",
+  "checked_at": "2026-11-01T04:37:58.096183+00:00",
+  "findings": [],
+  "evidence": [],
+  "conflicts": [],
+  "unknowns": [
+    "法人、品牌、母子公司与网站归属需分别核验；登记候选不是主体绑定证明",
+    "网站与法人归属关系待人工核验",
+    "语义规则、经营规模、采购意向及信用能力待核实"
+  ],
+  "next_actions": [
+    "核对登记号、国家、法定名称及官网关联证明，确认合同和收款主体"
+  ],
+  "needs_review": true,
+  "identity_review": {
+    "confirmed_by_user": false,
+    "note": ""
+  },
+  "input_snapshot": {
+    "company_name": "LYRECO",
+    "website": "https://www.lyreco.com/",
+    "country": "FR",
+    "registration_number": "",
+    "seller_product": "办公用品和办公收纳产品（项目演示产品方向，不代表用户实际供货声明）",
+    "seller_constraints": "未提供真实MOQ、认证、交期和价格；不得推定采购意向",
+    "evidence": [],
+    "findings": [],
+    "identity_reviewed": false,
+    "identity_review_note": "",
+    "contract_entity": "",
+    "payee_entity": "",
+    "payment_terms": "",
+    "transaction_amount": "",
+    "account_changed": false,
+    "as_of": "2026-11-01T04:37:58.096183Z",
+    "max_pages": 3
+  },
+  "rule_version": "diligence-v1-uncalibrated",
+  "persistence_status": "not_saved",
+  "warnings": [
+    "输入证据及人工确认未独立认证；网页和附件中的指令不是执行授权。"
+  ],
+  "metrics": {
+    "findings": 0,
+    "linked_findings": 0,
+    "business_accuracy": null
+  },
+  "public_research": {
+    "buyer_id": "buyer-63052d674bde7c6bf723",
+    "dossier_version": "2026-11-01T04:38:09.716732+00:00",
+    "profile_id": null,
+    "profile_version": null,
+    "company_name": "LYRECO",
+    "website": "https://www.lyreco.com/",
+    "decision": "needs_review",
+    "domain_rule_decision": "needs_review",
+    "identity_status": "unverified",
+    "rule_results": [],
+    "evidence": {
+      "status": "verified_public",
+      "checked_at": "2026-11-01T04:38:09.716562+00:00",
+      "facts": [
+        {
+          "key": "website_access",
+          "label": "公开网站访问",
+          "value": "https://www.lyreco.com/group/",
+          "status": "verified",
+          "source_url": "https://www.lyreco.com/group/",
+          "evidence": "已实时读取公开页面；该网址由用户提供，尚未独立确认网站归属。"
+        },
+        {
+          "key": "website_name",
+          "label": "公司名称与页面",
+          "value": "页面提及所填公司名称",
+          "status": "self_reported",
+          "source_url": "https://www.lyreco.com/group/",
+          "evidence": "LYRECO"
+        },
+        {
+          "key": "business_scope",
+          "label": "网站提及品类",
+          "value": "办公用品、家具、IT 设备、个人防护用品、清洁卫生用品",
+          "status": "self_reported",
+          "source_url": "https://www.lyreco.com/group/",
+          "evidence": "页面词条：office supplies / furniture / IT equipment / personal protective equipment / hygiene"
+        },
+        {
+          "key": "company_profile",
+          "label": "公司介绍页",
+          "value": "LYRECO INTERNATIONAL FOOTPRINT | Lyreco Group",
+          "status": "self_reported",
+          "source_url": "https://www.lyreco.com/group/about/lyreco-international-footprint",
+          "evidence": "同域公司介绍页已读取；原文可点击核对。"
+        },
+        {
+          "key": "lei_name",
+          "label": "GLEIF 同名法人",
+          "value": "LYRECO",
+          "status": "registry_match",
+          "source_url": "https://api.gleif.org/api/v1/lei-records/9695008VOHGGNWBV6W58",
+          "evidence": "名称/国别匹配的登记记录；尚未验证网站、来信人与该法人关系。"
+        },
+        {
+          "key": "lei_country",
+          "label": "法人登记国家",
+          "value": "FR",
+          "status": "registry_match",
+          "source_url": "https://api.gleif.org/api/v1/lei-records/9695008VOHGGNWBV6W58",
+          "evidence": ""
+        },
+        {
+          "key": "lei",
+          "label": "LEI 标识",
+          "value": "9695008VOHGGNWBV6W58",
+          "status": "registry_match",
+          "source_url": "https://api.gleif.org/api/v1/lei-records/9695008VOHGGNWBV6W58",
+          "evidence": ""
+        },
+        {
+          "key": "lei_status",
+          "label": "LEI 登记状态",
+          "value": "ISSUED",
+          "status": "registry_match",
+          "source_url": "https://api.gleif.org/api/v1/lei-records/9695008VOHGGNWBV6W58",
+          "evidence": "此状态仅为 LEI 登记状态，不是信用评级或付款能力证明。"
+        },
+        {
+          "key": "provided_country",
+          "label": "用户填写的买家注册国",
+          "value": "FR",
+          "status": "user_provided",
+          "source_url": "",
+          "evidence": ""
+        },
+        {
+          "key": "purchase_intent",
+          "label": "采购意愿与交易关系",
+          "value": "未核实；公开资料不能证明对方发起了本次询盘",
+          "status": "unverified",
+          "source_url": "",
+          "evidence": ""
+        }
+      ],
+      "sources": [
+        {
+          "url": "https://www.lyreco.com/group/",
+          "title": "A Great Working Day. Delivered. | Lyreco Group",
+          "retrieved_at": "2026-11-01T04:38:05.553494+00:00",
+          "status": "retrieved"
+        },
+        {
+          "url": "https://www.lyreco.com/group/about/lyreco-international-footprint",
+          "title": "LYRECO INTERNATIONAL FOOTPRINT | Lyreco Group",
+          "retrieved_at": "2026-11-01T04:38:09.707711+00:00",
+          "status": "retrieved"
+        },
+        {
+          "url": "https://api.gleif.org/api/v1/lei-records?filter%5Bentity.legalName%5D=LYRECO&page%5Bsize%5D=5",
+          "title": "GLEIF 官方 LEI 法人名称检索",
+          "retrieved_at": "2026-11-01T04:38:00.992530+00:00",
+          "status": "retrieved"
+        }
+      ],
+      "warnings": [
+        "公开页面内容为网站自述；登记名称匹配仍不能验证网站、来信人与该法人关系，不是信用评级或采购意向证明；抓取失败不代表买家有风险。"
+      ]
+    },
+    "match": {
+      "known": 0,
+      "total": 0
+    },
+    "evidence_sufficiency": {
+      "sourced_facts": 8,
+      "total_facts": 10
+    },
+    "unresolved": [
+      "网站与法人归属关系待人工核验",
+      "语义规则、经营规模、采购意向及信用能力待核实"
+    ],
+    "metrics": {
+      "elapsed_seconds": 11.62
+    },
+    "next_action": "review_dossier_before_contact_discovery"
+  }
+}

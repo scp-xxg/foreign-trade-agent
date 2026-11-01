@@ -1,0 +1,131 @@
+{
+  "requirements": {
+    "case_id": "PUBLIC-RESEARCH-NO-ACTUAL-ORDER",
+    "stage": "requirements",
+    "input_hash": "ff7c8527cbc68466977d5206f5d4884062c7201b714d91c6b4d9a1654c363dc5",
+    "as_of": "2026-11-01T04:50:10.303918+00:00",
+    "status": "needs_input",
+    "items": [],
+    "approval_required": true,
+    "executed_external_action": false,
+    "metrics": {
+      "accuracy": null,
+      "business_effect": null
+    },
+    "warnings": [
+      "仅核对传入证据与声明，不独立认证供应商、质检或到账；不自动下单、联系、扣款、付款或建立定时监控。"
+    ]
+  },
+  "sourcing": {
+    "case_id": "PUBLIC-RESEARCH-NO-ACTUAL-ORDER",
+    "stage": "sourcing",
+    "input_hash": "ff7c8527cbc68466977d5206f5d4884062c7201b714d91c6b4d9a1654c363dc5",
+    "as_of": "2026-11-01T04:50:10.303918+00:00",
+    "status": "needs_input",
+    "items": [],
+    "approval_required": true,
+    "executed_external_action": false,
+    "metrics": {
+      "accuracy": null,
+      "business_effect": null
+    },
+    "warnings": [
+      "仅核对传入证据与声明，不独立认证供应商、质检或到账；不自动下单、联系、扣款、付款或建立定时监控。"
+    ],
+    "issues": [
+      {
+        "code": "missing_requirements"
+      }
+    ]
+  },
+  "capability": {
+    "case_id": "PUBLIC-RESEARCH-NO-ACTUAL-ORDER",
+    "stage": "capability",
+    "input_hash": "ff7c8527cbc68466977d5206f5d4884062c7201b714d91c6b4d9a1654c363dc5",
+    "as_of": "2026-11-01T04:50:10.303918+00:00",
+    "status": "needs_input",
+    "items": [],
+    "approval_required": true,
+    "executed_external_action": false,
+    "metrics": {
+      "accuracy": null,
+      "business_effect": null
+    },
+    "warnings": [
+      "仅核对传入证据与声明，不独立认证供应商、质检或到账；不自动下单、联系、扣款、付款或建立定时监控。"
+    ],
+    "issues": [
+      {
+        "code": "missing_requirements"
+      }
+    ]
+  },
+  "comparison": {
+    "case_id": "PUBLIC-RESEARCH-NO-ACTUAL-ORDER",
+    "stage": "comparison",
+    "input_hash": "ff7c8527cbc68466977d5206f5d4884062c7201b714d91c6b4d9a1654c363dc5",
+    "as_of": "2026-11-01T04:50:10.303918+00:00",
+    "status": "needs_input",
+    "items": [],
+    "approval_required": true,
+    "executed_external_action": false,
+    "metrics": {
+      "accuracy": null,
+      "business_effect": null
+    },
+    "warnings": [
+      "仅核对传入证据与声明，不独立认证供应商、质检或到账；不自动下单、联系、扣款、付款或建立定时监控。"
+    ]
+  },
+  "quality": {
+    "case_id": "PUBLIC-RESEARCH-NO-ACTUAL-ORDER",
+    "stage": "quality",
+    "input_hash": "ff7c8527cbc68466977d5206f5d4884062c7201b714d91c6b4d9a1654c363dc5",
+    "as_of": "2026-11-01T04:50:10.303918+00:00",
+    "status": "needs_input",
+    "items": [],
+    "approval_required": true,
+    "executed_external_action": false,
+    "metrics": {
+      "accuracy": null,
+      "business_effect": null
+    },
+    "warnings": [
+      "仅核对传入证据与声明，不独立认证供应商、质检或到账；不自动下单、联系、扣款、付款或建立定时监控。"
+    ]
+  },
+  "delivery": {
+    "case_id": "PUBLIC-RESEARCH-NO-ACTUAL-ORDER",
+    "stage": "delivery",
+    "input_hash": "ff7c8527cbc68466977d5206f5d4884062c7201b714d91c6b4d9a1654c363dc5",
+    "as_of": "2026-11-01T04:50:10.303918+00:00",
+    "status": "needs_input",
+    "items": [],
+    "approval_required": true,
+    "executed_external_action": false,
+    "metrics": {
+      "accuracy": null,
+      "business_effect": null
+    },
+    "warnings": [
+      "仅核对传入证据与声明，不独立认证供应商、质检或到账；不自动下单、联系、扣款、付款或建立定时监控。"
+    ]
+  },
+  "settlement": {
+    "case_id": "PUBLIC-RESEARCH-NO-ACTUAL-ORDER",
+    "stage": "settlement",
+    "input_hash": "ff7c8527cbc68466977d5206f5d4884062c7201b714d91c6b4d9a1654c363dc5",
+    "as_of": "2026-11-01T04:50:10.303918+00:00",
+    "status": "needs_input",
+    "items": [],
+    "approval_required": true,
+    "executed_external_action": false,
+    "metrics": {
+      "accuracy": null,
+      "business_effect": null
+    },
+    "warnings": [
+      "仅核对传入证据与声明，不独立认证供应商、质检或到账；不自动下单、联系、扣款、付款或建立定时监控。"
+    ]
+  }
+}

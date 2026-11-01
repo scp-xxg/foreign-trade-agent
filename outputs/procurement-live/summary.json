@@ -1,0 +1,70 @@
+{
+  "tested_at": "2026-11-01T04:50:10.329454+00:00",
+  "scope": "Real public reads + production prepare functions. Synthetic business records are separate. No real purchase, live LLM, authenticated API or browser acceptance.",
+  "checks": [
+    {
+      "name": "实时读取两个公开来源",
+      "passed": true
+    },
+    {
+      "name": "仅公开资料时七阶段均提示缺输入",
+      "passed": true
+    },
+    {
+      "name": "模拟净需求100+5-20-10=75",
+      "passed": true
+    },
+    {
+      "name": "模拟可用产能100-25=75",
+      "passed": true
+    },
+    {
+      "name": "模拟报价75x10+20=770",
+      "passed": true
+    },
+    {
+      "name": "模拟核对余额75x10-100=650",
+      "passed": true
+    },
+    {
+      "name": "所有结果无外部执行",
+      "passed": true
+    },
+    {
+      "name": "未知运费不得参与成本排名",
+      "passed": true
+    },
+    {
+      "name": "实测12超出9至11被检出",
+      "passed": true
+    },
+    {
+      "name": "验收差异不输出已核对余额",
+      "passed": true
+    },
+    {
+      "name": "未确认库存不计算净需求",
+      "passed": true
+    },
+    {
+      "name": "重复发票被拒绝",
+      "passed": true
+    },
+    {
+      "name": "改价后输入指纹更新",
+      "passed": true
+    }
+  ],
+  "known_gap": {
+    "delivery_requires_approved_po_enforced": false
+  },
+  "stages": {
+    "requirements": "review_required",
+    "sourcing": "review_required",
+    "capability": "review_required",
+    "comparison": "review_required",
+    "quality": "review_required",
+    "delivery": "needs_completion",
+    "settlement": "review_required"
+  }
+}

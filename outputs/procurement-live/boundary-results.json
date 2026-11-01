@@ -1,0 +1,291 @@
+{
+  "unknown-freight": {
+    "case_id": "SYNTHETIC-ONLY-NOT-LYRECO-NOT-RASPBERRYPI",
+    "stage": "comparison",
+    "input_hash": "53f93d4854329f5f120d14b44fb33a31aec0ede952873fa2ee5acc9101a682ae",
+    "as_of": "2026-11-01T00:00:00+00:00",
+    "status": "needs_completion",
+    "items": [
+      {
+        "line_id": "l",
+        "sku": "A",
+        "revision": "v1",
+        "issues": [
+          {
+            "code": "quotes_need_completion"
+          }
+        ],
+        "offers": [
+          {
+            "offer_id": "q",
+            "supplier_id": "v",
+            "goods_subtotal": "750",
+            "known_cost_total": "750",
+            "quote_currency": "CNY",
+            "normalized_known_cost": "750",
+            "comparison_currency": "CNY",
+            "missing_costs": [
+              "freight"
+            ],
+            "issues": [
+              "unknown_costs"
+            ],
+            "comparable": false,
+            "cost_rank": null
+          }
+        ],
+        "ranking_scope": "仅相同需求数量与口径的已确认成本，不代表供应商准入或采购授权",
+        "rfq_draft": {
+          "specifications": {
+            "name": "Bottle",
+            "material": "steel",
+            "specification": "500ml",
+            "packaging": "box"
+          },
+          "required_costs": [
+            "freight"
+          ],
+          "cost_basis": "delivered net"
+        },
+        "status": "needs_completion"
+      }
+    ],
+    "approval_required": true,
+    "executed_external_action": false,
+    "metrics": {
+      "accuracy": null,
+      "business_effect": null
+    },
+    "warnings": [
+      "仅核对传入证据与声明，不独立认证供应商、质检或到账；不自动下单、联系、扣款、付款或建立定时监控。"
+    ]
+  },
+  "quality-out-of-bounds": {
+    "case_id": "SYNTHETIC-ONLY-NOT-LYRECO-NOT-RASPBERRYPI",
+    "stage": "quality",
+    "input_hash": "13c155d1aa7cb7205f2adef424ea1db9e1e667ef8b8c28af41943ea3be81c3a2",
+    "as_of": "2026-11-01T00:00:00+00:00",
+    "status": "needs_completion",
+    "items": [
+      {
+        "line_id": "l",
+        "sku": "A",
+        "revision": "v1",
+        "issues": [
+          {
+            "code": "measurement_out_of_bounds",
+            "check_id": "qc"
+          }
+        ],
+        "measurements": [
+          {
+            "check_id": "qc",
+            "numeric_within_limits": false
+          }
+        ],
+        "checklist": [
+          {
+            "evidence": [
+              {
+                "source_id": "s",
+                "excerpt": "confirmed"
+              }
+            ],
+            "id": "qc",
+            "line_id": "l",
+            "revision": "v1",
+            "name": "size",
+            "stage": "sample",
+            "standard": "length",
+            "method": "caliper",
+            "owner": "QA",
+            "state": "passed",
+            "reviewed": true,
+            "sample_version": "s1",
+            "measured_value": "12",
+            "lower_limit": "9",
+            "upper_limit": "11",
+            "measurement_unit": "mm"
+          }
+        ],
+        "sample_versions": [
+          "s1"
+        ],
+        "sampling_plan": "未自动推断AQL；按企业确认标准填写检查方法",
+        "production_released": false,
+        "status": "needs_completion"
+      }
+    ],
+    "approval_required": true,
+    "executed_external_action": false,
+    "metrics": {
+      "accuracy": null,
+      "business_effect": null
+    },
+    "warnings": [
+      "仅核对传入证据与声明，不独立认证供应商、质检或到账；不自动下单、联系、扣款、付款或建立定时监控。"
+    ]
+  },
+  "quality-settlement": {
+    "case_id": "SYNTHETIC-ONLY-NOT-LYRECO-NOT-RASPBERRYPI",
+    "stage": "settlement",
+    "input_hash": "97c3262b5617048d462e8d41ec2fba77f5e26b09b56aac3bee2ddc2ff21c9141",
+    "as_of": "2026-11-01T00:00:00+00:00",
+    "status": "needs_completion",
+    "items": [
+      {
+        "line_id": "l",
+        "sku": "A",
+        "revision": "v1",
+        "issues": [
+          {
+            "code": "quality_exception",
+            "rejected": "5"
+          },
+          {
+            "code": "invoice_acceptance_difference",
+            "difference": "5"
+          }
+        ],
+        "received_quantity": "75",
+        "net_accepted": "70",
+        "pending_inspection": "0",
+        "billed_quantity": "75",
+        "invoice_amount": "750",
+        "confirmed_payments_and_credits": "100",
+        "declared_balance": "650",
+        "currency": "CNY",
+        "reconciled_balance": null,
+        "payment_authorized": false,
+        "exceptions": [
+          {
+            "code": "quality_exception",
+            "rejected": "5"
+          },
+          {
+            "code": "invoice_acceptance_difference",
+            "difference": "5"
+          }
+        ],
+        "status": "needs_completion"
+      }
+    ],
+    "approval_required": true,
+    "executed_external_action": false,
+    "metrics": {
+      "accuracy": null,
+      "business_effect": null
+    },
+    "warnings": [
+      "仅核对传入证据与声明，不独立认证供应商、质检或到账；不自动下单、联系、扣款、付款或建立定时监控。"
+    ]
+  },
+  "unknown-inventory": {
+    "case_id": "SYNTHETIC-ONLY-NOT-LYRECO-NOT-RASPBERRYPI",
+    "stage": "requirements",
+    "input_hash": "d1f38ccd8727a7aa207c4085d7bf24c8fbfc77758b914901e4fc7d53083be8f6",
+    "as_of": "2026-11-01T00:00:00+00:00",
+    "status": "needs_completion",
+    "items": [
+      {
+        "line_id": "l",
+        "sku": "A",
+        "revision": "v1",
+        "issues": [
+          {
+            "code": "inventory_basis_unconfirmed"
+          }
+        ],
+        "confirmed_facts": {
+          "name": "Bottle",
+          "material": "steel",
+          "specification": "500ml",
+          "packaging": "box"
+        },
+        "ordered_demand": "100",
+        "unit": "pcs",
+        "net_purchase_quantity": null,
+        "inventory_basis": "unknown",
+        "rfq_draft": {
+          "line_id": "l",
+          "sku": "A",
+          "revision": "v1",
+          "quantity": "100",
+          "unit": "pcs",
+          "destination": "Ningbo",
+          "need_by": "2026-11-10T00:00:00+00:00",
+          "specifications": {
+            "name": "Bottle",
+            "material": "steel",
+            "specification": "500ml",
+            "packaging": "box"
+          }
+        },
+        "status": "needs_completion"
+      }
+    ],
+    "approval_required": true,
+    "executed_external_action": false,
+    "metrics": {
+      "accuracy": null,
+      "business_effect": null
+    },
+    "warnings": [
+      "仅核对传入证据与声明，不独立认证供应商、质检或到账；不自动下单、联系、扣款、付款或建立定时监控。"
+    ]
+  },
+  "missing-po-delivery": {
+    "case_id": "SYNTHETIC-ONLY-NOT-LYRECO-NOT-RASPBERRYPI",
+    "stage": "delivery",
+    "input_hash": "fe47527a1041378578e37a2ab0335b37a7690c4e317147af34423d43189313cd",
+    "as_of": "2026-11-01T00:00:00+00:00",
+    "status": "needs_completion",
+    "items": [
+      {
+        "line_id": "l",
+        "sku": "A",
+        "revision": "v1",
+        "issues": [
+          {
+            "code": "overdue",
+            "milestone_id": "m"
+          },
+          {
+            "code": "stale_progress",
+            "milestone_id": "m"
+          },
+          {
+            "code": "delivery_at_risk",
+            "milestone_id": "m"
+          }
+        ],
+        "milestones": [
+          {
+            "milestone_id": "m",
+            "name": "production",
+            "owner": "buyer",
+            "flags": [
+              "overdue",
+              "stale_progress",
+              "delivery_at_risk"
+            ],
+            "blocked_by": [],
+            "completed_on_time": null
+          }
+        ],
+        "monitor_created": false,
+        "estimate_basis": "用户提供的剩余自然小时，不是工作日排产预测",
+        "status": "needs_completion"
+      }
+    ],
+    "approval_required": true,
+    "executed_external_action": false,
+    "metrics": {
+      "accuracy": null,
+      "business_effect": null
+    },
+    "warnings": [
+      "仅核对传入证据与声明，不独立认证供应商、质检或到账；不自动下单、联系、扣款、付款或建立定时监控。"
+    ]
+  }
+}

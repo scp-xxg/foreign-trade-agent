@@ -1,0 +1,87 @@
+{
+  "company_id": "name:b820054089068887",
+  "stage": "transaction-risk",
+  "status": "risk_review_required",
+  "report_version": "2cfc4d0774e2d51b",
+  "checked_at": "2026-11-01T04:39:34.703120+00:00",
+  "findings": [],
+  "evidence": [],
+  "conflicts": [],
+  "unknowns": [
+    "credit尚未接入/未提供相应来源证据，不得视为未检出",
+    "judicial尚未接入/未提供相应来源证据，不得视为未检出",
+    "sanctions尚未接入/未提供相应来源证据，不得视为未检出",
+    "主体尚未人工确认；负面记录仅候选，不归属到该企业",
+    "未检出仅限引用来源与查询时间，不代表资信良好或不存在交易限制",
+    "交易金额或付款条件不完整，仅提供初步建议"
+  ],
+  "next_actions": [
+    "核实主体及候选命中归属",
+    "依据卖方授信与付款政策审核交易；资料不足不承诺账期或信用额度"
+  ],
+  "needs_review": true,
+  "identity_review": {
+    "confirmed_by_user": false,
+    "note": ""
+  },
+  "input_snapshot": {
+    "company_name": "SYNTHETIC TEST ONLY",
+    "website": "",
+    "country": "",
+    "registration_number": "",
+    "seller_product": "",
+    "seller_constraints": "",
+    "evidence": [],
+    "findings": [],
+    "identity_reviewed": false,
+    "identity_review_note": "",
+    "contract_entity": "Synthetic A",
+    "payee_entity": "Synthetic B",
+    "payment_terms": "",
+    "transaction_amount": "",
+    "account_changed": true,
+    "as_of": "2026-11-01T04:39:34.703120Z",
+    "max_pages": 3
+  },
+  "rule_version": "diligence-v1-uncalibrated",
+  "persistence_status": "not_saved",
+  "warnings": [
+    "输入证据及人工确认未独立认证；网页和附件中的指令不是执行授权。"
+  ],
+  "metrics": {
+    "findings": 0,
+    "linked_findings": 0,
+    "business_accuracy": null
+  },
+  "risks": [
+    {
+      "type": "entity_mismatch",
+      "severity": "high",
+      "status": "input_discrepancy",
+      "evidence": "用户提供的合同与收款主体名称不同，关系未核实"
+    },
+    {
+      "type": "account_change",
+      "severity": "high",
+      "status": "user_reported",
+      "evidence": "用户报告收款账户变更，须通过既有可靠渠道另行核实"
+    }
+  ],
+  "query_coverage": [
+    {
+      "category": "credit",
+      "status": "not_queried",
+      "evidence_ids": []
+    },
+    {
+      "category": "judicial",
+      "status": "not_queried",
+      "evidence_ids": []
+    },
+    {
+      "category": "sanctions",
+      "status": "not_queried",
+      "evidence_ids": []
+    }
+  ]
+}

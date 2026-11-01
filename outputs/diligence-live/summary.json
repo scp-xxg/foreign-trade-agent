@@ -1,0 +1,60 @@
+{
+  "tested_at": "2026-11-01T04:39:34.704388+00:00",
+  "scope": "Real public retrieval and production service functions; no mocks. Not authenticated HTTP, browser chat, or LLM orchestration acceptance.",
+  "checks": [
+    {
+      "name": "四阶段均返回实际结果",
+      "passed": true
+    },
+    {
+      "name": "所有阶段保留人工复核",
+      "passed": true
+    },
+    {
+      "name": "未冒充已确认主体",
+      "passed": true
+    },
+    {
+      "name": "信用司法制裁保持未查询",
+      "passed": true
+    },
+    {
+      "name": "缺交易条件不放行",
+      "passed": true
+    },
+    {
+      "name": "同输入的四阶段版本一致",
+      "passed": true
+    },
+    {
+      "name": "伪造原文引用被拒绝",
+      "passed": true
+    },
+    {
+      "name": "独立模拟异常触发主体差异与账户变更",
+      "passed": true
+    }
+  ],
+  "stages": {
+    "identity-check": {
+      "status": "evidence_pending_review",
+      "report_version": "1853f09c52ea296d",
+      "findings": 1
+    },
+    "business-fit": {
+      "status": "needs_review",
+      "report_version": "1853f09c52ea296d",
+      "findings": 1
+    },
+    "decision-chain": {
+      "status": "evidence_pending_review",
+      "report_version": "1853f09c52ea296d",
+      "findings": 1
+    },
+    "transaction-risk": {
+      "status": "incomplete_checks",
+      "report_version": "1853f09c52ea296d",
+      "findings": 0
+    }
+  }
+}

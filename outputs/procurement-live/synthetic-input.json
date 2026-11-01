@@ -1,0 +1,286 @@
+{
+  "case_id": "SYNTHETIC-ONLY-NOT-LYRECO-NOT-RASPBERRYPI",
+  "as_of": "2026-11-01T00:00:00Z",
+  "sources": [
+    {
+      "id": "s",
+      "reference": "SYNTHETIC TEST RECORD: test-only approvals, not real approvals",
+      "text": "confirmed Bottle steel 500ml box"
+    }
+  ],
+  "requirements": [
+    {
+      "id": "l",
+      "sku": "A",
+      "revision": "v1",
+      "quantity": 100,
+      "unit": "pcs",
+      "need_by": "2026-11-10T00:00:00Z",
+      "destination": "Ningbo",
+      "available_stock": 20,
+      "confirmed_inbound": 10,
+      "safety_stock": 5,
+      "inventory_confirmed": true,
+      "capability_checks": [
+        "capacity"
+      ],
+      "quality_checks": [
+        "size"
+      ],
+      "facts": [
+        {
+          "field": "name",
+          "value": "Bottle",
+          "confirmed": true,
+          "evidence": [
+            {
+              "source_id": "s",
+              "excerpt": "Bottle"
+            }
+          ]
+        },
+        {
+          "field": "material",
+          "value": "steel",
+          "confirmed": true,
+          "evidence": [
+            {
+              "source_id": "s",
+              "excerpt": "steel"
+            }
+          ]
+        },
+        {
+          "field": "specification",
+          "value": "500ml",
+          "confirmed": true,
+          "evidence": [
+            {
+              "source_id": "s",
+              "excerpt": "500ml"
+            }
+          ]
+        },
+        {
+          "field": "packaging",
+          "value": "box",
+          "confirmed": true,
+          "evidence": [
+            {
+              "source_id": "s",
+              "excerpt": "box"
+            }
+          ]
+        }
+      ],
+      "evidence": [
+        {
+          "source_id": "s",
+          "excerpt": "confirmed"
+        }
+      ]
+    }
+  ],
+  "criteria": [
+    {
+      "name": "capacity"
+    }
+  ],
+  "suppliers": [
+    {
+      "id": "v",
+      "legal_name": "Factory",
+      "country": "CN",
+      "identity_reviewed": true,
+      "evidence": [
+        {
+          "source_id": "s",
+          "excerpt": "confirmed"
+        }
+      ],
+      "assessments": [
+        {
+          "name": "capacity",
+          "state": "met",
+          "basis": "independent_check",
+          "observed_at": "2026-10-31T00:00:00Z",
+          "valid_until": "2026-12-01T00:00:00Z",
+          "evidence": [
+            {
+              "source_id": "s",
+              "excerpt": "confirmed"
+            }
+          ]
+        }
+      ],
+      "capacities": [
+        {
+          "line_id": "l",
+          "revision": "v1",
+          "unit": "pcs",
+          "total": 100,
+          "committed": 25,
+          "available_by": "2026-11-09T00:00:00Z",
+          "valid_until": "2026-12-01T00:00:00Z",
+          "independently_checked": true,
+          "evidence": [
+            {
+              "source_id": "s",
+              "excerpt": "confirmed"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "cost_basis": "delivered net",
+  "required_costs": [
+    "freight"
+  ],
+  "offers": [
+    {
+      "id": "q",
+      "line_id": "l",
+      "supplier_id": "v",
+      "revision": "v1",
+      "quantity": 75,
+      "unit": "pcs",
+      "currency": "CNY",
+      "unit_price": 10,
+      "moq": 50,
+      "valid_until": "2026-12-01T00:00:00Z",
+      "cost_basis": "delivered net",
+      "costs": {
+        "freight": 20
+      },
+      "reviewed": true,
+      "evidence": [
+        {
+          "source_id": "s",
+          "excerpt": "confirmed"
+        }
+      ]
+    }
+  ],
+  "orders": [
+    {
+      "line_id": "l",
+      "order_id": "po",
+      "supplier_id": "v",
+      "revision": "v1",
+      "quantity": 75,
+      "unit": "pcs",
+      "currency": "CNY",
+      "unit_price": 10,
+      "approved": true,
+      "evidence": [
+        {
+          "source_id": "s",
+          "excerpt": "confirmed"
+        }
+      ]
+    }
+  ],
+  "receipts": [
+    {
+      "id": "r",
+      "document_number": "R1",
+      "line_id": "l",
+      "order_id": "po",
+      "revision": "v1",
+      "unit": "pcs",
+      "batch": "b1",
+      "received": 75,
+      "accepted": 75,
+      "rejected": 0,
+      "reviewed": true,
+      "evidence": [
+        {
+          "source_id": "s",
+          "excerpt": "confirmed"
+        }
+      ]
+    }
+  ],
+  "invoices": [
+    {
+      "id": "i",
+      "number": "I1",
+      "line_id": "l",
+      "order_id": "po",
+      "supplier_id": "v",
+      "revision": "v1",
+      "unit": "pcs",
+      "currency": "CNY",
+      "quantity": 75,
+      "unit_price": 10,
+      "reviewed": true,
+      "evidence": [
+        {
+          "source_id": "s",
+          "excerpt": "confirmed"
+        }
+      ]
+    }
+  ],
+  "adjustments": [
+    {
+      "id": "a",
+      "line_id": "l",
+      "order_id": "po",
+      "currency": "CNY",
+      "kind": "payment",
+      "amount": 100,
+      "confirmed": true,
+      "evidence": [
+        {
+          "source_id": "s",
+          "excerpt": "confirmed"
+        }
+      ]
+    }
+  ],
+  "quality_checks": [
+    {
+      "id": "qc",
+      "line_id": "l",
+      "revision": "v1",
+      "name": "size",
+      "stage": "sample",
+      "standard": "length",
+      "method": "caliper",
+      "owner": "QA",
+      "state": "passed",
+      "reviewed": true,
+      "sample_version": "s1",
+      "measured_value": 10,
+      "lower_limit": 9,
+      "upper_limit": 11,
+      "measurement_unit": "mm",
+      "evidence": [
+        {
+          "source_id": "s",
+          "excerpt": "confirmed"
+        }
+      ]
+    }
+  ],
+  "milestones": [
+    {
+      "id": "m",
+      "line_id": "l",
+      "revision": "v1",
+      "name": "production",
+      "owner": "buyer",
+      "planned_at": "2026-10-30T00:00:00Z",
+      "observed_at": "2026-10-28T00:00:00Z",
+      "remaining_hours": 300,
+      "evidence": [
+        {
+          "source_id": "s",
+          "excerpt": "confirmed"
+        }
+      ]
+    }
+  ]
+}

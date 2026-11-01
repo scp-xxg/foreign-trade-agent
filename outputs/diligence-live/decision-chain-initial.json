@@ -1,0 +1,116 @@
+{
+  "company_id": "buyer-63052d674bde7c6bf723",
+  "stage": "decision-chain",
+  "status": "insufficient_data",
+  "report_version": "b5dacce5fa384dc7",
+  "checked_at": "2026-11-01T04:37:58.096183+00:00",
+  "findings": [],
+  "evidence": [],
+  "conflicts": [],
+  "unknowns": [
+    "职位不代表采购或最终审批权限；公开邮箱不证明任职、所有权或可投递"
+  ],
+  "next_actions": [
+    "逐人确认当前任职、采购职责和生效时间；未知决策节点保持空缺"
+  ],
+  "needs_review": true,
+  "identity_review": {
+    "confirmed_by_user": false,
+    "note": ""
+  },
+  "input_snapshot": {
+    "company_name": "LYRECO",
+    "website": "https://www.lyreco.com/",
+    "country": "FR",
+    "registration_number": "",
+    "seller_product": "办公用品和办公收纳产品（项目演示产品方向，不代表用户实际供货声明）",
+    "seller_constraints": "未提供真实MOQ、认证、交期和价格；不得推定采购意向",
+    "evidence": [],
+    "findings": [],
+    "identity_reviewed": false,
+    "identity_review_note": "",
+    "contract_entity": "",
+    "payee_entity": "",
+    "payment_terms": "",
+    "transaction_amount": "",
+    "account_changed": false,
+    "as_of": "2026-11-01T04:37:58.096183Z",
+    "max_pages": 3
+  },
+  "rule_version": "diligence-v1-uncalibrated",
+  "persistence_status": "not_saved",
+  "warnings": [
+    "输入证据及人工确认未独立认证；网页和附件中的指令不是执行授权。"
+  ],
+  "metrics": {
+    "findings": 0,
+    "linked_findings": 0,
+    "business_accuracy": null
+  },
+  "public_channels": {
+    "buyer_id": "buyer-63052d674bde7c6bf723",
+    "checked_at": "2026-11-01T04:38:23.276165+00:00",
+    "channels": [
+      {
+        "channel": "https://www.lyreco.com/group/contacts",
+        "type": "contact_page",
+        "evidence": "/group/contacts",
+        "source_url": "https://www.lyreco.com/group/",
+        "retrieved_at": "2026-11-01T04:38:15.018252+00:00",
+        "status": "publicly_listed",
+        "person_name": null,
+        "role": null,
+        "employment_status": "unknown",
+        "role_status": "unknown",
+        "deliverability": "unknown",
+        "company_relationship": "website_claim"
+      },
+      {
+        "channel": "privacy.office@lyreco.com",
+        "type": "email",
+        "evidence": "privacy.office@lyreco.com",
+        "source_url": "https://www.lyreco.com/group/contacts",
+        "retrieved_at": "2026-11-01T04:38:23.255076+00:00",
+        "status": "publicly_listed",
+        "person_name": null,
+        "role": null,
+        "employment_status": "unknown",
+        "role_status": "unknown",
+        "deliverability": "unknown",
+        "company_relationship": "website_claim"
+      }
+    ],
+    "sources": [
+      {
+        "url": "https://www.lyreco.com/group/",
+        "retrieved_at": "2026-11-01T04:38:15.018252+00:00",
+        "excerpt": "A Great Working Day. Delivered. | Lyreco Group Lyreco Group Workplace Solutions Safety Responsibility and Sustainability Lyreco Careers News & Media Contact e-shop Lyreco Group Workplace Solutions Safety Responsibility and Sustainability Lyreco Careers News & Media Contact e-shop About Lyreco Workplace solutions Responsibility & Sustainability Lyreco Careers News Contact us 5 figures about… green products Our guiding principles Safety World presence People and Values Pioneers since 1926 Ethics and Compliance Lyreco For Education Our Executive Team Inside Lyreco Shop at Lyreco.com About Lyreco World presence People & Values Pioneers since 1926 Ethics and compliance Lyreco For Education Our Executive Team Workplace solutions E-SHOP 10,000 products Expertise Logistics & Delivery Proximity Tail Management Sustainability Our strategy Planet People Progress Lyreco careers APPLY NOW Your development first Diversity & Inclusion Join an international company Safety Products Services & Solutions Contact us A great working day. Delivered. Your source of inspiration! /group/magazine Lyreco Linkedin Page Lyreco Youtube Channel A Great Working Day. Delivered. 100 YEARS OF LYRECO, IN STEP WITH YO",
+        "status": "retrieved"
+      },
+      {
+        "url": "https://www.lyreco.com/group/",
+        "retrieved_at": "2026-11-01T04:38:20.063411+00:00",
+        "excerpt": "A Great Working Day. Delivered. | Lyreco Group Lyreco Group Workplace Solutions Safety Responsibility and Sustainability Lyreco Careers News & Media Contact e-shop Lyreco Group Workplace Solutions Safety Responsibility and Sustainability Lyreco Careers News & Media Contact e-shop About Lyreco Workplace solutions Responsibility & Sustainability Lyreco Careers News Contact us 5 figures about… green products Our guiding principles Safety World presence People and Values Pioneers since 1926 Ethics and Compliance Lyreco For Education Our Executive Team Inside Lyreco Shop at Lyreco.com About Lyreco World presence People & Values Pioneers since 1926 Ethics and compliance Lyreco For Education Our Executive Team Workplace solutions E-SHOP 10,000 products Expertise Logistics & Delivery Proximity Tail Management Sustainability Our strategy Planet People Progress Lyreco careers APPLY NOW Your development first Diversity & Inclusion Join an international company Safety Products Services & Solutions Contact us A great working day. Delivered. Your source of inspiration! /group/magazine Lyreco Linkedin Page Lyreco Youtube Channel A Great Working Day. Delivered. 100 YEARS OF LYRECO, IN STEP WITH YO",
+        "status": "retrieved"
+      },
+      {
+        "url": "https://www.lyreco.com/group/contacts",
+        "retrieved_at": "2026-11-01T04:38:23.255076+00:00",
+        "excerpt": "Contact us | Lyreco Lyreco Group Workplace Solutions Safety Responsibility and Sustainability Lyreco Careers News & Media Contact e-shop Lyreco Group Workplace Solutions Safety Responsibility and Sustainability Lyreco Careers News & Media Contact e-shop About Lyreco Workplace solutions Responsibility & Sustainability Lyreco Careers News Contact us 5 figures about… green products Our guiding principles Safety Inside Lyreco Shop at Lyreco.com About Lyreco World presence People & Values Pioneers since 1926 Ethics and compliance Lyreco For Education Our Executive Team Workplace solutions E-SHOP 10,000 products Expertise Logistics & Delivery Proximity Tail Management Sustainability Our strategy Planet People Progress Lyreco careers APPLY NOW Your development first Diversity & Inclusion Join an international company Safety Products Services & Solutions Contact us A great working day. Delivered. Your source of inspiration! /group/magazine Lyreco Linkedin Page Lyreco Youtube Channel Contact us Looking for information? Current Request You are ... Contact Request type Your request relates to... Lyreco Group or multiple countries (Optional) A specific country (Optional) Country (Optional) - S",
+        "status": "retrieved"
+      }
+    ],
+    "warnings": [],
+    "status": "needs_review",
+    "unresolved": [
+      "当前仅提取公开邮箱与站内联系页；具名采购负责人、职级及在职情况需人工补充。",
+      "公开列出不等于适合营销联系；邮箱归属、可投递性与采购权限未验证。"
+    ],
+    "metrics": {
+      "pages_attempted": 3,
+      "pages_read": 3,
+      "channels_found": 2,
+      "elapsed_seconds": 13.56
+    }
+  }
+}
