@@ -55,7 +55,13 @@ async def device_preparation(
                 if request.enabled_mcp_ids is None or key in request.enabled_mcp_ids
             ],
             plugin_ids=list(request.user_agent.plugin_ids or []) if request.user_agent else None,
-            activated_ids=[*sticky.plugin_ids, *_mode_plugin_ids, required.plugin_id],
+            # A role binding is an explicit capability selection. Keep it eager
+            # so the initial filesystem authorization includes its skill paths;
+            # deferring it would expose tools later with stale empty path grants.
+            activated_ids=[
+                *(list(request.user_agent.plugin_ids or []) if request.user_agent else []),
+                *sticky.plugin_ids, *_mode_plugin_ids, required.plugin_id,
+            ],
             invoked_skill_ids=[
                 *(request.invoked_skill_ids or []),
                 *sticky.direct_skill_ids,

@@ -115,7 +115,7 @@ async def system_prompt(
                     sensitive=True,
                 )
             _plugin_runtime = {
-                "activated_slugs": set(),
+                "activated_slugs": set(_subagent_progressive.activated_slugs),
                 "loaded_skill_ids": fully_loaded_skill_ids,
                 "trade_tools_allowed": trade_tools_allowed(request),
                 "connected_keys": set(enabled_mcp_keys),

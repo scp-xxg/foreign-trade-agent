@@ -80,3 +80,17 @@
 交付约定：子智能体回传记录ID与revision；主协调器可只读调用trade_product_content get展示原生下载卡，不代替角色写入。ZIP按下载请求动态打包，assets仅列三张图片不是ZIP缺失；未实际下载时不声称已核验。确认后的本机资料包rev3为ai_grounded，ZIP认证下载HTTP200且八个文件校验完整。
 
 确认后的第二轮也已实际完成岗位回交：运营调用trade_confirm_product_facts与generate，六条确认事实生成ai_grounded英文资料、9条FAQ与三图；随后业务员读取同一询盘/资料包，调用draft并读回未发送且未过期的中英回复，询盘rev3，原报价USD2400保持不变。资料包ZIP八文件认证下载已独立校验。模拟脚本与实际回执分开保留。
+
+## 冷启动依赖修复与预检
+
+角色明确绑定的本地插件现在直接从本机安装注册表展开，并在子会话创建时完成技能目录与工具授权；不再依赖主对话先选插件或之前加载的状态。已加载状态同步到角色加载器，避免重复加载误报插件不存在。主助手的未选插件仍按需加载。
+
+演示前可执行不调用模型、不写业务数据的绑定自检：
+
+~~~bash
+.venv/bin/python extensions/foreign_trade/check_roles.py --app-home "$TRADE_APP_HOME" --username "$TRADE_USERNAME" --port 3002
+~~~
+
+三岗均应ok=true；连接实际可用性另用team.py check --running核验。回归覆盖未预加载、无云账号、无旧安装表、错误标识、跨账号、禁用和未就绪等情况。
+
+本次冷启动实测：登记复验chat_8f526491dab9456c保存inq_b0011e406b8e4dc9992a1d6b2114949b，revision=1，无报价和草稿；随后chat_70ecf2cbec6348e6明确禁止主助手预加载，顶层只有一次call_subagent，业务员自行view_text_file及trade_inquiry get成功。新建的复验记录标题带“冷启动复验”，不覆盖用户旧记录。相关99项回归检查通过；额外重跑18项覆盖最终加载状态同步。

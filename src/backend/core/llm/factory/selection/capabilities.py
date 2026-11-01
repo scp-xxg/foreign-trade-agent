@@ -120,9 +120,9 @@ def _expand_plugin_bindings(
 ) -> tuple[list[str], list[str]]:
     """Expand bound plugin install_ids into (skill id list, MCP server id list).
 
-    Takes each plugin's bundled skills / mcp from
-    ``InstalledPlugin.component_ids``. Returns empty on failure — best-effort,
-    never blocks agent construction.
+    Expand legacy InstalledPlugin rows plus authorized local/cloud registry
+    packages. Local role bindings must work without parent-chat activation.
+    Runtime preflight still validates ownership, readiness and dependencies.
     """
     if not plugin_ids:
         return [], []
@@ -147,6 +147,20 @@ def _expand_plugin_bindings(
     from core.harness.registry.run_capabilities import has_run_capabilities
 
     if has_run_capabilities():
+        # Local imports are authoritative in the device registry, not the
+        # legacy InstalledPlugin table. Resolve only the owner-visible, enabled,
+        # integrity-checked package selected by this role; never borrow a parent
+        # conversation activation or enable unrelated plugins.
+        from core.harness.registry import device_catalog
+        selected = set(plugin_ids)
+        if user_id:
+            for entry in device_catalog.plugin_entries(user_id):
+                identity = str(entry.get("install_id") or "")
+                if (identity.startswith("plugin:local:")
+                    and selected.intersection({identity, str(entry.get("slug") or "")})
+                    and entry.get("enabled") and entry.get("callable")):
+                    skills.extend(entry.get("skills") or [])
+                    mcp.extend(entry.get("mcp") or [])
         from core.harness.registry.run_capabilities import cloud_binding_ids
 
         cloud_skills, cloud_mcp = cloud_binding_ids(plugin_ids, user_id=user_id)
