@@ -1,7 +1,7 @@
 <!-- Modified by foreign-trade-agent contributors, 2026-10-21: public team distribution. -->
 # SailAgent
 
-当前整合版：[现场完整步骤与评分对照](docs/FINAL_DEMO_20261101.md) · [队友部署](docs/TEAM_SETUP.md)。
+PR #7已合并main：[现场具体步骤与示例问答](docs/LIVE_DEMO_PLAYBOOK.md) · [评分对照与实测](docs/FINAL_DEMO_20261101.md) · [队友部署](docs/TEAM_SETUP.md)。
 
 <img src="src/frontend/public/brand/sailagent-preview.png" alt="SailAgent" width="500" />
 
@@ -16,7 +16,7 @@
 ## 已实现
 
 - 8 个办公收纳 SKU：中英文检索、产品规格、MOQ 和数量阶梯价。
-- “外贸业务助手（演示）”插件 0.4.0：五个技能覆盖即时查询报价、买家询盘跟进、产品内容、跨岗位协同、本地化与规则校验；包含八个会话绑定业务工具，另保留三个目录/报价 MCP 工具。以对话为主入口，复用工作台。[对话使用与升级](docs/CHAT_PLUGIN.md)
+- “外贸业务助手（演示）”插件 0.9.0：十四个技能覆盖询盘到上品、买家核验、获客与跟进、产品内容、跨岗位协同及本地化审核；包含十个会话绑定业务工具，另保留三个目录/报价 MCP 工具。以对话为主入口，复用工作台。[对话使用与升级](docs/CHAT_PLUGIN.md)
 - 定制包装门槛与费用、交期冲突说明；改量或改包装后重新计算。
 - 中英对照 PDF、中文/英文双工作表 Excel 下载；直接使用工具回执，保留来源和稳定报价编号。
 - 外贸首页、6 条推荐问题、默认助手提示词、团队部署脚本和自动检查。
@@ -31,7 +31,7 @@
 
 ## 队友快速部署（Linux / WSL2）
 
-团队统一从 `main` 获取公开版本，无需切换历史功能分支。首次部署见 [队友部署指南](docs/TEAM_SETUP.md)，现场操作见 [三个场景逐步演示](docs/DEMO_WALKTHROUGH.md)。
+团队统一从 `main` 获取公开版本，无需切换历史功能分支。首次部署见 [队友部署指南](docs/TEAM_SETUP.md)，现场操作见 [具体步骤与示例问答](docs/LIVE_DEMO_PLAYBOOK.md)。
 
 先准备 **Python 3.11+（内置 SQLite ≥ 3.38）、Node.js 22（至少 22.12）、Git**；推荐 Python 3.11。Node 20.19+ 也满足当前前端要求。Windows 队员请进入 WSL2 Linux 终端执行。
 
