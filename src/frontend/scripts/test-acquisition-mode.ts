@@ -1,3 +1,4 @@
+import { captureChatInvocation } from '../src/utils/chatInvocation';
 import assert from 'node:assert/strict';
 import { acquisitionMessage, ACQUISITION_SKILLS } from '../src/utils/acquisitionMode';
 import { useComposerStore, readComposer } from '../src/stores/composerStore';
@@ -163,3 +164,30 @@ assert.equal(tradeWorkflowMessage('/compact',true,false,false,false,false,false,
 store.activate('chat:material-other');assert.equal(readComposer('chat:material-other').materialCheckMode,false);
 store.resetForUser('material-other-user');assert.equal(readComposer('chat:material').materialCheckMode,false);
 console.log('Material checks: explicit routing, workflow reuse, commands and user isolation passed');
+
+// Selecting any workflow must discard stale single-capability routing chips.
+for (const workflow of TRADE_WORKFLOWS) {
+  const draft = { ...readComposer('chat:workflow-routing'),
+    activeSkill: { id: 'old-skill', name: 'Old skill' },
+    activePlugin: { id: 'old-plugin', name: 'Old plugin' },
+    activeConnector: { id: 'old-connector', name: 'Old connector' },
+    activeMention: { id: 'old-agent', name: 'Old agent' },
+  };
+  const enabled = { ...draft, ...workflowSelection(draft, workflow.id) };
+  assert.equal(enabled[workflow.field], true);
+  for (const key of ['activeSkill', 'activePlugin', 'activeConnector', 'activeMention', 'activeCommand'] as const)
+    assert.equal(enabled[key], null, workflow.id + ': stale ' + key);
+  assert.equal(Object.keys(captureChatInvocation(enabled)).length, 0);
+  const disabled = { ...enabled, ...workflowSelection(enabled, workflow.id) };
+  assert.equal(disabled[workflow.field], false);
+}
+console.log('All eight workflows clear stale routing on activation');
+
+const { WORKFLOW_SKILL_LOADING } = await import('../src/utils/acquisitionMode');
+const flagOrder = ['acquisitionMode','diligenceMode','communicationMode','negotiationMode','retrospectiveMode','closingMode','listingMode','procurementMode'];
+for (const workflow of TRADE_WORKFLOWS) {
+  const flags = flagOrder.map(field => field === workflow.field);
+  const message = tradeWorkflowMessage('Test', flags[0],flags[1],flags[2],flags[3],flags[4],flags[5],flags[6],flags[7]);
+  assert.ok(message.startsWith(WORKFLOW_SKILL_LOADING), workflow.id);
+  assert.ok(message.includes('view_text_file'));
+}

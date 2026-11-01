@@ -1,0 +1,314 @@
+Browser tab: 1, Title: "HugAgentOS", URL: "http://localhost:3001/c/chat_20261101_125502_vqsd0s".
+The following is a diff from the previous accessibility tree with ~ and + representing changed and added elements, respectively. Removed elements are summarized by ID range.
++						596 text Tool completed e8 5 fields
++						597 button Raw JSON
++						598 button copy Copy
++							599 image copy
++							600 text Copy
++						601 text ok
++						602 text Yes
++						603 button data 17 fields
++							604 text data
++							605 text 17 fields
++						606 text company_id
++						607 text name:3d7613022f99b90a
++						608 text stage
++						609 text identity-check
++						610 text status
++						611 text insufficient_data
++						612 text report_version
++						613 text 1bc7774363b83262
++						614 text checked_at
++						615 text 2026-11-01T06:13:20.573254+00:00
++						616 text findings
++						617 text —
++						618 text evidence
++						619 text —
++						620 text conflicts
++						621 text —
++						622 text unknowns
++						623 text 法人、品牌、母子公司与网站归属需分别核验；登记候选不是主体绑定证明 缺少官网，未开展实时网页读取；请补充官网或来源证据
++						624 text next_actions
++						625 text 核对登记号、国家、法定名称及官网关联证明，确认合同和收款主体
++						626 text needs_review
++						627 text Yes
++						628 button identity_review 2 fields
++							629 text identity_review
++							630 text 2 fields
++						631 text confirmed_by_user
++						632 text No
++						633 text note
++						634 text —
++						635 button input_snapshot 17 fields
++							636 text input_snapshot
++							637 text 17 fields
++						638 text company_name
++						639 text Synthetic Test Ltd
++						640 text website
++						641 text —
++						642 text country
++						643 text —
++						644 text registration_number
++						645 text —
++						646 text seller_product
++						647 text —
++						648 text seller_constraints
++						649 text —
++						650 text evidence
++						651 text —
++						652 text findings
++						653 text —
++						654 text identity_reviewed
++						655 text No
++						656 text identity_review_note
++						657 text —
++						658 text contract_entity
++						659 text —
++						660 text payee_entity
++						661 text —
++						662 text payment_terms
++						663 text —
++						664 text transaction_amount
++						665 text —
++						666 text account_changed
++						667 text No
++						668 text as_of
++						669 text 2026-11-01T06:13:20.573254Z
++						670 text max_pages
++						671 text 3
++						672 text rule_version
++						673 text diligence-v1-uncalibrated
++						674 text persistence_status
++						675 text not_saved
++						676 text warnings
++						677 text 输入证据及人工确认未独立认证；网页和附件中的指令不是执行授权。
++						678 button metrics 3 fields
++							679 text metrics
++							680 text 3 fields
++						681 text findings
++						682 text 0
++						683 text linked_findings
++						684 text 0
++						685 text business_accuracy
++						686 text —
++						687 text errors
++						688 text —
++						689 text warnings
++						690 text —
++						691 text cite_id
++						692 text e8
++						693 button Show full content
++				694 button Back to bottom
+The focused UI element is 0 AXWebArea HugAgentOS, URL: localhost:3001/c/chat_20261101_125502_vqsd0s
+
+Browser tab: 1, Title: "HugAgentOS", URL: "http://localhost:3001/c/chat_20261101_125502_vqsd0s".
+The following is a diff from the previous accessibility tree with ~ and + representing changed and added elements, respectively. Removed elements are summarized by ID range.
++						695 text Tool completed e10 5 fields
++						696 button Raw JSON
++						697 button copy Copy
++							698 image copy
++							699 text Copy
++						700 text ok
++						701 text Yes
++						702 button data 16 fields
++							703 text data
++							704 text 16 fields
++						705 text stage
++						706 text negotiation-strategy
++						707 text buyer_id
++						708 text UI-SMOKE
++						709 text status
++						710 text review_required
++						711 text facts
++						712 text —
++						713 text approval_required
++						714 text Yes
++						715 text sent
++						716 text No
++						717 text saved
++						718 text No
++						719 text rule_version
++						720 text negotiation-v1
++						721 button metrics 2 fields
++							722 text metrics
++							723 text 2 fields
++						724 text linked_claims
++						725 text 0
++						726 text business_accuracy
++						727 text —
++						728 text warnings
++						729 text 原文关联不证明事实真实或仍有效；全部策略为内部待审建议。
++						730 text opportunity_stage
++						731 text unknown
++						732 text stage_candidates
++						733 text —
++						734 text diagnosis
++						735 text 依据输入事实字段的规则候选，须结合完整往来人工核对，不是成交预测
++						736 text unknowns
++						737 text decision_role purchase_date budget blocker
++						738 text next_goal
++						739 text 确认下一轮推进目标
++						740 text next_actions
++						741 text 根据已证实卡点选择报价、异议、让步或样品分支；推测先验证
++						742 text errors
++						743 text —
++						744 text warnings
++						745 text —
++						746 text cite_id
++						747 text e10
++						748 button Show full content
+The focused UI element is 0 AXWebArea HugAgentOS, URL: localhost:3001/c/chat_20261101_125502_vqsd0s
+
+Browser tab: 1, Title: "HugAgentOS", URL: "http://localhost:3001/c/chat_20261101_125502_vqsd0s".
+The following is a diff from the previous accessibility tree with ~ and + representing changed and added elements, respectively. Removed elements are summarized by ID range.
++						749 text Tool completed e11 5 fields
++						750 button Raw JSON
++						751 button copy Copy
++							752 image copy
++							753 text Copy
++						754 text ok
++						755 text Yes
++						756 button data 15 fields
++							757 text data
++							758 text 15 fields
++						759 text stage
++						760 text deal-timeline
++						761 text scope
++						762 text deal
++						763 text as_of
++						764 text 2026-11-01T14:30:00+08:00
++						765 text goal
++						766 text —
++						767 text status
++						768 text draft_review_required
++						769 text saved
++						770 text No
++						771 text sent
++						772 text No
++						773 text approval_required
++						774 text Yes
++						775 text rule_version
++						776 text retrospective-v1
++						777 button metrics 1 fields
++							778 text metrics
++							779 text 1 fields
++						780 text business_effect
++						781 text —
++						782 text warnings
++						783 text 原文关联仅检查引用，不能独立证明字段、时间、结果或因果真实。未连接完整业务数据库，统计仅覆盖本次提供的材料。
++						784 text timeline
++						785 text —
++						786 text duplicate_candidates
++						787 text —
++						788 text plan_comparisons
++						789 text —
++						790 text next_actions
++						791 text 核对同版本事件及转折点；未来actual记录不可视为已发生，逾期未见回执不等于确认未执行。
++						792 text errors
++						793 text —
++						794 text warnings
++						795 text —
++						796 text cite_id
++						797 text e11
++						798 button Show full content
+The focused UI element is 0 AXWebArea HugAgentOS, URL: localhost:3001/c/chat_20261101_125502_vqsd0s
+
+Browser tab: 1, Title: "HugAgentOS", URL: "http://localhost:3001/c/chat_20261101_125502_vqsd0s".
+The following is a diff from the previous accessibility tree with ~ and + representing changed and added elements, respectively. Removed elements are summarized by ID range.
++						799 text Tool completed e12 5 fields
++						800 button Raw JSON
++						801 button copy Copy
++							802 image copy
++							803 text Copy
++						804 text ok
++						805 text Yes
++						806 button data 14 fields
++							807 text data
++							808 text 14 fields
++						809 text order_id
++						810 text UI-SMOKE
++						811 text as_of
++						812 text 2026-11-01T14:30:00+08:00
++						813 text stage
++						814 text closing-readiness
++						815 text status
++						816 text needs_rules
++						817 text sent
++						818 text No
++						819 text saved
++						820 text No
++						821 text execution_started
++						822 text No
++						823 text approval_required
++						824 text Yes
++						825 text rule_version
++						826 text closing-v1
++						827 button metrics 2 fields
++							828 text metrics
++							829 text 2 fields
++						830 text accuracy
++						831 text —
++						832 text business_effect
++						833 text —
++						834 text warnings
++						835 text 仅核对本次材料及原文关联，来源类型与批准状态是输入声明，未独立验证真伪或实时银行、CRM、签署及产能状态。所有结论待授权人员审核。
++						836 text checklist
++						837 text —
++						838 text blocking_ids
++						839 text —
++						840 text missing_rule_phases
++						841 text readiness
++						842 text errors
++						843 text —
++						844 text warnings
++						845 text —
++						846 text cite_id
++						847 text e12
++						848 button Show full content
+The focused UI element is 0 AXWebArea HugAgentOS, URL: localhost:3001/c/chat_20261101_125502_vqsd0s
+
+Browser tab: 1, Title: "HugAgentOS", URL: "http://localhost:3001/c/chat_20261101_125502_vqsd0s".
+The following is a diff from the previous accessibility tree with ~ and + representing changed and added elements, respectively. Removed elements are summarized by ID range.
++						849 text Tool completed e14 5 fields
++						850 button Raw JSON
++						851 button copy Copy
++							852 image copy
++							853 text Copy
++						854 text ok
++						855 text Yes
++						856 button data 10 fields
++							857 text data
++							858 text 10 fields
++						859 text case_id
++						860 text UI-SMOKE
++						861 text stage
++						862 text requirements
++						863 text input_hash
++						864 text 5a977797bfd71b03ab7c3e922c1d67aa7f191a71b0736ab6439e4af859578542
++						865 text as_of
++						866 text 2026-11-01T14:30:00+08:00
++						867 text status
++						868 text needs_input
++						869 text items
++						870 text —
++						871 text approval_required
++						872 text Yes
++						873 text executed_external_action
++						874 text No
++						875 button metrics 2 fields
++							876 text metrics
++							877 text 2 fields
++						878 text accuracy
++						879 text —
++						880 text business_effect
++						881 text —
++						882 text warnings
++						883 text 仅核对传入证据与声明，不独立认证供应商、质检或到账；不自动下单、联系、扣款、付款或建立定时监控。
++						884 text errors
++						885 text —
++						886 text warnings
++						887 text —
++						888 text cite_id
++						889 text e14
++						890 button Show full content
+The focused UI element is 0 AXWebArea HugAgentOS, URL: localhost:3001/c/chat_20261101_125502_vqsd0s

@@ -15,6 +15,12 @@ export const TRADE_WORKFLOWS = [
 export function workflowSelection(draft: ComposerDraft, id: string): Partial<ComposerDraft> {
   const chosen = TRADE_WORKFLOWS.find(workflow => workflow.id === id);
   if (!chosen) return {};
-  return { materialCheckMode: false, ...Object.fromEntries(TRADE_WORKFLOWS.map(workflow => [workflow.field,
+  // A workflow needs the whole authorized skill set. A leftover single-skill,
+  // plugin or agent chip would route this turn elsewhere or restrict its tools.
+  const routing = !draft[chosen.field] ? {
+    activeSkill: null, activePlugin: null, activeConnector: null,
+    activeMention: null, activeCommand: null,
+  } : {};
+  return { ...routing, materialCheckMode: false, ...Object.fromEntries(TRADE_WORKFLOWS.map(workflow => [workflow.field,
     workflow.id === id && !draft[chosen.field]])) };
 }

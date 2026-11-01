@@ -1,0 +1,144 @@
+Browser tab: 1, Title: "HugAgentOS", URL: "http://localhost:3001/c/chat_20261101_155053_6wd4he".
+1 AXWebArea HugAgentOS, URL: localhost:3001/c/chat_20261101_155053_6wd4he
+	2 container
+		3 container
+			4 button Open sidebar
+				5 image menu
+			6 text 宁波保温杯外贸获客工作流 政策解读
+			7 container
+				8 container
+					42 container
+						43 text [工作流技能加载]
+						44 text 先从当前可用插件目录找到外贸插件，用load_plugin加载当前账号可用的实际安装。以下技能名称为业务名称；导入后的技能ID可能带后缀，必须使用该插件返回的实际技能ID和路径。
+						45 text 执行每个阶段前，用view_text_file完整读取该安装中对应技能的SKILL.md，再按需读取输入契约。不能用同名内置副本、其他技能或终端cat代替，因为它们不会登记该安装的技能已完整读取。
+						46 text 若工具返回skill_not_loaded，按回执给出的实际ID及路径完整读取后重试一次；若插件或技能已停用、未安装或无权限，报告缺口，不绕过权限、不声称已执行。
+						47 text [/工作流技能加载]
+						48 text 开启获客工作流。我们是用于演示的宁波保温杯供应商，以下能力均为虚构测试数据，不代表真实工厂：500ml 双层真空不锈钢杯，304 不锈钢；现有款 MOQ 500 个，定制颜色 MOQ 1,000 个/色；支持激光 Logo、定制颜色和礼盒；月产能 50,000 个；参考价 FOB Ningbo USD 4.5–6/个；大货交期 30–40 天；食品接触报告覆盖型号和有效期未知。 [获客模式：六技能工作流]
+						49 text 请先读取并遵循以下六个技能：trade-customer-profile、trade-buyer-search、trade-buyer-due-diligence、trade-buyer-contact-discovery、trade-lead-prioritization、trade-personalized-outreach。
+						50 text 结合本对话已提供的资料执行：客户画像 → 潜在买家搜索 → 买家背调 → 联系人发现 → 线索评分与跟进优先级 → 个性化开发信草稿。六个技能共同参与，但阶段按依赖顺序执行。
+						51 text 先检查产品及用途、目标国家或地区、买家类型、供货能力（MOQ、价格区间、交期、认证及定制能力），以及线索数量、排除条件、预算。缺少关键资料时集中追问，未知事实不得猜测；未指定预算时最多4条查询、5家候选、8次网页读取、90秒搜索，每家联系人发现最多3页。
+						52 text 画像与搜索计划可在已有授权、信息充分时继续；背调后列出证据、匹配理由、风险与未知项，等待用户审核适合买家后再发现公开联系渠道。继续审核时沿用前序结果，避免重复搜索。
+						53 text 最终交付客户画像及筛选规则、带来源和命中理由的去重候选表、逐家背调与审核状态、已准入买家的公开联系渠道、可解释优先级队列和待审开发信、执行统计和待补充事项。每项证据保留URL和获取时间；岗位、任职及可投递状态未核实时标为unknown。
+						54 text 仅使用真实工具结果。工具、技能或搜索配置不可用时明确报告缺口及已完成阶段，不编造执行结果。使用prioritize工具按四维证据评分，未知不算不匹配，区分匹配分与证据覆盖率；当前75分/75%门槛尚未校准。拒绝联系、硬排除或审核不适合必须停止；资料不足先补资料。仅为优先跟进且渠道已核对的买家调用outreach工具生成草稿，使用已确认英文产品与供货资料并附声明来源；可选个性化事实必须对应买家证据。当前为模板生成，中文对照保留英文事实原文，不声称独立验证或自动翻译。输出两个主题、英文正文、中文审核对照及事实引用，等待人工批准。不自动发送消息。
+						55 text [/获客模式]
+						56 text [共享资料检查]
+						57 text 仅在本轮生成了拟对外使用的开发信、回复、商品文案、报价或合同草稿时，在最终交付前读取trade-sensitive-word-check并实际调用trade_material_check(action="sensitive",data={fields:[{id,text,placement}],context})；传最终原文，不用摘要替代。一般解释、内部统计和纯提问不强制检查。关键事实不足可以交付带待核实标记的内部草稿。
+						58 text 若已有产品标识/版本、目标市场与当前业务阶段，或用户要求合规检查，再读取trade-compliance-check调用action="compliance"，按其输入契约提供case_id/as_of/product/stage/markets/channel/fields；该动作已包含敏感词扫描，不需重复扫描。未知用途保持null，不编造审核记录。先复用本对话已有资料，缺项集中追问。
+						59 text 工具真实结果会显示两种检查卡片：原文敏感词标注和合规清单。不得用模型文字伪造卡片或称未命中即合规。修改后重跑，不自动采纳建议、发送或发布；官方入口不等于已查询最新法规。
+						60 text [/共享资料检查]
+					9 button copy, Help: Copy content
+						10 image copy
+					11 button edit, Help: Edit message
+						12 image edit
+					13 text 2026-11-01 15:51:49
+					61 text 我会按六阶段获客流程推进，先加载当前账号安装的外贸插件，检查输入要求，再集中确认缺少的关键条件。你提供的供应商能力将保留“虚构测试数据”声明；背调完成后会停在买家审核节点，等待你确认后再发现联系渠道。
+					62 button (collapsed) 10 tools Asking you · 1m 26s, Secondary Actions: Expand
+						63 container 10 tools
+						105 text Asking you
+						65 text ·
+						66 text 1m 26s
+					67 button appstore Plugin: foreign-trade-demo-ccb3f5 0:01
+						68 image appstore
+						69 text Plugin:
+						70 text foreign-trade-demo-ccb3f5
+						71 text 0:01
+					72 button Skill: 0:02
+						73 text Skill:
+						74 text 0:02
+					101 text Skill Loaded
+					102 text trade-customer-profile-c01d3b
+					103 text No details
+					75 button Skill: 0:07
+						76 text Skill:
+						77 text 0:07
+					106 text Skill Loaded
+					107 text trade-buyer-search-c01d3b
+					108 text No details
+					78 button Skill: 0:08
+						79 text Skill:
+						80 text 0:08
+					109 text Skill Loaded
+					110 text trade-buyer-due-diligence-c01d3b
+					111 text No details
+					81 button Skill: 0:10
+						82 text Skill:
+						83 text 0:10
+					112 text Skill Loaded
+					113 text trade-buyer-contact-discovery-c01d3b
+					114 text No details
+					84 button Skill: 0:12
+						85 text Skill:
+						86 text 0:12
+					115 text Skill Loaded
+					116 text trade-lead-prioritization-c01d3b
+					117 text No details
+					87 button Skill: 0:14
+						88 text Skill:
+						89 text 0:14
+					118 text Skill Loaded
+					119 text trade-personalized-outreach-c01d3b
+					120 text No details
+					90 button Read file: 0:16
+						91 text Read file:
+						104 text 0:16
+					121 button trade_buyer_research 0:02
+						122 text trade_buyer_research
+						123 text 0:02
+					127 container
+						128 text Tool completed e3
+					129 text 5 fields
+					130 button Raw JSON
+					131 button copy Copy
+						132 image copy
+						133 text Copy
+					134 container
+						135 text ok Yes
+						136 button data 11 fields
+							137 text data
+							138 text 11 fields
+						139 text profile_id profile-62e7932b14ef5572 version 1 status draft created_at 2026-11-01T07:52:46.911876+00:00 product DEMO / 虚构测试供应商声明：宁波供应商；500ml 双层真空304不锈钢杯。具体用途（如成人日常饮水、促销礼赠、户外）尚待用户确认。
+						140 button merchant_statements 4 fields
+							141 text merchant_statements
+							142 text 4 fields
+						143 text product DEMO / 虚构测试供应商声明：宁波供应商；500ml 双层真空304不锈钢杯。具体用途（如成人日常饮水、促销礼赠、户外）尚待用户确认。 markets — buyer_types — constraints 全部能力为用户提供的虚构测试数据，不代表真实工厂：现有款MOQ 500个；定制颜色MOQ 1,000个/色；支持激光Logo、定制颜色和礼盒；月产能50,000个；参考价FOB Ningbo USD 4.5–6/个；大货交期30–40天；食品接触报告覆盖型号及有效期unknown。目标国家、买家类型、具体用途、排除条件待确认。未指定新预算前最多4条查询、5家候选、8次网页读取、90秒搜索；每家联系人发现最多3页。不得将未知采购量视为不符合MOQ，不得宣称食品接触合规。建议画像仅为待确认假设：保温杯进口商/批发商、促销礼品分销商、自有品牌商。背调后必须等待用户审核适合再发现渠道。75分/75%评分门槛未校准。 rules —
+						144 button search_plan 1 in total
+							145 text search_plan
+							146 text 1 in total
+						147 text 1 queries DEMO / 虚构测试供应商声明：宁波供应商；500ml 双层真空304不锈钢杯。具体用途（如成人日常饮水、促销礼赠、户外）尚待用户确认。 distributor
+						148 button evidence 1 in total
+							149 text evidence
+							150 text 1 in total
+						151 text 1 type user_statement excerpt 全部能力为用户提供的虚构测试数据，不代表真实工厂：现有款MOQ 500个；定制颜色MOQ 1,000个/色；支持激光Logo、定制颜色和礼盒；月产能50,000个；参考价FOB Ningbo USD 4.5–6/个；大货交期30–40天；食品接触报告覆盖型号及有效期unknown。目标国家、买家类型、具体用途、排除条件待确认。未指定新预算前最多4条查询、5家候选、8次网页读取、90秒搜索；每家联系人发现最多3页。不得将未知采购量视为不符合MOQ，不得宣称食品接触合规。建议画像仅为待确认假设：保温杯进口商/批发商、促销礼品分销商、自有品牌商。背调后必须等待用户审核适合再发现渠道。75分/75%评分门槛未校准。 retrieved_at 2026-11-01T07:52:46.911876+00:00 unresolved 请确认买家类型、目标市场及硬性承接条件；自由文本限制尚未转为自动规则。 采购量、认证适用性、需求与付款能力均未验证。 evaluation_status not_evaluated errors — warnings — cite_id e3
+					152 button Show full content
+					124 button 询问用户 0:39
+						125 text 询问用户
+						126 text 0:39
+				93 button (collapsed) Description: Task plan: 0/4 steps completed, click to Expand, Secondary Actions: Expand
+					94 text Task plan
+					95 text 加载安装技能并核对获客输入，集中补齐关键条件
+					96 text 0
+					97 text /
+					98 text 4
+					99 image right
+				153 container 本轮优先搜索哪些国家或地区？请列出1–2个目标市场。
+					154 container
+						155 heading 本轮优先搜索哪些国家或地区？请列出1–2个目标市场。, Value: 2
+							156 text 本轮优先搜索哪些国家或地区？请列出1–2个目标市场。
+						157 button (expanded) Description: Collapse the question, Secondary Actions: Collapse
+							158 image down
+						159 button Cancel this question
+							160 image close
+					161 本轮优先搜索哪些国家或地区？请列出1–2个目标市场。
+						162 text entry area (settable)
+					163 container
+						164 button (disabled) Previous
+							165 image left
+						166 text 1 / 3
+						167 button Next
+							168 image right
+						169 button Skip this question
+						170 button Next
+		40 container Current conversation navigation
+			41 button Jump to: [工作流技能加载] 先从当前可用插件目录找到外贸插件，用load_plugin加载当前账号可用的实际安装。以下技能名称为业务名称；导入后的技能ID可能带后缀，必须使用该插件返回的实际技能ID和路径。 执行每个阶段前，用view_text_file完整读取该安装中对应技能的SKILL.md，再按需读取输入契约。不能用同名内置副本、其他技能或终端cat代替，因为它们不会登记该安装的技能已完整读取。 若工具返回skill_not_loaded，按回执给出的实际ID及路径完整读取后重试一次；若插件或技能已停用、未安装或无权限，报告缺口，不绕过权限、不声称已执行。
+
+The focused UI element is 162 text entry area (settable)

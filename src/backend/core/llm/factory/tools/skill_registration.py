@@ -68,10 +68,14 @@ async def skill_registration(
                 allowed_skill_dirs.append(str(_root))
 
     if _prepared_capabilities is not None:
-        # File tools may read exactly this run's revisions, never the entire
-        # capability root (which contains other accounts and business data).
+        # File tools may read exactly this run's revisions, including deferred
+        # plugin skills. Deferral hides instructions, not the frozen grant;
+        # using only eager IDs prevents reading skills after load_plugin.
+        # The reader still revalidates ownership/revocation on every call.
         allowed_skill_dirs = [
-            os.path.realpath(loader.get_skill_dir(name)) for name in (skill_ids_to_register or [])
+            os.path.realpath(directory)
+            for name in _prepared_capabilities.bindings
+            if (directory := loader.get_skill_dir(name))
         ]
 
     return (

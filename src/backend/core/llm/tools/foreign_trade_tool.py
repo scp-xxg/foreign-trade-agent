@@ -676,6 +676,9 @@ def register_foreign_trade_tools(toolkit, *, user_id: str, chat_id: str | None, 
                 result.update(imported_documents=imports,import_status="candidate_sources_require_confirmation")
             return _response(_success(result))
         except ValueError as exc:
+            from core.llm.foreign_trade_plugin import TradeSkillRequired
+            if isinstance(exc, TradeSkillRequired):
+                return _response(_failure(exc))
             if isinstance(exc,ValidationError):return _response(_failure(exc))
             return _response(_failure(InquiryError(422,"发品输入或图片规则无效，请核对技能输入契约")))
         except Exception as exc:
@@ -708,7 +711,10 @@ def register_foreign_trade_tools(toolkit, *, user_id: str, chat_id: str | None, 
                         attachments.append((fid, filename, parse_upload(filename, content)))
             from core.foreign_trade.material_check import prepare
             return _response(_success(prepare(action, _data(data), attachments)))
-        except (ValueError, TypeError, KeyError):
+        except (ValueError, TypeError, KeyError) as exc:
+            from core.llm.foreign_trade_plugin import TradeSkillRequired
+            if isinstance(exc, TradeSkillRequired):
+                return _response(_failure(exc))
             return _response(_failure(InquiryError(422, "检查资料格式无效，请核对字段、原文长度和时间格式。")))
         except Exception as exc:
             return _response(_failure(exc))

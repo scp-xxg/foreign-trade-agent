@@ -20,9 +20,9 @@ SKILLS = ["buyer-inquiry-followup", "product-content", "cross-role-collaboration
 NAMES = set(trade.TRADE_TOOL_NAMES)
 
 
-def _import(tmp_path, *, name="foreign-trade-demo"):
+def _import(tmp_path, *, name="foreign-trade-demo", skills=SKILLS):
     root = tmp_path / name
-    for skill in SKILLS:
+    for skill in skills:
         directory = root / "skills" / skill
         directory.mkdir(parents=True)
         (directory / "SKILL.md").write_text(
@@ -333,3 +333,136 @@ def test_team_installer_updates_the_migrated_device_package_and_installed_api(cl
     registry.set_enabled(existing.install_id, False)
     disabled = install_device_plugin(USER, current)
     assert disabled["enabled"] is False
+
+
+def test_default_selection_includes_owned_imported_skills_and_respects_revocation(client, tmp_path):
+    from features.desktop.plugin_resolution import prepare_desktop_plugin_skill_defaults, resolve_desktop_progressive_plugins
+
+    installed = _import(tmp_path)
+    component_ids = set(installed['components']['skills'])
+    selected = prepare_desktop_plugin_skill_defaults(USER, SKILLS)
+    assert component_ids <= set(selected)
+    plan = resolve_desktop_progressive_plugins(
+        user_id=USER, enabled_skill_ids=selected, enabled_mcp_ids=[])
+    target = next(p for p in plan.directory if p.install_id == installed['install_id'])
+    assert component_ids <= set(target.skill_ids)
+    assert not component_ids.intersection(prepare_desktop_plugin_skill_defaults('other-user', []))
+
+    sid = next(iter(component_ids))
+    registry.set_enabled(registry.install_id('skill', 'local', sid), False)
+    assert sid not in prepare_desktop_plugin_skill_defaults(USER, [])
+    registry.set_enabled(installed['install_id'], False)
+    assert not component_ids.intersection(prepare_desktop_plugin_skill_defaults(USER, []))
+
+
+@pytest.mark.asyncio
+async def test_fresh_chat_catalog_defaults_expose_imported_skill_paths(client, tmp_path, index_db):
+    from time import monotonic
+    from core.capabilities.catalog import resolver
+    from features.desktop.capabilities import runtime as capability_runtime
+    from features.desktop.plugin_resolution import resolve_desktop_progressive_plugins
+
+    installed = _import(tmp_path)
+    component_ids = set(installed["components"]["skills"])
+    # The chat route resolves a concrete default list before the factory. Test
+    # the cache-hit path too: installation/revocation must not wait for its TTL.
+    resolver.process_state().capability_cache[USER] = (monotonic() + 30, (SKILLS, [], []))
+    try:
+        with index_db() as db:
+            selected, _, _ = resolver.resolve_all_runtime_enabled(db, USER)
+        assert component_ids <= set(selected)
+        plan = resolve_desktop_progressive_plugins(
+            user_id=USER, enabled_skill_ids=selected, enabled_mcp_ids=[])
+        target = next(p for p in plan.deferred if p.install_id == installed["install_id"])
+        prepared = capability_runtime.prepare("fresh-chat-defaults", USER, skill_ids=selected)
+        prepared = prepared.preflight(plugin_ids=[installed["install_id"]])
+        from core.llm.factory.request import AgentRequest
+        from core.llm.factory.tools.skill_registration import skill_registration
+        from core.llm.tools.skill_tool import register_sandboxed_view_text_file
+        import logging
+        directories, loader, _ = await skill_registration(
+            AgentRequest(enabled_skill_ids=[]), _api_scope=None, _eval_scope=None,
+            _log=logging.getLogger(__name__), _prepared_capabilities=prepared,
+            loader=None, toolkit=ToolAssembly(),
+        )
+        basic = SimpleNamespace(tools=[], skills_or_loaders=[])
+        collector = ToolAssembly()
+        register_load_plugin(collector, {target.slug: target}, {
+            "toolkit": SimpleNamespace(tool_groups=[basic]), "user_id": USER,
+            "loader": loader, "prepared_run": prepared,
+            "prepared_servers": {}, "persist": False,
+        })
+        response = await next(t for t in collector if t.name == "load_plugin")._func(target.slug)
+        text = str(response)
+        for sid in component_ids:
+            assert f"{sid}/SKILL.md" in text
+        assert len(basic.skills_or_loaders) == len(component_ids)
+        loaded = set()
+        register_sandboxed_view_text_file(collector, directories, loader,
+                                        fully_loaded_skill_ids=loaded, user_id=USER)
+        read = next(t for t in collector if t.name == "view_text_file")
+        from core.capabilities.skills.config import model_facing_skill_dir
+        for sid in component_ids:
+            path = model_facing_skill_dir(sid, loader.get_skill_dir(sid)) + "/SKILL.md"
+            result = await read._func(file_path=path)
+            assert result.state == "success", str(result)
+        assert loaded == component_ids
+        denied = await read._func(file_path=str(tmp_path / "outside.txt"))
+        assert denied.state == "denied"
+        registry.set_enabled(installed["install_id"], False)
+        assert (await read._func(file_path=path)).state == "denied"
+        with index_db() as db:
+            selected, _, _ = resolver.resolve_all_runtime_enabled(db, USER)
+        assert not component_ids.intersection(selected)
+    finally:
+        resolver.process_state().capability_cache.pop(USER, None)
+
+
+def _workflow_cases():
+    from core.foreign_trade import diligence, communication, negotiation, retrospective, closing, listing, procurement
+    stamp = "2026-11-01T13:00:00+08:00"
+    yield "acquisition", "trade_buyer_research", "profile", "trade-customer-profile", {"product": "Test bottle", "markets": ["Germany"]}
+    yield "material-check", "trade_material_check", "sensitive", "trade-sensitive-word-check", {"fields": [{"id": "body", "text": "CE certified test bottle"}]}
+    for workflow, module, data in [
+        ("diligence", diligence, {"company_name": "Synthetic test company"}),
+        ("communication", communication, {"buyer_id": "synthetic-buyer"}),
+        ("negotiation", negotiation, {"buyer_id": "synthetic-buyer"}),
+        ("retrospective", retrospective, {"as_of": stamp}),
+        ("closing", closing, {"order_id": "synthetic-order", "as_of": stamp}),
+        ("listing", listing, {"batch_id": "synthetic-listing", "as_of": stamp, "platform": "Amazon", "site": "DE", "language": "de"}),
+        ("procurement", procurement, {"case_id": "synthetic-procurement", "as_of": stamp}),
+    ]:
+        tool = {"listing": "trade_listing_prepare", "procurement": "trade_procurement_prepare"}.get(workflow, "trade_buyer_research")
+        for action, skill in module.STAGES.items():
+            yield workflow, tool, action, skill, data
+
+
+@pytest.mark.asyncio
+async def test_all_workflows_imported_default_tools_two_turns(client, tmp_path):
+    """Exercise real dispatch for every stage, including fresh read gates next turn."""
+    from pathlib import Path
+    from features.desktop.plugin_resolution import prepare_desktop_plugin_skill_defaults, resolve_desktop_progressive_plugins
+    root = next(p for p in Path(__file__).resolve().parents if (p / "extensions/foreign_trade/plugin").is_dir())
+    names = [p.parent.name for p in (root / "extensions/foreign_trade/plugin/skills").glob("*/SKILL.md")]
+    assert len(names) >= 50
+    installed = _import(tmp_path, skills=names)
+    for turn in (1, 2):
+        selected = prepare_desktop_plugin_skill_defaults(USER, SKILLS)
+        plan = resolve_desktop_progressive_plugins(user_id=USER, enabled_skill_ids=selected, enabled_mcp_ids=[])
+        target = next(p for p in plan.directory if p.install_id == installed["install_id"])
+        loaded = set()
+        collector = ToolAssembly()
+        trade.register_trade_plugin_target(collector, target, user_id=USER, chat_id="workflow-smoke", loaded_skill_ids=loaded)
+        tools = {tool.name: tool for tool in collector}
+        for workflow, tool, action, skill, data in _workflow_cases():
+            sid = next(s for s in target.skill_ids if s.startswith(skill + "-"))
+            loaded.discard(sid)
+            denied = _decoded(await tools[tool]._func(action=action, data=data))
+            assert not denied["ok"] and "view_text_file" in json.dumps(denied), (turn, workflow, action, denied)
+            loaded.add(sid)  # Simulate the full-read marker; real reader is tested above.
+            result = _decoded(await tools[tool]._func(action=action, data=data))
+            assert result["ok"], (turn, workflow, action, result)
+            registry.set_enabled(registry.install_id("skill", "local", sid), False)
+            revoked = _decoded(await tools[tool]._func(action=action, data=data))
+            assert not revoked["ok"], (workflow, action)
+            registry.set_enabled(registry.install_id("skill", "local", sid), True)

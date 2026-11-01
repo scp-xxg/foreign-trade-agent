@@ -273,8 +273,12 @@ def _apply_desktop_cloud_bridge(result, *, user_id=None):
         bridged_skills, _, bridged_mcps = result
     from core.harness.registry.run_capabilities import has_run_capabilities
     if has_run_capabilities() and bridged_skills is not None:
-        from core.harness.registry.run_capabilities import filter_available_names
-        bridged_skills = filter_available_names(bridged_skills, user_id=user_id)
+        from core.harness.registry.run_capabilities import plugin_skill_defaults
+        # Chat resolves defaults before calling the factory, so its skill list
+        # is already concrete and never enters the factory's None fallback.
+        # Include installed plugin identities here, outside the TTL cache, so
+        # fresh chats freeze the same authorized skills as subsequent turns.
+        bridged_skills = plugin_skill_defaults(user_id, bridged_skills)
     return (bridged_skills, agents, bridged_mcps)
 
 

@@ -43,8 +43,15 @@ export function tradeWorkflowMessage(text: string, acquisition: boolean, diligen
   if (!text.trim() || text.trim().startsWith('/')) return text;
   if (materialCheck) return materialCheckMessage(text);
   const workflow = procurement ? procurementMessage(text, true) : listing ? listingMessage(text, true) : closing ? closingMessage(text, true) : retrospective ? retrospectiveMessage(text, true) : negotiation ? negotiationMessage(text, true) : communication ? communicationMessage(text, true) : diligence ? diligenceMessage(text, true) : acquisitionMessage(text, acquisition);
-  return [acquisition,diligence,communication,negotiation,retrospective,closing,listing,procurement].some(Boolean) ? workflow + MATERIAL_CHECK_GUIDANCE : workflow;
+  return [acquisition,diligence,communication,negotiation,retrospective,closing,listing,procurement].some(Boolean) ? WORKFLOW_SKILL_LOADING + workflow + MATERIAL_CHECK_GUIDANCE : workflow;
 }
+
+export const WORKFLOW_SKILL_LOADING = `[工作流技能加载]
+先从当前可用插件目录找到外贸插件，用load_plugin加载当前账号可用的实际安装。以下技能名称为业务名称；导入后的技能ID可能带后缀，必须使用该插件返回的实际技能ID和路径。
+执行每个阶段前，用view_text_file完整读取该安装中对应技能的SKILL.md，再按需读取输入契约。不能用同名内置副本、其他技能或终端cat代替，因为它们不会登记该安装的技能已完整读取。
+若工具返回skill_not_loaded，按回执给出的实际ID及路径完整读取后重试一次；若插件或技能已停用、未安装或无权限，报告缺口，不绕过权限、不声称已执行。
+[/工作流技能加载]
+`;
 
 export const MATERIAL_CHECK_GUIDANCE = `
 [共享资料检查]

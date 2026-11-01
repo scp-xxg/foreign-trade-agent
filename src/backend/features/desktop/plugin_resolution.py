@@ -17,12 +17,28 @@ from core.capabilities.plugins.runtime import resolution as plugin_resolution
 
 
 def prepare_desktop_plugin_skill_defaults(user_id, skill_ids):
-    """Include enabled cloud plugin intentions before ready-only skill filtering."""
+    """Include authorized plugin components before ready-only skill filtering."""
     from features.desktop.capabilities import skills
     from features.desktop.capabilities.plugins import enabled_cloud_skill_intents
     from features.desktop.capabilities.preparation import ensure_cloud_ready
 
     selected = set(skill_ids) | enabled_cloud_skill_intents(user_id)
+    # Imported local skills have owner-qualified names. The default catalog can
+    # contain only their built-in names, leaving an otherwise callable plugin
+    # with a partial skill surface. Add the exact installed component identities
+    # here (defaults only); explicit restricted selections remain untouched.
+    from features.desktop.capabilities import registry
+    from features.desktop.capabilities.dependency import _identifier
+    from features.desktop.capabilities.local_plugin_runtime import enabled_for
+    from core.capabilities.identity_rules import LOCAL_PROFILE
+
+    if user_id:
+        for row in registry.list_installations(kind="plugin", profile_id=LOCAL_PROFILE):
+            if (row.payload.get("owner_user_id") != user_id
+                    or not row.ready or not enabled_for(row, user_id)):
+                continue
+            for entry in (row.payload.get("components") or {}).get("skills", []):
+                selected.add(_identifier(entry) if isinstance(entry, dict) else str(entry))
     ensure_cloud_ready(user_id, skill_keys=sorted(selected))
     return skills.filter_available_names(sorted(selected), user_id=user_id)
 
