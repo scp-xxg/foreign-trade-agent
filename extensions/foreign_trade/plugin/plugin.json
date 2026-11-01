@@ -1,8 +1,8 @@
 {
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "foreign-trade-demo",
-  "version": "0.9.0",
-  "description": "外贸业务助手：在对话中核验买家、处理询盘报价与跟进，制作英文上品资料、FAQ和图片，并按业务、采购、美工、运营、合规岗位协同与内部交接。来源可核验，模拟交易明确标注，确认与审核由用户决定。 支持阿里RFQ与Amazon Listing本地化、版本化规则知识检索、报价条款校验和多轮风险反馈。 支持基于客户画像的真实公开买家搜索、来源追踪与人工效果审核。 支持画像、搜索、背调、公开联系人、线索排序、开发信草稿六阶段获客工作流。 支持联系人、评分、跟进节奏与回复分流四技能客户跟进工作流。",
+  "version": "0.10.0",
+  "description": "SailAgent 外贸业务助手：销售核验公开买家资料、处理询盘报价和跟进；同款商品接力运营，确认事实后生成英文资料、FAQ、图片与 Amazon US 草稿。两条流程共享版本化记录，结合企业知识及有来源的市场规则审核，支持修改复审与下载，不自动发送或发布。",
   "author": {
     "name": "Foreign Trade Demo"
   },
@@ -43,9 +43,9 @@
               "prompt": "请按客户画像、买家搜索、买家背调、联系人发现、线索评分与跟进优先级、个性化开发信生成六个技能开展获客。背调后等我审核适合，再发现公开渠道；按有来源的维度证据计算匹配分及覆盖率，为优先跟进买家使用已核对英文供货资料生成待审草稿。未知保留，拒绝联系则停止，不发送消息。"
             },
             {
-              "id": "trade-customer-followup",
-              "label": "客户跟进",
-              "prompt": "请读取trade-buyer-contact-discovery、trade-lead-prioritization、trade-followup-cadence、trade-reply-triage四个技能。沿用已审核买家和四维证据，发现核对公开渠道、评分并按真实发送记录和买家时区规划跟进；有回复先用reply-triage，任何回复暂停旧节奏，退订或拒绝停止，再把完整reply交给cadence重算。缺少审核、来源、时区或发送记录先问我，不自动发送或定时执行。"
+              "id": "trade-customer-diligence",
+              "label": "客户背调",
+              "prompt": "请读取trade-company-identity、trade-business-fit、trade-contact-verification、trade-transaction-risk四技能，依次调用identity-check、business-fit、decision-chain、transaction-risk，形成带来源、时间、候选及未知项的背调报告。先核验主体，身份冲突先确认；区分网站自述与登记证据、产品相关与采购信号、职位与采购权限；信用司法制裁未查询不得认为无风险。请先检查我的企业资料和卖方产品，缺项集中问我，不联系客户。"
             },
             {
               "id": "trade-buyer-search",
@@ -76,6 +76,26 @@
               "id": "localization-review",
               "label": "本地化与规则校验",
               "prompt": "请基于我已有的询盘或确认产品资料生成阿里RFQ销售回复和Amazon美国站Listing草稿，先检索当前规则知识，再真实校验平台要求与报价条款，展示文字批注、风险标记和来源。修改后再校验并比较，不发送或发布。"
+            },
+            {
+              "id": "trade-customer-communication",
+              "label": "客户沟通",
+              "prompt": "读取六个沟通技能，按客户现有往来执行首次触达、回复分流、需求澄清、有据答复、跟进节奏、沟通纪要的情境工作流；缺项追问，退订停止，提供待审草稿，不自动发送。"
+            },
+            {
+              "id": "trade-negotiation",
+              "label": "谈单",
+              "prompt": "读取四个谈单技能，诊断商机后按情况处理异议、条件交换或样品试单，复用报价、答复、条款校验及纪要；成本授权缺项先确认，生成内部策略和待审草稿，不对外承诺。"
+            },
+            {
+              "id": "trade-retrospective",
+              "label": "复盘",
+              "prompt": "读取trade-deal-timeline、trade-funnel-analysis、trade-win-loss-analysis、trade-improvement-planning、trade-playbook-learning及各输入契约，执行单商机或周期复盘。先确认范围、时间、目标和真实记录，区分计划实际、成熟转化与待观察、陈述与原因假设，交付内部待审改进计划与候选案例；不自动写库、设置提醒或修改技能。"
+            },
+            {
+              "id": "trade-closing",
+              "label": "成交",
+              "prompt": "读取trade-closing-readiness、trade-order-reconciliation、trade-sales-document-drafting、trade-order-confirmation、trade-payment-verification、trade-order-handoff及输入契约，按企业规则执行成交六技能工作流，交付内部待审阻塞、条款对照、PI合同草稿、手续与付款核对和交接包。缺少材料先确认，水单不算到账，不自动签署、发信、投产或保存。"
             }
           ]
         }
@@ -123,6 +143,14 @@
           {
             "name": "trade_buyer_research",
             "description": "生成客户画像草案、核对候选买家公开证据或发现公开邮箱与联系页；来源不足保持未知，不联系客户。"
+          },
+          {
+            "name": "trade_listing_prepare",
+            "description": "基于当前会话授权资料整理商品事实、类目、关键词、文案与图片预检，保留来源和待确认项；不自动发布。"
+          },
+          {
+            "name": "trade_procurement_prepare",
+            "description": "采购需求、供应商证据、成本、质量与交付准备的内部辅助分析；事实须有来源，未知保留，不自动采购或付款。"
           }
         ]
       }

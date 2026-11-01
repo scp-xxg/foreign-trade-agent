@@ -1,0 +1,1495 @@
+{
+  "$defs": {
+    "Adjustment": {
+      "additionalProperties": false,
+      "properties": {
+        "evidence": {
+          "items": {
+            "$ref": "#/$defs/Evidence"
+          },
+          "maxItems": 20,
+          "minItems": 1,
+          "title": "Evidence",
+          "type": "array"
+        },
+        "id": {
+          "maxLength": 1000,
+          "minLength": 1,
+          "title": "Id",
+          "type": "string"
+        },
+        "line_id": {
+          "maxLength": 1000,
+          "minLength": 1,
+          "title": "Line Id",
+          "type": "string"
+        },
+        "order_id": {
+          "maxLength": 1000,
+          "minLength": 1,
+          "title": "Order Id",
+          "type": "string"
+        },
+        "currency": {
+          "pattern": "^[A-Z]{3}$",
+          "title": "Currency",
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "payment",
+            "credit"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "amount": {
+          "anyOf": [
+            {
+              "minimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "string"
+            }
+          ],
+          "title": "Amount"
+        },
+        "confirmed": {
+          "default": false,
+          "title": "Confirmed",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "evidence",
+        "id",
+        "line_id",
+        "order_id",
+        "currency",
+        "kind",
+        "amount"
+      ],
+      "title": "Adjustment",
+      "type": "object"
+    },
+    "Assessment": {
+      "additionalProperties": false,
+      "properties": {
+        "evidence": {
+          "items": {
+            "$ref": "#/$defs/Evidence"
+          },
+          "maxItems": 20,
+          "minItems": 1,
+          "title": "Evidence",
+          "type": "array"
+        },
+        "name": {
+          "maxLength": 1000,
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "state": {
+          "enum": [
+            "met",
+            "not_met",
+            "unknown"
+          ],
+          "title": "State",
+          "type": "string"
+        },
+        "basis": {
+          "default": "supplier_claim",
+          "enum": [
+            "supplier_claim",
+            "document",
+            "independent_check"
+          ],
+          "title": "Basis",
+          "type": "string"
+        },
+        "observed_at": {
+          "format": "date-time",
+          "title": "Observed At",
+          "type": "string"
+        },
+        "valid_until": {
+          "format": "date-time",
+          "title": "Valid Until",
+          "type": "string"
+        }
+      },
+      "required": [
+        "evidence",
+        "name",
+        "state",
+        "observed_at",
+        "valid_until"
+      ],
+      "title": "Assessment",
+      "type": "object"
+    },
+    "Capacity": {
+      "additionalProperties": false,
+      "properties": {
+        "evidence": {
+          "items": {
+            "$ref": "#/$defs/Evidence"
+          },
+          "maxItems": 20,
+          "minItems": 1,
+          "title": "Evidence",
+          "type": "array"
+        },
+        "line_id": {
+          "maxLength": 1000,
+          "minLength": 1,
+          "title": "Line Id",
+          "type": "string"
+        },
+        "revision": {
+          "maxLength": 1000,
+          "minLength": 1,
+          "title": "Revision",
+          "type": "string"
+        },
+        "unit": {
+          "maxLength": 1000,
+          "minLength": 1,
+          "title": "Unit",
+          "type": "string"
+        },
+        "total": {
+          "anyOf": [
+            {
+              "minimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "string"
+            }
+          ],
+          "title": "Total"
+        },
+        "committed": {
+          "anyOf": [
+            {
+              "minimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "string"
+            }
+          ],
+          "title": "Committed"
+        },
+        "available_by": {
+          "format": "date-time",
+          "title": "Available By",
+          "type": "string"
+        },
+        "valid_until": {
+          "format": "date-time",
+          "title": "Valid Until",
+          "type": "string"
+        },
+        "independently_checked": {
+          "default": false,
+          "title": "Independently Checked",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "evidence",
+        "line_id",
+        "revision",
+        "unit",
+        "total",
+        "committed",
+        "available_by",
+        "valid_until"
+      ],
+      "title": "Capacity",
+      "type": "object"
+    },
+    "Criterion": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "maxLength": 1000,
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "required": {
+          "default": true,
+          "title": "Required",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "name"
+      ],
+      "title": "Criterion",
+      "type": "object"
+    },
+    "Evidence": {
+      "additionalProperties": false,
+      "properties": {
+        "source_id": {
+          "maxLength": 1000,
+          "minLength": 1,
+          "title": "Source Id",
+          "type": "string"
+        },
+        "excerpt": {
+          "maxLength": 6000,
+          "minLength": 1,
+          "title": "Excerpt",
+          "type": "string"
+        }
+      },
+      "required": [
+        "source_id",
+        "excerpt"
+      ],
+      "title": "Evidence",
+      "type": "object"
+    },
+    "FX": {
+      "additionalProperties": false,
+      "properties": {
+        "evidence": {
+          "items": {
+            "$ref": "#/$defs/Evidence"
+          },
+          "maxItems": 20,
+          "minItems": 1,
+          "title": "Evidence",
+          "type": "array"
+        },
+        "currency": {
+          "pattern": "^[A-Z]{3}$",
+          "title": "Currency",
+          "type": "string"
+        },
+        "rate": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "string"
+            }
+          ],
+          "title": "Rate"
+        },
+        "observed_at": {
+          "format": "date-time",
+          "title": "Observed At",
+          "type": "string"
+        },
+        "valid_until": {
+          "format": "date-time",
+          "title": "Valid Until",
+          "type": "string"
+        }
+      },
+      "required": [
+        "evidence",
+        "currency",
+        "rate",
+        "observed_at",
+        "valid_until"
+      ],
+      "title": "FX",
+      "type": "object"
+    },
+    "Fact": {
+      "additionalProperties": false,
+      "properties": {
+        "evidence": {
+          "items": {
+            "$ref": "#/$defs/Evidence"
+          },
+          "maxItems": 20,
+          "minItems": 1,
+          "title": "Evidence",
+          "type": "array"
+        },
+        "field": {
+          "maxLength": 1000,
+          "minLength": 1,
+          "title": "Field",
+          "type": "string"
+        },
+        "value": {
+          "maxLength": 1000,
+          "minLength": 1,
+          "title": "Value",
+          "type": "string"
+        },
+        "confirmed": {
+          "default": false,
+          "title": "Confirmed",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "evidence",
+        "field",
+        "value"
+      ],
+      "title": "Fact",
+      "type": "object"
+    },
+    "Invoice": {
+      "additionalProperties": false,
+      "properties": {
+        "evidence": {
+          "items": {
+            "$ref": "#/$defs/Evidence"
+          },
+          "maxItems": 20,
+          "minItems": 1,
+          "title": "Evidence",
+          "type": "array"
+        },
+        "id": {
+          "maxLength": 1000,
+          "minLength": 1,
+          "title": "Id",
+          "type": "string"
+        },
+        "number": {
+          "maxLength": 1000,
+          "minLength": 1,
+          "title": "Number",
+          "type": "string"
+        },
+        "line_id": {
+          "maxLength": 1000,
+          "minLength": 1,
+          "title": "Line Id",
+          "type": "string"
+        },
+        "order_id": {
+          "maxLength": 1000,
+          "minLength": 1,
+          "title": "Order Id",
+          "type": "string"
+        },
+        "supplier_id": {
+          "maxLength": 1000,
+          "minLength": 1,
+          "title": "Supplier Id",
+          "type": "string"
+        },
+        "revision": {
+          "maxLength": 1000,
+          "minLength": 1,
+          "title": "Revision",
+          "type": "string"
+        },
+        "unit": {
+          "maxLength": 1000,
+          "minLength": 1,
+          "title": "Unit",
+          "type": "string"
+        },
+        "currency": {
+          "pattern": "^[A-Z]{3}$",
+          "title": "Currency",
+          "type": "string"
+        },
+        "quantity": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "string"
+            }
+          ],
+          "title": "Quantity"
+        },
+        "unit_price": {
+          "anyOf": [
+            {
+              "minimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "string"
+            }
+          ],
+          "title": "Unit Price"
+        },
+        "charges": {
+          "anyOf": [
+            {
+              "minimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "string"
+            }
+          ],
+          "default": "0",
+          "title": "Charges"
+        },
+        "reviewed": {
+          "default": false,
+          "title": "Reviewed",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "evidence",
+        "id",
+        "number",
+        "line_id",
+        "order_id",
+        "supplier_id",
+        "revision",
+        "unit",
+        "currency",
+        "quantity",
+        "unit_price"
+      ],
+      "title": "Invoice",
+      "type": "object"
+    },
+    "Milestone": {
+      "additionalProperties": false,
+      "properties": {
+        "evidence": {
+          "items": {
+            "$ref": "#/$defs/Evidence"
+          },
+          "maxItems": 20,
+          "minItems": 1,
+          "title": "Evidence",
+          "type": "array"
+        },
+        "id": {
+          "maxLength": 1000,
+          "minLength": 1,
+          "title": "Id",
+          "type": "string"
+        },
+        "line_id": {
+          "maxLength": 1000,
+          "minLength": 1,
+          "title": "Line Id",
+          "type": "string"
+        },
+        "revision": {
+          "maxLength": 1000,
+          "minLength": 1,
+          "title": "Revision",
+          "type": "string"
+        },
+        "name": {
+          "maxLength": 1000,
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "owner": {
+          "maxLength": 1000,
+          "minLength": 1,
+          "title": "Owner",
+          "type": "string"
+        },
+        "planned_at": {
+          "format": "date-time",
+          "title": "Planned At",
+          "type": "string"
+        },
+        "actual_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Actual At"
+        },
+        "observed_at": {
+          "format": "date-time",
+          "title": "Observed At",
+          "type": "string"
+        },
+        "remaining_hours": {
+          "anyOf": [
+            {
+              "minimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Remaining Hours"
+        },
+        "depends_on": {
+          "items": {
+            "maxLength": 1000,
+            "minLength": 1,
+            "type": "string"
+          },
+          "maxItems": 30,
+          "title": "Depends On",
+          "type": "array"
+        }
+      },
+      "required": [
+        "evidence",
+        "id",
+        "line_id",
+        "revision",
+        "name",
+        "owner",
+        "planned_at",
+        "observed_at"
+      ],
+      "title": "Milestone",
+      "type": "object"
+    },
+    "Offer": {
+      "additionalProperties": false,
+      "properties": {
+        "evidence": {
+          "items": {
+            "$ref": "#/$defs/Evidence"
+          },
+          "maxItems": 20,
+          "minItems": 1,
+          "title": "Evidence",
+          "type": "array"
+        },
+        "id": {
+          "maxLength": 1000,
+          "minLength": 1,
+          "title": "Id",
+          "type": "string"
+        },
+        "line_id": {
+          "maxLength": 1000,
+          "minLength": 1,
+          "title": "Line Id",
+          "type": "string"
+        },
+        "supplier_id": {
+          "maxLength": 1000,
+          "minLength": 1,
+          "title": "Supplier Id",
+          "type": "string"
+        },
+        "revision": {
+          "maxLength": 1000,
+          "minLength": 1,
+          "title": "Revision",
+          "type": "string"
+        },
+        "quantity": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "string"
+            }
+          ],
+          "title": "Quantity"
+        },
+        "unit": {
+          "maxLength": 1000,
+          "minLength": 1,
+          "title": "Unit",
+          "type": "string"
+        },
+        "currency": {
+          "pattern": "^[A-Z]{3}$",
+          "title": "Currency",
+          "type": "string"
+        },
+        "unit_price": {
+          "anyOf": [
+            {
+              "minimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "string"
+            }
+          ],
+          "title": "Unit Price"
+        },
+        "moq": {
+          "anyOf": [
+            {
+              "minimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "string"
+            }
+          ],
+          "title": "Moq"
+        },
+        "valid_until": {
+          "format": "date-time",
+          "title": "Valid Until",
+          "type": "string"
+        },
+        "cost_basis": {
+          "maxLength": 1000,
+          "minLength": 1,
+          "title": "Cost Basis",
+          "type": "string"
+        },
+        "costs": {
+          "additionalProperties": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "maxProperties": 30,
+          "title": "Costs",
+          "type": "object"
+        },
+        "reviewed": {
+          "default": false,
+          "title": "Reviewed",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "evidence",
+        "id",
+        "line_id",
+        "supplier_id",
+        "revision",
+        "quantity",
+        "unit",
+        "currency",
+        "unit_price",
+        "moq",
+        "valid_until",
+        "cost_basis"
+      ],
+      "title": "Offer",
+      "type": "object"
+    },
+    "Order": {
+      "additionalProperties": false,
+      "properties": {
+        "evidence": {
+          "items": {
+            "$ref": "#/$defs/Evidence"
+          },
+          "maxItems": 20,
+          "minItems": 1,
+          "title": "Evidence",
+          "type": "array"
+        },
+        "line_id": {
+          "maxLength": 1000,
+          "minLength": 1,
+          "title": "Line Id",
+          "type": "string"
+        },
+        "order_id": {
+          "maxLength": 1000,
+          "minLength": 1,
+          "title": "Order Id",
+          "type": "string"
+        },
+        "supplier_id": {
+          "maxLength": 1000,
+          "minLength": 1,
+          "title": "Supplier Id",
+          "type": "string"
+        },
+        "revision": {
+          "maxLength": 1000,
+          "minLength": 1,
+          "title": "Revision",
+          "type": "string"
+        },
+        "quantity": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "string"
+            }
+          ],
+          "title": "Quantity"
+        },
+        "unit": {
+          "maxLength": 1000,
+          "minLength": 1,
+          "title": "Unit",
+          "type": "string"
+        },
+        "currency": {
+          "pattern": "^[A-Z]{3}$",
+          "title": "Currency",
+          "type": "string"
+        },
+        "unit_price": {
+          "anyOf": [
+            {
+              "minimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "string"
+            }
+          ],
+          "title": "Unit Price"
+        },
+        "approved": {
+          "default": false,
+          "title": "Approved",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "evidence",
+        "line_id",
+        "order_id",
+        "supplier_id",
+        "revision",
+        "quantity",
+        "unit",
+        "currency",
+        "unit_price"
+      ],
+      "title": "Order",
+      "type": "object"
+    },
+    "QualityCheck": {
+      "additionalProperties": false,
+      "properties": {
+        "evidence": {
+          "items": {
+            "$ref": "#/$defs/Evidence"
+          },
+          "maxItems": 20,
+          "minItems": 1,
+          "title": "Evidence",
+          "type": "array"
+        },
+        "id": {
+          "maxLength": 1000,
+          "minLength": 1,
+          "title": "Id",
+          "type": "string"
+        },
+        "line_id": {
+          "maxLength": 1000,
+          "minLength": 1,
+          "title": "Line Id",
+          "type": "string"
+        },
+        "revision": {
+          "maxLength": 1000,
+          "minLength": 1,
+          "title": "Revision",
+          "type": "string"
+        },
+        "name": {
+          "maxLength": 1000,
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "stage": {
+          "enum": [
+            "sample",
+            "preproduction",
+            "production",
+            "preshipment"
+          ],
+          "title": "Stage",
+          "type": "string"
+        },
+        "standard": {
+          "maxLength": 1000,
+          "minLength": 1,
+          "title": "Standard",
+          "type": "string"
+        },
+        "method": {
+          "maxLength": 1000,
+          "minLength": 1,
+          "title": "Method",
+          "type": "string"
+        },
+        "owner": {
+          "maxLength": 1000,
+          "minLength": 1,
+          "title": "Owner",
+          "type": "string"
+        },
+        "state": {
+          "default": "pending",
+          "enum": [
+            "pending",
+            "passed",
+            "failed"
+          ],
+          "title": "State",
+          "type": "string"
+        },
+        "reviewed": {
+          "default": false,
+          "title": "Reviewed",
+          "type": "boolean"
+        },
+        "sample_version": {
+          "maxLength": 1000,
+          "minLength": 1,
+          "title": "Sample Version",
+          "type": "string"
+        },
+        "measured_value": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Measured Value"
+        },
+        "lower_limit": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Lower Limit"
+        },
+        "upper_limit": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Upper Limit"
+        },
+        "measurement_unit": {
+          "default": "",
+          "maxLength": 100,
+          "title": "Measurement Unit",
+          "type": "string"
+        }
+      },
+      "required": [
+        "evidence",
+        "id",
+        "line_id",
+        "revision",
+        "name",
+        "stage",
+        "standard",
+        "method",
+        "owner",
+        "sample_version"
+      ],
+      "title": "QualityCheck",
+      "type": "object"
+    },
+    "Receipt": {
+      "additionalProperties": false,
+      "properties": {
+        "evidence": {
+          "items": {
+            "$ref": "#/$defs/Evidence"
+          },
+          "maxItems": 20,
+          "minItems": 1,
+          "title": "Evidence",
+          "type": "array"
+        },
+        "id": {
+          "maxLength": 1000,
+          "minLength": 1,
+          "title": "Id",
+          "type": "string"
+        },
+        "document_number": {
+          "maxLength": 1000,
+          "minLength": 1,
+          "title": "Document Number",
+          "type": "string"
+        },
+        "line_id": {
+          "maxLength": 1000,
+          "minLength": 1,
+          "title": "Line Id",
+          "type": "string"
+        },
+        "order_id": {
+          "maxLength": 1000,
+          "minLength": 1,
+          "title": "Order Id",
+          "type": "string"
+        },
+        "revision": {
+          "maxLength": 1000,
+          "minLength": 1,
+          "title": "Revision",
+          "type": "string"
+        },
+        "unit": {
+          "maxLength": 1000,
+          "minLength": 1,
+          "title": "Unit",
+          "type": "string"
+        },
+        "batch": {
+          "maxLength": 1000,
+          "minLength": 1,
+          "title": "Batch",
+          "type": "string"
+        },
+        "received": {
+          "anyOf": [
+            {
+              "minimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "string"
+            }
+          ],
+          "title": "Received"
+        },
+        "accepted": {
+          "anyOf": [
+            {
+              "minimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "string"
+            }
+          ],
+          "title": "Accepted"
+        },
+        "rejected": {
+          "anyOf": [
+            {
+              "minimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "string"
+            }
+          ],
+          "title": "Rejected"
+        },
+        "returned": {
+          "anyOf": [
+            {
+              "minimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "string"
+            }
+          ],
+          "default": "0",
+          "title": "Returned"
+        },
+        "reviewed": {
+          "default": false,
+          "title": "Reviewed",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "evidence",
+        "id",
+        "document_number",
+        "line_id",
+        "order_id",
+        "revision",
+        "unit",
+        "batch",
+        "received",
+        "accepted",
+        "rejected"
+      ],
+      "title": "Receipt",
+      "type": "object"
+    },
+    "Requirement": {
+      "additionalProperties": false,
+      "properties": {
+        "evidence": {
+          "items": {
+            "$ref": "#/$defs/Evidence"
+          },
+          "maxItems": 20,
+          "minItems": 1,
+          "title": "Evidence",
+          "type": "array"
+        },
+        "id": {
+          "maxLength": 1000,
+          "minLength": 1,
+          "title": "Id",
+          "type": "string"
+        },
+        "sku": {
+          "maxLength": 1000,
+          "minLength": 1,
+          "title": "Sku",
+          "type": "string"
+        },
+        "revision": {
+          "maxLength": 1000,
+          "minLength": 1,
+          "title": "Revision",
+          "type": "string"
+        },
+        "quantity": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "string"
+            }
+          ],
+          "title": "Quantity"
+        },
+        "unit": {
+          "maxLength": 1000,
+          "minLength": 1,
+          "title": "Unit",
+          "type": "string"
+        },
+        "need_by": {
+          "format": "date-time",
+          "title": "Need By",
+          "type": "string"
+        },
+        "destination": {
+          "maxLength": 1000,
+          "minLength": 1,
+          "title": "Destination",
+          "type": "string"
+        },
+        "facts": {
+          "items": {
+            "$ref": "#/$defs/Fact"
+          },
+          "maxItems": 100,
+          "title": "Facts",
+          "type": "array"
+        },
+        "available_stock": {
+          "anyOf": [
+            {
+              "minimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Available Stock"
+        },
+        "confirmed_inbound": {
+          "anyOf": [
+            {
+              "minimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Confirmed Inbound"
+        },
+        "safety_stock": {
+          "anyOf": [
+            {
+              "minimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Safety Stock"
+        },
+        "inventory_confirmed": {
+          "default": false,
+          "title": "Inventory Confirmed",
+          "type": "boolean"
+        },
+        "capability_checks": {
+          "items": {
+            "maxLength": 1000,
+            "minLength": 1,
+            "type": "string"
+          },
+          "maxItems": 100,
+          "title": "Capability Checks",
+          "type": "array"
+        },
+        "quality_checks": {
+          "items": {
+            "maxLength": 1000,
+            "minLength": 1,
+            "type": "string"
+          },
+          "maxItems": 100,
+          "title": "Quality Checks",
+          "type": "array"
+        }
+      },
+      "required": [
+        "evidence",
+        "id",
+        "sku",
+        "revision",
+        "quantity",
+        "unit",
+        "need_by",
+        "destination"
+      ],
+      "title": "Requirement",
+      "type": "object"
+    },
+    "Source": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "maxLength": 1000,
+          "minLength": 1,
+          "title": "Id",
+          "type": "string"
+        },
+        "reference": {
+          "maxLength": 1000,
+          "minLength": 1,
+          "title": "Reference",
+          "type": "string"
+        },
+        "text": {
+          "maxLength": 60000,
+          "minLength": 1,
+          "title": "Text",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "reference",
+        "text"
+      ],
+      "title": "Source",
+      "type": "object"
+    },
+    "Supplier": {
+      "additionalProperties": false,
+      "properties": {
+        "evidence": {
+          "items": {
+            "$ref": "#/$defs/Evidence"
+          },
+          "maxItems": 20,
+          "minItems": 1,
+          "title": "Evidence",
+          "type": "array"
+        },
+        "id": {
+          "maxLength": 1000,
+          "minLength": 1,
+          "title": "Id",
+          "type": "string"
+        },
+        "legal_name": {
+          "maxLength": 1000,
+          "minLength": 1,
+          "title": "Legal Name",
+          "type": "string"
+        },
+        "country": {
+          "maxLength": 1000,
+          "minLength": 1,
+          "title": "Country",
+          "type": "string"
+        },
+        "registration_id": {
+          "default": "",
+          "maxLength": 100,
+          "title": "Registration Id",
+          "type": "string"
+        },
+        "website": {
+          "default": "",
+          "maxLength": 1000,
+          "title": "Website",
+          "type": "string"
+        },
+        "identity_reviewed": {
+          "default": false,
+          "title": "Identity Reviewed",
+          "type": "boolean"
+        },
+        "capacities": {
+          "items": {
+            "$ref": "#/$defs/Capacity"
+          },
+          "maxItems": 100,
+          "title": "Capacities",
+          "type": "array"
+        },
+        "assessments": {
+          "items": {
+            "$ref": "#/$defs/Assessment"
+          },
+          "maxItems": 100,
+          "title": "Assessments",
+          "type": "array"
+        }
+      },
+      "required": [
+        "evidence",
+        "id",
+        "legal_name",
+        "country"
+      ],
+      "title": "Supplier",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "case_id": {
+      "maxLength": 1000,
+      "minLength": 1,
+      "title": "Case Id",
+      "type": "string"
+    },
+    "as_of": {
+      "format": "date-time",
+      "title": "As Of",
+      "type": "string"
+    },
+    "sources": {
+      "items": {
+        "$ref": "#/$defs/Source"
+      },
+      "maxItems": 100,
+      "title": "Sources",
+      "type": "array"
+    },
+    "requirements": {
+      "items": {
+        "$ref": "#/$defs/Requirement"
+      },
+      "maxItems": 100,
+      "title": "Requirements",
+      "type": "array"
+    },
+    "required_fields": {
+      "items": {
+        "maxLength": 1000,
+        "minLength": 1,
+        "type": "string"
+      },
+      "maxItems": 100,
+      "title": "Required Fields",
+      "type": "array"
+    },
+    "criteria": {
+      "items": {
+        "$ref": "#/$defs/Criterion"
+      },
+      "maxItems": 100,
+      "title": "Criteria",
+      "type": "array"
+    },
+    "suppliers": {
+      "items": {
+        "$ref": "#/$defs/Supplier"
+      },
+      "maxItems": 100,
+      "title": "Suppliers",
+      "type": "array"
+    },
+    "comparison_currency": {
+      "default": "CNY",
+      "pattern": "^[A-Z]{3}$",
+      "title": "Comparison Currency",
+      "type": "string"
+    },
+    "cost_basis": {
+      "default": "",
+      "maxLength": 1000,
+      "title": "Cost Basis",
+      "type": "string"
+    },
+    "required_costs": {
+      "items": {
+        "maxLength": 1000,
+        "minLength": 1,
+        "type": "string"
+      },
+      "maxItems": 30,
+      "title": "Required Costs",
+      "type": "array"
+    },
+    "fx": {
+      "items": {
+        "$ref": "#/$defs/FX"
+      },
+      "maxItems": 50,
+      "title": "Fx",
+      "type": "array"
+    },
+    "offers": {
+      "items": {
+        "$ref": "#/$defs/Offer"
+      },
+      "maxItems": 200,
+      "title": "Offers",
+      "type": "array"
+    },
+    "quality_checks": {
+      "items": {
+        "$ref": "#/$defs/QualityCheck"
+      },
+      "maxItems": 300,
+      "title": "Quality Checks",
+      "type": "array"
+    },
+    "milestones": {
+      "items": {
+        "$ref": "#/$defs/Milestone"
+      },
+      "maxItems": 300,
+      "title": "Milestones",
+      "type": "array"
+    },
+    "progress_freshness_hours": {
+      "anyOf": [
+        {
+          "exclusiveMinimum": 0.0,
+          "type": "number"
+        },
+        {
+          "type": "string"
+        }
+      ],
+      "default": "48",
+      "title": "Progress Freshness Hours"
+    },
+    "orders": {
+      "items": {
+        "$ref": "#/$defs/Order"
+      },
+      "maxItems": 100,
+      "title": "Orders",
+      "type": "array"
+    },
+    "receipts": {
+      "items": {
+        "$ref": "#/$defs/Receipt"
+      },
+      "maxItems": 300,
+      "title": "Receipts",
+      "type": "array"
+    },
+    "invoices": {
+      "items": {
+        "$ref": "#/$defs/Invoice"
+      },
+      "maxItems": 300,
+      "title": "Invoices",
+      "type": "array"
+    },
+    "adjustments": {
+      "items": {
+        "$ref": "#/$defs/Adjustment"
+      },
+      "maxItems": 300,
+      "title": "Adjustments",
+      "type": "array"
+    }
+  },
+  "required": [
+    "case_id",
+    "as_of"
+  ],
+  "title": "ProcurementInput",
+  "type": "object"
+}

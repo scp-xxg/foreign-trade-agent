@@ -34,8 +34,7 @@ are covered by upstream are replaced by the corresponding upstream modules.
 - Correct package license metadata to reference the full existing LICENSE.
 
 Source files changed from the upstream baseline carry a modification notice.
-The temporary repository name is `foreign-trade-agent`; product renaming and a
-new logo are deferred. Model credentials, accounts, databases and conversations
+The repository name is `foreign-trade-agent`; the application brand is SailAgent. Model credentials, accounts, databases and conversations
 are local deployment state and are not distributed.
 
 ## Public synchronization and collaboration (2026-10-28)
@@ -114,3 +113,7 @@ are local deployment state and are not distributed.
 - Persist account-scoped acquisition checkpoints with revision guards and ft_0001 migration; add browser marketplace review and explicit member agent permissions.
 - Fix ambiguous same-name marketplace clones and missing device-plugin binding options without sharing private knowledge or credentials.
 - Verify 697 public/selected compatibility tests, frontend build, quote export regressions, real multi-round conversation, Wiki original-source reasoning and browser file downloads. See docs/FINAL_DEMO_20261101.md for score mapping, reproducible prompts and configured-service limits.
+
+## 客户背调四技能
+
+新增企业身份、业务采购匹配、联系人决策链核验、交易风险四技能与受认证接口，接入聊天逐技能权限检查。对话框以客户背调替代客户跟进，保留原跟进技能。报告区分真实公开读取、输入证据关联与未查询来源。详见 docs/DILIGENCE_WORKFLOW.md。

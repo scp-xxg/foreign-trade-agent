@@ -1,0 +1,635 @@
+{
+  "$defs": {
+    "Action": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "maxLength": 100,
+          "minLength": 1,
+          "title": "Id",
+          "type": "string"
+        },
+        "problem": {
+          "maxLength": 2000,
+          "minLength": 1,
+          "title": "Problem",
+          "type": "string"
+        },
+        "evidence": {
+          "items": {
+            "$ref": "#/$defs/Evidence"
+          },
+          "maxItems": 10,
+          "minItems": 1,
+          "title": "Evidence",
+          "type": "array"
+        },
+        "hypothesis": {
+          "default": "",
+          "maxLength": 1000,
+          "title": "Hypothesis",
+          "type": "string"
+        },
+        "owner": {
+          "default": "",
+          "maxLength": 200,
+          "title": "Owner",
+          "type": "string"
+        },
+        "due_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Due At"
+        },
+        "deliverable": {
+          "default": "",
+          "maxLength": 1000,
+          "title": "Deliverable",
+          "type": "string"
+        },
+        "acceptance": {
+          "default": "",
+          "maxLength": 1000,
+          "title": "Acceptance",
+          "type": "string"
+        },
+        "metric": {
+          "default": "",
+          "maxLength": 500,
+          "title": "Metric",
+          "type": "string"
+        },
+        "baseline": {
+          "default": "",
+          "maxLength": 500,
+          "title": "Baseline",
+          "type": "string"
+        },
+        "target": {
+          "default": "",
+          "maxLength": 500,
+          "title": "Target",
+          "type": "string"
+        },
+        "population": {
+          "default": "",
+          "maxLength": 500,
+          "title": "Population",
+          "type": "string"
+        },
+        "comparison": {
+          "default": "",
+          "maxLength": 1000,
+          "title": "Comparison",
+          "type": "string"
+        },
+        "guardrail": {
+          "default": "",
+          "maxLength": 500,
+          "title": "Guardrail",
+          "type": "string"
+        },
+        "check_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Check At"
+        },
+        "completed_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Completed At"
+        },
+        "completion_evidence": {
+          "items": {
+            "$ref": "#/$defs/Evidence"
+          },
+          "maxItems": 10,
+          "title": "Completion Evidence",
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "problem",
+        "evidence"
+      ],
+      "title": "Action",
+      "type": "object"
+    },
+    "Deal": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "maxLength": 100,
+          "minLength": 1,
+          "title": "Id",
+          "type": "string"
+        },
+        "channel": {
+          "default": "unknown",
+          "maxLength": 100,
+          "minLength": 1,
+          "title": "Channel",
+          "type": "string"
+        },
+        "outcome": {
+          "default": "unknown",
+          "enum": [
+            "open",
+            "paused",
+            "won",
+            "lost",
+            "unknown"
+          ],
+          "title": "Outcome",
+          "type": "string"
+        },
+        "outcome_evidence": {
+          "items": {
+            "$ref": "#/$defs/Evidence"
+          },
+          "maxItems": 10,
+          "title": "Outcome Evidence",
+          "type": "array"
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "title": "Deal",
+      "type": "object"
+    },
+    "Event": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "maxLength": 100,
+          "minLength": 1,
+          "title": "Id",
+          "type": "string"
+        },
+        "deal_id": {
+          "maxLength": 100,
+          "minLength": 1,
+          "title": "Deal Id",
+          "type": "string"
+        },
+        "at": {
+          "format": "date-time",
+          "title": "At",
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "planned",
+            "actual"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "stage": {
+          "enum": [
+            "lead",
+            "reply",
+            "inquiry",
+            "quote",
+            "sample",
+            "trial",
+            "won"
+          ],
+          "title": "Stage",
+          "type": "string"
+        },
+        "description": {
+          "maxLength": 2000,
+          "minLength": 1,
+          "title": "Description",
+          "type": "string"
+        },
+        "actor": {
+          "default": "",
+          "maxLength": 200,
+          "title": "Actor",
+          "type": "string"
+        },
+        "version": {
+          "default": "",
+          "maxLength": 100,
+          "title": "Version",
+          "type": "string"
+        },
+        "evidence": {
+          "items": {
+            "$ref": "#/$defs/Evidence"
+          },
+          "maxItems": 10,
+          "minItems": 1,
+          "title": "Evidence",
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "deal_id",
+        "at",
+        "kind",
+        "stage",
+        "description",
+        "evidence"
+      ],
+      "title": "Event",
+      "type": "object"
+    },
+    "Evidence": {
+      "additionalProperties": false,
+      "properties": {
+        "source_id": {
+          "maxLength": 80,
+          "minLength": 1,
+          "title": "Source Id",
+          "type": "string"
+        },
+        "excerpt": {
+          "maxLength": 3000,
+          "minLength": 1,
+          "title": "Excerpt",
+          "type": "string"
+        }
+      },
+      "required": [
+        "source_id",
+        "excerpt"
+      ],
+      "title": "Evidence",
+      "type": "object"
+    },
+    "Lesson": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "maxLength": 100,
+          "minLength": 1,
+          "title": "Id",
+          "type": "string"
+        },
+        "title": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Title",
+          "type": "string"
+        },
+        "content": {
+          "maxLength": 3000,
+          "minLength": 1,
+          "title": "Content",
+          "type": "string"
+        },
+        "applicability": {
+          "default": "",
+          "maxLength": 1000,
+          "title": "Applicability",
+          "type": "string"
+        },
+        "exceptions": {
+          "default": "",
+          "maxLength": 1000,
+          "title": "Exceptions",
+          "type": "string"
+        },
+        "deal_ids": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 100,
+          "minItems": 1,
+          "title": "Deal Ids",
+          "type": "array"
+        },
+        "evidence": {
+          "items": {
+            "$ref": "#/$defs/Evidence"
+          },
+          "maxItems": 10,
+          "minItems": 1,
+          "title": "Evidence",
+          "type": "array"
+        },
+        "validation_evidence": {
+          "items": {
+            "$ref": "#/$defs/Evidence"
+          },
+          "maxItems": 10,
+          "title": "Validation Evidence",
+          "type": "array"
+        },
+        "requested_tier": {
+          "default": "case",
+          "enum": [
+            "case",
+            "hypothesis",
+            "validated"
+          ],
+          "title": "Requested Tier",
+          "type": "string"
+        },
+        "reviewer": {
+          "default": "",
+          "maxLength": 200,
+          "title": "Reviewer",
+          "type": "string"
+        },
+        "version": {
+          "default": "1",
+          "maxLength": 80,
+          "minLength": 1,
+          "title": "Version",
+          "type": "string"
+        },
+        "review_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Review At"
+        }
+      },
+      "required": [
+        "id",
+        "title",
+        "content",
+        "deal_ids",
+        "evidence"
+      ],
+      "title": "Lesson",
+      "type": "object"
+    },
+    "Reason": {
+      "additionalProperties": false,
+      "properties": {
+        "deal_id": {
+          "maxLength": 100,
+          "minLength": 1,
+          "title": "Deal Id",
+          "type": "string"
+        },
+        "category": {
+          "enum": [
+            "product",
+            "price",
+            "delivery",
+            "quality",
+            "trust",
+            "payment",
+            "purchase_change",
+            "execution",
+            "unknown"
+          ],
+          "title": "Category",
+          "type": "string"
+        },
+        "explanation": {
+          "maxLength": 2000,
+          "minLength": 1,
+          "title": "Explanation",
+          "type": "string"
+        },
+        "kind": {
+          "default": "hypothesis",
+          "enum": [
+            "customer_statement",
+            "observed_factor",
+            "hypothesis"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "controllable": {
+          "default": "unknown",
+          "enum": [
+            "yes",
+            "no",
+            "unknown"
+          ],
+          "title": "Controllable",
+          "type": "string"
+        },
+        "evidence": {
+          "items": {
+            "$ref": "#/$defs/Evidence"
+          },
+          "maxItems": 10,
+          "title": "Evidence",
+          "type": "array"
+        },
+        "counterevidence": {
+          "items": {
+            "$ref": "#/$defs/Evidence"
+          },
+          "maxItems": 10,
+          "title": "Counterevidence",
+          "type": "array"
+        },
+        "verification_question": {
+          "default": "",
+          "maxLength": 1000,
+          "title": "Verification Question",
+          "type": "string"
+        }
+      },
+      "required": [
+        "deal_id",
+        "category",
+        "explanation"
+      ],
+      "title": "Reason",
+      "type": "object"
+    },
+    "Source": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "maxLength": 80,
+          "minLength": 1,
+          "title": "Id",
+          "type": "string"
+        },
+        "reference": {
+          "maxLength": 500,
+          "minLength": 1,
+          "title": "Reference",
+          "type": "string"
+        },
+        "text": {
+          "maxLength": 20000,
+          "minLength": 1,
+          "title": "Text",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "reference",
+        "text"
+      ],
+      "title": "Source",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "scope": {
+      "default": "deal",
+      "enum": [
+        "deal",
+        "period"
+      ],
+      "title": "Scope",
+      "type": "string"
+    },
+    "goal": {
+      "default": "",
+      "maxLength": 2000,
+      "title": "Goal",
+      "type": "string"
+    },
+    "as_of": {
+      "format": "date-time",
+      "title": "As Of",
+      "type": "string"
+    },
+    "period_start": {
+      "anyOf": [
+        {
+          "format": "date-time",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Period Start"
+    },
+    "period_end": {
+      "anyOf": [
+        {
+          "format": "date-time",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Period End"
+    },
+    "observation_days": {
+      "default": 30,
+      "maximum": 3650,
+      "minimum": 1,
+      "title": "Observation Days",
+      "type": "integer"
+    },
+    "stage_order": {
+      "items": {
+        "enum": [
+          "lead",
+          "reply",
+          "inquiry",
+          "quote",
+          "sample",
+          "trial",
+          "won"
+        ],
+        "type": "string"
+      },
+      "maxItems": 7,
+      "minItems": 2,
+      "title": "Stage Order",
+      "type": "array"
+    },
+    "sources": {
+      "items": {
+        "$ref": "#/$defs/Source"
+      },
+      "maxItems": 100,
+      "title": "Sources",
+      "type": "array"
+    },
+    "events": {
+      "items": {
+        "$ref": "#/$defs/Event"
+      },
+      "maxItems": 1000,
+      "title": "Events",
+      "type": "array"
+    },
+    "deals": {
+      "items": {
+        "$ref": "#/$defs/Deal"
+      },
+      "maxItems": 500,
+      "title": "Deals",
+      "type": "array"
+    },
+    "reasons": {
+      "items": {
+        "$ref": "#/$defs/Reason"
+      },
+      "maxItems": 100,
+      "title": "Reasons",
+      "type": "array"
+    },
+    "actions": {
+      "items": {
+        "$ref": "#/$defs/Action"
+      },
+      "maxItems": 100,
+      "title": "Actions",
+      "type": "array"
+    },
+    "lessons": {
+      "items": {
+        "$ref": "#/$defs/Lesson"
+      },
+      "maxItems": 100,
+      "title": "Lessons",
+      "type": "array"
+    }
+  },
+  "required": [
+    "as_of"
+  ],
+  "title": "RetrospectiveInput",
+  "type": "object"
+}

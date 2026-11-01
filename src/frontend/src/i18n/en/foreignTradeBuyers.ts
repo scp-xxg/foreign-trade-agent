@@ -1,4 +1,32 @@
 export const FOREIGN_TRADE_BUYERS_DICT: Record<string, string> = {
+  '采购已开启：需求拆解 → 供应商寻源 → 能力评估 → 成本比选 → 质量策划 → 交期跟踪 → 验收结算': 'Procurement: Requirements → Sourcing → Capability → Cost comparison → Quality → Delivery → Acceptance and settlement',
+  '请提供：产品规格与版本、数量与单位、需求日期与交付地；已有供应商、报价、库存、质量标准、采购订单和验收付款记录可分阶段补充。': 'Provide product specifications and revision, quantities and units, required date and destination. Add suppliers, quotes, inventory, quality standards, orders and acceptance/payment records as each stage needs them.',
+  '将交付：采购需求与询价草稿、候选及能力证据、成本对比、质量清单、交期风险和结算差异。缺资料暂停对应阶段，审批后推进；下单、发送及付款需另行确认。': 'Receive requirements and RFQ drafts, supplier evidence, cost comparisons, quality checklists, delivery risks and reconciliation differences. Missing data pauses the relevant stage. Sending, ordering and paying require separate confirmation.',
+  '发品准备': 'Listing preparation',
+  '发品准备已开启：资料标准化 → 类目属性 → 关键词 → 商品内容 → 图片适配 → 发布前检查': 'Listing preparation: Normalize → Category and attributes → Keywords → Content → Images → Preflight',
+  '请提供：产品资料和图片、目标平台、站点、语言，以及有版本和有效期的平台规则。': 'Provide product information and images, target platform, site, language, and versioned platform rules with validity dates.',
+  '将交付：产品档案、类目属性、关键词方案、标题描述、适配图片和检查报告。缺资料会暂停对应步骤；审核后继续，当前不会发布商品。': 'Receive product records, category attributes, keywords, titles and descriptions, adapted images, and a check report. Steps wait for missing information and review; this workflow does not publish products.',
+  '成交': "Closing",
+  '成交已开启：准备检查 → 条款核对 → 制单 → 签署下单 → 收款核验 → 订单交接': "Closing: Readiness \u2192 Terms \u2192 Documents \u2192 Order confirmation \u2192 Payment \u2192 Handoff",
+  '请提供：订单与截至时间、企业成交规则、PO与报价版本、规格及往来、批准模板、签署记录和付款证据。': "Provide the order, as-of time, company closing rules, PO and quote versions, specifications, correspondence, approved templates, signature records and payment evidence.",
+  '将交付：阻塞清单、条款差异、PI或合同草稿、手续进度、收款对照与交接包。水单不等于到账，执行与文件均需审核。': "Receive blockers, term differences, PI or contract drafts, order progress, payment reconciliation and a handoff package. Remittance slips do not prove receipt; documents and execution require review.",
+
+  '复盘': 'Review',
+  '复盘已开启：过程还原 → 漏斗分析 → 原因分析 → 改进行动 → 经验沉淀': 'Review: Timeline → Funnel → Causes → Improvements → Playbook',
+  '请提供：复盘对象与周期、目标、客户往来、报价及订单记录。周期分析还需阶段口径、观察期和统计截至时间。': 'Provide review scope, period, goals, correspondence, quotes and orders. Period analysis also needs stage definitions, an observation window and an as-of time.',
+  '将交付：证据时间线、转化与瓶颈、赢丢原因及假设、改进任务草案和待审案例。单商机可跳过漏斗，未知数据不补造，知识入库需审核。': 'Receive an evidence timeline, conversions, blockers, win/loss factors, hypotheses, action drafts and candidate cases. Single deals can skip the funnel; unknowns stay unknown and knowledge requires review.',
+
+  '谈单': 'Negotiation',
+  '谈单已开启：诊断 → 报价 → 异议与条件交换 → 样品试单 → 条款与纪要': 'Negotiation: Diagnosis → Quote → Objections and exchanges → Samples → Terms and notes',
+  '请提供：客户往来、采购需求、报价版本、成本及币种、利润底线、让步权限和样品政策。': 'Provide correspondence, requirements, quote version, costs and currency, margin floor, concession authority and sample policy.',
+  '将交付：商机卡点、谈判策略、内部让步测算、样品计划和待审回复。缺少成本或授权先确认，商业承诺由你审核。': 'Receive blockers, strategy, internal concession calculations, sample plans and reply drafts. Missing costs or authority require confirmation; review commercial commitments.',
+
+  '客户沟通': 'Customer communication',
+  '开启六技能客户沟通工作流': 'Enable the six-skill customer communication workflow',
+  '客户沟通已开启：触达 → 分流 → 澄清 → 答复 → 跟进 → 纪要': 'Communication enabled: Outreach → Triage → Clarify → Reply → Follow-up → Summary',
+  '请提供：客户与渠道、沟通目标、往来原文、已确认产品及供货资料、实际发送记录与买家时区。': 'Provide customer and channel, goal, correspondence, confirmed product and supply facts, actual sending history and buyer timezone.',
+  '将交付：意图判断、需求问题、有据答复草稿、跟进建议及沟通纪要。按情境调用技能，退订停止触达，消息经你审核后发送。': 'Receive intent, clarification questions, grounded reply drafts, follow-up suggestions and notes. Skills run as relevant; opt-outs stop outreach. Review messages before sending.',
+
   '买家搜索': "Buyer search",
   '买家背调': "Buyer due diligence",
   '产品': "Product",
@@ -162,4 +190,9 @@ export const FOREIGN_TRADE_BUYERS_DICT: Record<string, string> = {
   '审核说明': "Review explanation",
   '创建与安装智能体': "Create and install agents",
   '智能体权限': "Agent permission",
+  '客户背调': 'Customer due diligence',
+  '开启企业身份、业务匹配、联系人核验与交易风险工作流': 'Enable identity, business fit, contact verification and transaction risk',
+  '客户背调已开启：企业身份 → 业务匹配 → 联系人核验 → 交易风险': 'Diligence on: identity → business fit → contacts → transaction risk',
+  '请提供：企业名称、官网或登记号、注册国家、我方产品与供货能力、已有联系人及证据；交易评估可补充金额、币种、付款条件、合同与收款主体。': 'Provide company name, website or registration number, country, seller products and capabilities, contacts and evidence. Add amount, currency, payment terms and contracting/payee entities for transaction review.',
+  '将交付：企业身份、业务匹配、联系人与决策链、风险与合作建议，以及证据来源和待核实项。未查询不代表无风险；主体冲突须人工确认，不自动联系客户。': 'Outputs: identity, business fit, contacts, decision chain, risks, recommendations, sources and open questions. Missing checks do not mean no risk. Identity conflicts require review; no outbound contact.',
 };

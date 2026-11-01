@@ -568,11 +568,16 @@ def register_foreign_trade_tools(toolkit, *, user_id: str, chat_id: str | None, 
         except Exception as exc:
             return _response(_failure(exc))
 
-    async def trade_buyer_research(action: Literal["profile", "due-diligence", "contacts", "prioritize", "outreach", "cadence", "reply-triage"], data: dict) -> ToolResponse:
-        """获客阶段工具。profile: product/markets/buyer_types/constraints；due-diligence或contacts: company_name/website/country/profile/excluded_channels/max_pages。联系人阶段须先人工审核背调，本工具不保存或核验前序审核。prioritize: buyer_id/dossier_version/review_version/review_decision/review_reason/hard_excluded/do_not_contact/has_channel/assessments（dimension=product|buyer_type|market|supply,result=match|partial|mismatch|unknown,excerpt,source_url,retrieved_at）。outreach: lead=上述评分输入,channel/channel_type/channel_source_url/channel_retrieved_at/company_name/sender_company/product_en/supplier_claim_en/supplier_claim_reference/buyer_fact_en/buyer_fact_dimension/goal=find_contact|share_catalog|confirm_interest/facts_confirmed。cadence: lead=评分完整输入,contact={channel,channel_type=email|contact_page,source_url,retrieved_at(带时区ISO),purpose_confirmed},timezone=IANA时区,as_of=带时区评估时间,initial_sent_at=实际首封时间或null,followup_sent_at=实际已发送跟进时间数组,max_followups=0..3,bounced=false,reply=可选回复输入。reply-triage: buyer_id/reply_text/source_reference/received_at(带时区ISO)/confirmed_intent(可选opt_out|not_interested|wrong_contact|out_of_office|request_quote|request_sample|interested|unknown)/evidence_excerpt(人工确认时须原文子串)。有回复须先分流，再传完整reply给cadence；任何回复暂停旧节奏。只生成建议，不发送或定时执行。"""
+    async def trade_buyer_research(action: Literal["profile", "due-diligence", "contacts", "prioritize", "outreach", "cadence", "reply-triage", "identity-check", "business-fit", "decision-chain", "transaction-risk", "clarify", "grounded-reply", "communication-summary", "negotiation-strategy", "objection-resolution", "concession-planning", "sample-trial", "deal-timeline", "funnel-analysis", "win-loss-analysis", "improvement-planning", "playbook-learning", "closing-readiness", "order-reconciliation", "sales-document-drafting", "order-confirmation", "payment-verification", "order-handoff"], data: dict) -> ToolResponse:
+        """成交操作closing-readiness/order-reconciliation/sales-document-drafting/order-confirmation/payment-verification/order-handoff：先读取对应trade成交技能references/contract.md，data含order_id、as_of带时区、sources及分支结构。严格引用原文；模板填充及Decimal核对为待审草稿，无发信、签署、银行查询、保存或投产。复盘操作deal-timeline/funnel-analysis/win-loss-analysis/improvement-planning/playbook-learning：必须先读取对应trade复盘技能的references/contract.md；data含scope、as_of(带时区)、sources及各阶段结构数据。漏斗为同批完整观察期口径，计划不计实际；只生成内部待审复盘，不保存或自动修改知识。谈单操作negotiation-strategy/objection-resolution/concession-planning/sample-trial共用沟通data并可带goal；offer契约及事实字段必须先读取对应谈单技能。concession-planning使用Decimal计算利润及授权底线，只返回内部待审建议。沟通操作clarify/grounded-reply/communication-summary的data={buyer_id,sources:[{id,reference,text}],claims:[{field,source_id,excerpt(来源原文子串)}],questions:[待答复字段名],do_not_contact}。clarify识别product/quantity/destination/delivery/certification缺项；grounded-reply按questions字段返回原文答复或待确认/冲突；communication-summary返回带来源事实纪要。无发送及保存接口。获客与背调阶段工具。背调操作 identity-check / business-fit / decision-chain / transaction-risk：data={company_name,website(可选),country,registration_number,seller_product,seller_constraints,evidence:[{id,source_url,retrieved_at(带时区ISO),source_type=registry|company_website|professional_profile|credit|judicial|sanctions|user_document,text}],findings:[{category=identity|business|contact|credit|judicial|sanctions,subject,field,value,evidence_id,excerpt(必须原文子串),result=supports|conflicts|candidate_hit|no_record}],identity_reviewed(用户确认才true),identity_review_note,contract_entity,payee_entity,payment_terms,transaction_amount,account_changed,max_pages(1..3)}。先核验主体，再业务与联系人，最后交易风险；未查询不得当作无风险，公开检索结果在public_research/public_channels，候选需人工审核，不发送或保存。profile: product/markets/buyer_types/constraints；due-diligence或contacts: company_name/website/country/profile/excluded_channels/max_pages。联系人阶段须先人工审核背调，本工具不保存或核验前序审核。prioritize: buyer_id/dossier_version/review_version/review_decision/review_reason/hard_excluded/do_not_contact/has_channel/assessments（dimension=product|buyer_type|market|supply,result=match|partial|mismatch|unknown,excerpt,source_url,retrieved_at）。outreach: lead=上述评分输入,channel/channel_type/channel_source_url/channel_retrieved_at/company_name/sender_company/product_en/supplier_claim_en/supplier_claim_reference/buyer_fact_en/buyer_fact_dimension/goal=find_contact|share_catalog|confirm_interest/facts_confirmed。cadence: lead=评分完整输入,contact={channel,channel_type=email|contact_page,source_url,retrieved_at(带时区ISO),purpose_confirmed},timezone=IANA时区,as_of=带时区评估时间,initial_sent_at=实际首封时间或null,followup_sent_at=实际已发送跟进时间数组,max_followups=0..3,bounced=false,reply=可选回复输入。reply-triage: buyer_id/reply_text/source_reference/received_at(带时区ISO)/confirmed_intent(可选opt_out|not_interested|wrong_contact|out_of_office|request_quote|request_sample|interested|unknown)/evidence_excerpt(人工确认时须原文子串)。有回复须先分流，再传完整reply给cadence；任何回复暂停旧节奏。只生成建议，不发送或定时执行。"""
         try:
             _assert_available(actor, installation)
-            skill = {"profile": "trade-customer-profile", "due-diligence": "trade-buyer-due-diligence", "contacts": "trade-buyer-contact-discovery", "prioritize": "trade-lead-prioritization", "outreach": "trade-personalized-outreach", "cadence": "trade-followup-cadence", "reply-triage": "trade-reply-triage"}.get(action)
+            from core.foreign_trade.diligence import STAGES, DiligenceInput, run_stage
+            from core.foreign_trade.communication import STAGES as COMMUNICATION_STAGES, CommunicationInput, communicate
+            from core.foreign_trade.negotiation import STAGES as NEGOTIATION_STAGES, NegotiationInput, negotiate
+            from core.foreign_trade.retrospective import STAGES as REVIEW_STAGES, RetrospectiveInput, review
+            from core.foreign_trade.closing import STAGES as CLOSING_STAGES, ClosingInput, close_order
+            skill = {**CLOSING_STAGES, **STAGES, **COMMUNICATION_STAGES, **NEGOTIATION_STAGES, **REVIEW_STAGES, "profile": "trade-customer-profile", "due-diligence": "trade-buyer-due-diligence", "contacts": "trade-buyer-contact-discovery", "prioritize": "trade-lead-prioritization", "outreach": "trade-personalized-outreach", "cadence": "trade-followup-cadence", "reply-triage": "trade-reply-triage"}.get(action)
             if not skill:
                 raise InquiryError(422, "不支持的获客阶段")
             if require_skill is not None:
@@ -580,7 +585,17 @@ def register_foreign_trade_tools(toolkit, *, user_id: str, chat_id: str | None, 
             from core.foreign_trade.acquisition import ProfileInput, ResearchInput, draft_profile, due_diligence, discover_contacts
             from core.foreign_trade.lead_outreach import LeadInput, OutreachInput, prioritize, draft_outreach
             from core.foreign_trade.followup import CadenceInput, ReplyInput, plan_cadence, triage_reply
-            if action == "cadence":
+            if action in CLOSING_STAGES:
+                result = close_order(ClosingInput.model_validate(_data(data)), action)
+            elif action in REVIEW_STAGES:
+                result = review(RetrospectiveInput.model_validate(_data(data)), action)
+            elif action in NEGOTIATION_STAGES:
+                result = negotiate(NegotiationInput.model_validate(_data(data)), action)
+            elif action in COMMUNICATION_STAGES:
+                result = communicate(CommunicationInput.model_validate(_data(data)), action)
+            elif action in STAGES:
+                result = await run_stage(DiligenceInput.model_validate(_data(data)), action)
+            elif action == "cadence":
                 result = plan_cadence(CadenceInput.model_validate(_data(data)))
             elif action == "reply-triage":
                 result = triage_reply(ReplyInput.model_validate(_data(data)))
@@ -597,7 +612,97 @@ def register_foreign_trade_tools(toolkit, *, user_id: str, chat_id: str | None, 
         except Exception as exc:
             return _response(_failure(exc))
 
-    tools = [trade_buyer_research, trade_buyer_search, trade_inquiry, trade_calculate_quote, trade_product_content,
+    async def trade_listing_prepare(
+        action: Literal["normalize", "taxonomy", "keywords", "compose", "media", "preflight"],
+        data: dict, file_ids: list[str] | None = None,
+    ) -> ToolResponse:
+        """发品准备六步骤。先读对应trade-product-normalization或trade-listing-*技能references/contract.md及schema.json。
+        data必含batch_id/as_of(带时区)/platform/site/language；products为带来源证据和确认状态的SKU主档。
+        normalize可用file_ids导入当前聊天CSV/XLSX/PDF等附件，返回原文及候选字段，不自动确认；扫描件须OCR后核对。
+        taxonomy/keywords/compose使用所提供平台规则和事实，缺少规则或真实数据保持未知。
+        media读取data.media的file_id实际缩放并生成附件，preflight重新读取实际图片校验。没有远程图片抓取或发布接口。
+        """
+        try:
+            _assert_available(actor, installation)
+            from core.foreign_trade.listing import STAGES, ListingInput, prepare, adapt_image
+            if action not in STAGES:
+                raise InquiryError(422, "不支持的发品步骤")
+            if require_skill is not None:
+                require_skill(STAGES[action])
+            req = ListingInput.model_validate(_data(data))
+            if file_ids and (action != "normalize" or len(file_ids)>10 or len(set(file_ids))!=len(file_ids)):
+                raise InquiryError(422, "file_ids仅供normalize导入，最多10个且不重复")
+            imports, reports = [], []
+            if action == "normalize" and file_ids:
+                from core.foreign_trade.content import parse_upload
+                with SessionLocal() as db:
+                    for fid in file_ids:
+                        filename, content = _attached_file_bytes(db, user_id=actor, chat_id=conversation, file_id=fid)
+                        parsed = parse_upload(filename, content)
+                        imports.append(dict(source_id=fid, reference=filename, text=parsed["text"],
+                            suggested_facts=parsed["suggested_facts"], warnings=parsed["warnings"],
+                            confirmation_required=True))
+            if action in {"media", "preflight"}:
+                from core.files.artifacts.service import store_bytes_as_artifact
+                from uuid import uuid4
+                with SessionLocal() as db:
+                    for item in req.media:
+                        # Ownership errors stop the call; malformed files are per-SKU failures.
+                        filename, content = _attached_file_bytes(db, user_id=actor, chat_id=conversation, file_id=item.file_id)
+                        try:
+                            payload, report = adapt_image(content, req.rules, convert=action == "media")
+                            report.update(sku=item.sku, file_id=item.file_id, role=item.role)
+                            if action == "media":
+                                if len(payload)>MAX_UPLOAD:
+                                    raise ValueError("输出图片超过8MiB")
+                                fmt=report["format"].lower(); ext="jpg" if fmt=="jpeg" else fmt
+                                artifact=store_bytes_as_artifact(db,user_id=actor,chat_id=conversation,
+                                    content=payload,filename="listing-"+uuid4().hex[:12]+"."+ext,
+                                    mime_type="image/"+fmt,source="foreign_trade_listing_media",
+                                    extra={"original_file_id":item.file_id,"sku":item.sku,"batch_id":req.batch_id,
+                                           "input_version":next(p.version for p in req.products if p.sku==item.sku)})
+                                report.update(output_file_id=artifact.artifact_id,download_url="/files/"+artifact.artifact_id,
+                                    appearance_review_required=True)
+                            reports.append(report)
+                        except Exception as exc:
+                            # No image decoder details, request bytes or storage keys in public errors.
+                            from PIL import Image
+                            if not isinstance(exc,(ValueError,OSError,Image.DecompressionBombError,Image.DecompressionBombWarning)):
+                                raise
+                            reports.append(dict(sku=item.sku,file_id=item.file_id,role=item.role,
+                                spec_passed=False,error="图片无法处理；请核对格式、像素、文件大小及平台规则"))
+            result=prepare(req,action,reports)
+            if imports:
+                result.update(imported_documents=imports,import_status="candidate_sources_require_confirmation")
+            return _response(_success(result))
+        except ValueError as exc:
+            if isinstance(exc,ValidationError):return _response(_failure(exc))
+            return _response(_failure(InquiryError(422,"发品输入或图片规则无效，请核对技能输入契约")))
+        except Exception as exc:
+            return _response(_failure(exc))
+
+    async def trade_procurement_prepare(
+        action: Literal["requirements", "sourcing", "capability", "comparison", "quality", "delivery", "settlement"],
+        data: dict,
+    ) -> ToolResponse:
+        """采购七步骤，读取trade-procurement-*或trade-supplier-*技能契约后调用。
+        统一case_id/as_of(带时区)/sources/requirements，所有证据须引用来源原文。
+        输入为当前对话已授权资料的结构化提取结果；不访问外部供应商、ERP或银行。
+        计算缺口、核验候选证据、比价、质量检查、交期预警和三方结算；无采购执行或付款。
+        """
+        try:
+            _assert_available(actor, installation)
+            from core.foreign_trade.procurement import STAGES, ProcurementInput, prepare
+            if action not in STAGES:
+                raise InquiryError(422, "不支持的采购步骤")
+            if require_skill is not None:
+                require_skill(STAGES[action])
+            req = ProcurementInput.model_validate(_data(data))
+            return _response(_success(prepare(req, action)))
+        except Exception as exc:
+            return _response(_failure(exc))
+
+    tools = [trade_procurement_prepare, trade_listing_prepare, trade_buyer_research, trade_buyer_search, trade_inquiry, trade_calculate_quote, trade_product_content,
              trade_save_inquiry, trade_import_product, trade_confirm_product_facts]
     from core.llm.factory.tools.definitions import function_tool
     from core.sandbox.permissions.tool_specs import allow_tool

@@ -16,7 +16,13 @@ export interface ImportedSpaceFile {
 type Capability = { id: string; name: string } | null;
 export interface ComposerDraft {
   acquisitionMode: boolean;
-  followupMode: boolean;
+  diligenceMode: boolean;
+  communicationMode: boolean;
+  negotiationMode: boolean;
+  retrospectiveMode: boolean;
+  closingMode: boolean;
+  listingMode: boolean;
+  procurementMode: boolean;
   input: string;
   document: JSONContent | null;
   quotedFollowUp: QuotedFollowUp | null;
@@ -35,7 +41,7 @@ export interface ComposerDraft {
 }
 function emptyDraft(): ComposerDraft {
   return {
-    acquisitionMode: false, followupMode: false, input: '', document: null, quotedFollowUp: null,
+    acquisitionMode: false, diligenceMode: false, communicationMode: false, negotiationMode: false, retrospectiveMode: false, closingMode: false, listingMode: false, procurementMode: false, input: '', document: null, quotedFollowUp: null,
     activeSkill: null, activePlugin: null, activeConnector: null, activeMention: null,
     activeCommand: null, referencedChats: [], uploadedFiles: [], uploadedArtifacts: new Map(),
     uploadingFiles: new Set(), uploadErrors: new Map(), importedSpaceFiles: [], uploads: new Map(),

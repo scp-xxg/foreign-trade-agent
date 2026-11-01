@@ -1,0 +1,585 @@
+{
+  "$defs": {
+    "Account": {
+      "additionalProperties": false,
+      "properties": {
+        "account_id": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Account Id",
+          "type": "string"
+        },
+        "beneficiary": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Beneficiary",
+          "type": "string"
+        },
+        "approved": {
+          "default": false,
+          "title": "Approved",
+          "type": "boolean"
+        },
+        "evidence": {
+          "items": {
+            "$ref": "#/$defs/Evidence"
+          },
+          "maxItems": 10,
+          "minItems": 1,
+          "title": "Evidence",
+          "type": "array"
+        }
+      },
+      "required": [
+        "account_id",
+        "beneficiary",
+        "evidence"
+      ],
+      "title": "Account",
+      "type": "object"
+    },
+    "Evidence": {
+      "additionalProperties": false,
+      "properties": {
+        "source_id": {
+          "maxLength": 80,
+          "minLength": 1,
+          "title": "Source Id",
+          "type": "string"
+        },
+        "excerpt": {
+          "maxLength": 3000,
+          "minLength": 1,
+          "title": "Excerpt",
+          "type": "string"
+        }
+      },
+      "required": [
+        "source_id",
+        "excerpt"
+      ],
+      "title": "Evidence",
+      "type": "object"
+    },
+    "Line": {
+      "additionalProperties": false,
+      "properties": {
+        "sku": {
+          "maxLength": 100,
+          "minLength": 1,
+          "title": "Sku",
+          "type": "string"
+        },
+        "description": {
+          "maxLength": 1000,
+          "minLength": 1,
+          "title": "Description",
+          "type": "string"
+        },
+        "quantity": {
+          "pattern": "^\\d{1,12}(\\.\\d{1,6})?$",
+          "title": "Quantity",
+          "type": "string"
+        },
+        "unit": {
+          "maxLength": 40,
+          "minLength": 1,
+          "title": "Unit",
+          "type": "string"
+        },
+        "unit_price": {
+          "pattern": "^\\d{1,12}(\\.\\d{1,6})?$",
+          "title": "Unit Price",
+          "type": "string"
+        },
+        "evidence": {
+          "items": {
+            "$ref": "#/$defs/Evidence"
+          },
+          "maxItems": 10,
+          "minItems": 1,
+          "title": "Evidence",
+          "type": "array"
+        }
+      },
+      "required": [
+        "sku",
+        "description",
+        "quantity",
+        "unit",
+        "unit_price",
+        "evidence"
+      ],
+      "title": "Line",
+      "type": "object"
+    },
+    "Payment": {
+      "additionalProperties": false,
+      "properties": {
+        "transaction_id": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Transaction Id",
+          "type": "string"
+        },
+        "order_id": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Order Id",
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "promise",
+            "remittance_slip",
+            "bank_credit",
+            "finance_verified"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "amount": {
+          "pattern": "^\\d{1,12}(\\.\\d{1,6})?$",
+          "title": "Amount",
+          "type": "string"
+        },
+        "currency": {
+          "pattern": "^[A-Z]{3}$",
+          "title": "Currency",
+          "type": "string"
+        },
+        "payer": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Payer",
+          "type": "string"
+        },
+        "account_id": {
+          "maxLength": 200,
+          "minLength": 1,
+          "title": "Account Id",
+          "type": "string"
+        },
+        "at": {
+          "format": "date-time",
+          "title": "At",
+          "type": "string"
+        },
+        "evidence": {
+          "items": {
+            "$ref": "#/$defs/Evidence"
+          },
+          "maxItems": 10,
+          "minItems": 1,
+          "title": "Evidence",
+          "type": "array"
+        }
+      },
+      "required": [
+        "transaction_id",
+        "order_id",
+        "kind",
+        "amount",
+        "currency",
+        "payer",
+        "account_id",
+        "at",
+        "evidence"
+      ],
+      "title": "Payment",
+      "type": "object"
+    },
+    "Requirement": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "maxLength": 100,
+          "minLength": 1,
+          "title": "Id",
+          "type": "string"
+        },
+        "phase": {
+          "enum": [
+            "readiness",
+            "signature",
+            "payment",
+            "handoff"
+          ],
+          "title": "Phase",
+          "type": "string"
+        },
+        "label": {
+          "maxLength": 500,
+          "minLength": 1,
+          "title": "Label",
+          "type": "string"
+        },
+        "required": {
+          "default": true,
+          "title": "Required",
+          "type": "boolean"
+        },
+        "state": {
+          "default": "pending",
+          "enum": [
+            "confirmed",
+            "pending",
+            "conflict",
+            "not_applicable"
+          ],
+          "title": "State",
+          "type": "string"
+        },
+        "owner": {
+          "default": "",
+          "maxLength": 200,
+          "title": "Owner",
+          "type": "string"
+        },
+        "due_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Due At"
+        },
+        "evidence": {
+          "items": {
+            "$ref": "#/$defs/Evidence"
+          },
+          "maxItems": 10,
+          "title": "Evidence",
+          "type": "array"
+        },
+        "policy_evidence": {
+          "items": {
+            "$ref": "#/$defs/Evidence"
+          },
+          "maxItems": 10,
+          "minItems": 1,
+          "title": "Policy Evidence",
+          "type": "array"
+        },
+        "depends_on": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 30,
+          "title": "Depends On",
+          "type": "array"
+        },
+        "note": {
+          "default": "",
+          "maxLength": 1000,
+          "title": "Note",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "phase",
+        "label",
+        "policy_evidence"
+      ],
+      "title": "Requirement",
+      "type": "object"
+    },
+    "Source": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "maxLength": 80,
+          "minLength": 1,
+          "title": "Id",
+          "type": "string"
+        },
+        "reference": {
+          "maxLength": 500,
+          "minLength": 1,
+          "title": "Reference",
+          "type": "string"
+        },
+        "text": {
+          "maxLength": 50000,
+          "minLength": 1,
+          "title": "Text",
+          "type": "string"
+        },
+        "kind": {
+          "default": "user_document",
+          "enum": [
+            "user_document",
+            "bank_record",
+            "finance_confirmation",
+            "approved_policy",
+            "approved_template"
+          ],
+          "title": "Kind",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "reference",
+        "text"
+      ],
+      "title": "Source",
+      "type": "object"
+    },
+    "Template": {
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "enum": [
+            "pi",
+            "contract"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "version": {
+          "maxLength": 100,
+          "minLength": 1,
+          "title": "Version",
+          "type": "string"
+        },
+        "text": {
+          "maxLength": 30000,
+          "minLength": 1,
+          "title": "Text",
+          "type": "string"
+        },
+        "approved": {
+          "default": false,
+          "title": "Approved",
+          "type": "boolean"
+        },
+        "evidence": {
+          "items": {
+            "$ref": "#/$defs/Evidence"
+          },
+          "maxItems": 10,
+          "minItems": 1,
+          "title": "Evidence",
+          "type": "array"
+        }
+      },
+      "required": [
+        "kind",
+        "version",
+        "text",
+        "evidence"
+      ],
+      "title": "Template",
+      "type": "object"
+    },
+    "Term": {
+      "additionalProperties": false,
+      "properties": {
+        "field": {
+          "maxLength": 80,
+          "minLength": 1,
+          "pattern": "^[a-z][a-z0-9_]*$",
+          "title": "Field",
+          "type": "string"
+        },
+        "value": {
+          "maxLength": 3000,
+          "minLength": 1,
+          "title": "Value",
+          "type": "string"
+        },
+        "document_id": {
+          "maxLength": 100,
+          "minLength": 1,
+          "title": "Document Id",
+          "type": "string"
+        },
+        "version": {
+          "maxLength": 100,
+          "minLength": 1,
+          "title": "Version",
+          "type": "string"
+        },
+        "confirmed": {
+          "default": false,
+          "title": "Confirmed",
+          "type": "boolean"
+        },
+        "evidence": {
+          "items": {
+            "$ref": "#/$defs/Evidence"
+          },
+          "maxItems": 10,
+          "minItems": 1,
+          "title": "Evidence",
+          "type": "array"
+        }
+      },
+      "required": [
+        "field",
+        "value",
+        "document_id",
+        "version",
+        "evidence"
+      ],
+      "title": "Term",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "order_id": {
+      "maxLength": 200,
+      "minLength": 1,
+      "title": "Order Id",
+      "type": "string"
+    },
+    "as_of": {
+      "format": "date-time",
+      "title": "As Of",
+      "type": "string"
+    },
+    "sources": {
+      "items": {
+        "$ref": "#/$defs/Source"
+      },
+      "maxItems": 100,
+      "title": "Sources",
+      "type": "array"
+    },
+    "requirements": {
+      "items": {
+        "$ref": "#/$defs/Requirement"
+      },
+      "maxItems": 150,
+      "title": "Requirements",
+      "type": "array"
+    },
+    "terms": {
+      "items": {
+        "$ref": "#/$defs/Term"
+      },
+      "maxItems": 300,
+      "title": "Terms",
+      "type": "array"
+    },
+    "required_fields": {
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 80,
+      "title": "Required Fields",
+      "type": "array"
+    },
+    "lines": {
+      "items": {
+        "$ref": "#/$defs/Line"
+      },
+      "maxItems": 100,
+      "title": "Lines",
+      "type": "array"
+    },
+    "template": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Template"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "account": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Account"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "currency": {
+      "anyOf": [
+        {
+          "pattern": "^[A-Z]{3}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Currency"
+    },
+    "payment_method": {
+      "default": "advance",
+      "enum": [
+        "advance",
+        "installment",
+        "lc",
+        "credit"
+      ],
+      "title": "Payment Method",
+      "type": "string"
+    },
+    "expected_due": {
+      "anyOf": [
+        {
+          "pattern": "^\\d{1,12}(\\.\\d{1,6})?$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Expected Due"
+    },
+    "due_evidence": {
+      "items": {
+        "$ref": "#/$defs/Evidence"
+      },
+      "maxItems": 10,
+      "title": "Due Evidence",
+      "type": "array"
+    },
+    "expected_payer": {
+      "default": "",
+      "maxLength": 200,
+      "title": "Expected Payer",
+      "type": "string"
+    },
+    "payments": {
+      "items": {
+        "$ref": "#/$defs/Payment"
+      },
+      "maxItems": 100,
+      "title": "Payments",
+      "type": "array"
+    },
+    "handoff_required_fields": {
+      "items": {
+        "type": "string"
+      },
+      "maxItems": 80,
+      "title": "Handoff Required Fields",
+      "type": "array"
+    }
+  },
+  "required": [
+    "order_id",
+    "as_of"
+  ],
+  "title": "ClosingInput",
+  "type": "object"
+}

@@ -72,3 +72,11 @@ def progress(user: UserContext=Depends(get_current_user), db: Session=Depends(ge
 @router.put('/progress')
 def checkpoint(req: SaveProgress, user: UserContext=Depends(get_current_user), db: Session=Depends(get_db)):
     return success_response(data=save_progress(db,str(user.user_id),req))
+
+from core.foreign_trade.diligence import DiligenceInput, run_stage
+from typing import Literal
+
+@router.post('/diligence/{stage}')
+async def diligence_stage(stage: Literal['identity-check','business-fit','decision-chain','transaction-risk'],
+                          req: DiligenceInput, user: UserContext=Depends(get_current_user)):
+    return success_response(data=await run_stage(req, stage))
