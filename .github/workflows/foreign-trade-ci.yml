@@ -76,7 +76,7 @@ jobs:
       - name: Test owned inquiries and bounded public sources without live network
         run: |
           python -m pytest tests -q
-          python -m pytest src/backend/tests/test_acquisition_access.py src/backend/tests/test_user_management_access.py src/backend/tests/test_skill_frontmatter_failure.py src/backend/tests/test_user_agent_resources.py src/backend/tests/features/marketplace/test_agent_marketplace.py -q
+          python -m pytest src/backend/tests/test_acquisition_access.py src/backend/tests/test_user_management_access.py src/backend/tests/test_skill_frontmatter_failure.py src/backend/tests/test_user_agent_resources.py src/backend/tests/features/marketplace/test_agent_marketplace.py src/backend/tests/llm/test_subagent_resume.py src/backend/tests/llm/test_subagent_cancellation.py src/backend/tests/llm/test_subagent_tool_streaming.py src/backend/tests/orchestration/test_direct_subagent_routing.py -q
           python -m pytest \
             src/backend/tests/llm/test_compaction_mid_turn.py src/backend/tests/llm/test_compaction_watermark.py \
             src/backend/tests/llm/test_compaction_e2e.py src/backend/tests/orchestration/test_model_steps_pipeline.py \

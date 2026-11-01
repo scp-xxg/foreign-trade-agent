@@ -189,13 +189,15 @@ def main():
             apply_assistant_prompt(db)
         from foreign_trade.brand_identity import apply_identity_prompt
         apply_identity_prompt(db)
+        from foreign_trade.core_roles import install_core_roles
+        core_agents = install_core_roles(db, user_id, result["install_id"])
         report = result["import_report"]
         print(json.dumps({
             "ok": True, "action": result["action"], "name": result["name"], "schema_upgrade": upgrade_report,
             "install_id": result["install_id"], "version": result["version"], "revision": result["revision"],
             "enabled": result["enabled"], "installed_components": result["installed_components"],
             "adapted": report.get("adapted", []), "dropped": report.get("dropped", []),
-            "account_permissions_changed": False,
+            "account_permissions_changed": False, "core_agents": core_agents,
             "homepage_copy_applied": args.apply_homepage_copy,
             "assistant_prompt_applied": args.apply_assistant_prompt,
             "next_step": "After a source upgrade, restart this public backend, refresh the page and start a new chat. For a package-content-only update, toggle the trade plugin off and on to refresh the running cache.",

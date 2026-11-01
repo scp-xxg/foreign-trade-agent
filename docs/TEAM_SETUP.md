@@ -61,6 +61,8 @@ setup 会创建或更新本仓库 `.venv`、安装 requirements.txt 和 editable
 
 基础五个技能为 `inquiry-quote`、`buyer-inquiry-followup`、`product-content`、`cross-role-collaboration`、`localization-review`。另有Max-channel八个获客/跟进技能和sales-to-listing总流程技能。十个业务工具为 `trade_save_inquiry`、`trade_import_product`、`trade_confirm_product_facts`、`trade_inquiry`、`trade_calculate_quote`、`trade_product_content`、`trade_collaboration`、`trade_review`、`trade_buyer_search`、`trade_buyer_research`。三个 MCP 工具为 `search_products`、`get_product`、`calculate_quote`。原生业务工具需要本公开宿主的注册和当前用户身份，单独导入 ZIP 不会给未适配的上游安装这些能力。
 
+有自建智能体权限的账号还会安装三个核心岗位：外贸业务员、采购跟单员、商品运营专员。重复install保留原角色及人工修改；无权限时提示permission_required，不自动提权。详见[三岗协作](CORE_ROLE_AGENTS.md)。
+
 同名账号已存在时，init 保留密码和权限。数据目录已有其他账号时，不会额外创建管理员；已有实例更新应使用正确目录和已有用户名执行 `install`。
 
 团队脚本不继承其他项目的 HUGAGENT_HOME，并跳过仓库 `.env`。首次部署若选择自定义目录，从 init 开始，后续每条命令都传同一个 `--app-home`。已有实例则先确认原目录和数据库，只执行 install：

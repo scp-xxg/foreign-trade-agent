@@ -253,7 +253,9 @@ def _run_subagent_in_thread(
             current_user_id=current_user_id,
             isolated=True,
             sandbox_session_id=sub_session_id,
-            chat_id=runtime.get("chat_id") if builtin_spec is not None else None,
+            # Both child kinds use the authenticated parent conversation for tool
+            # access. isolated=True and user_agent bindings still narrow capabilities.
+            chat_id=runtime.get("chat_id"),
             run_id=runtime.get("run_id"),
             journal_owner=runtime.get("journal_owner"),
             capability_scope=str(runtime.get("capability_scope") or ""),
