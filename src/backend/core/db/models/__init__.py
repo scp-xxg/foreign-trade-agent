@@ -6,7 +6,7 @@ so `from core.db.models import X` and `from core.db.models import *` both stay u
 
 from core.db.engine import Base
 from core.db.models.column_types import INETType, JSONType
-from core.db.models.foreign_trade import ForeignTradeInquiry
+from core.db.models.foreign_trade import ForeignTradeInquiry, AcquisitionProgress
 from core.db.models.foreign_trade_content import ForeignTradeContentPack
 from core.db.models.foreign_trade_collaboration import ForeignTradeCollaboration
 from core.db.models.foreign_trade_review import ForeignTradeKnowledgeRule, ForeignTradeReview
@@ -84,6 +84,7 @@ def __getattr__(name):
 
 __all__ = [
     'ForeignTradeInquiry',
+    'AcquisitionProgress',
     'ForeignTradeContentPack',
     'ForeignTradeCollaboration',
     'ForeignTradeKnowledgeRule',

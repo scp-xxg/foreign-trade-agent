@@ -1,3 +1,4 @@
+import { PRODUCT_NAME } from '../brand';
 import type { FileDecision, QuestionAnswer } from '@hugagent/chat-sdk';
 import { useMemo } from 'react';
 import { useChatStore } from '../stores/chatStore';
@@ -14,7 +15,7 @@ export function useHostChatRuntime(state: ReturnType<typeof useAppController>): 
   const currentId = useChatStore(s => s.currentChatId);
   const chats = useChatStore(s => s.store.chats);
   const sending = useChatStore(s => s.sendingChatIds.has(currentId));
-  const productName = usePageConfig('branding.product_name', 'HugAgentOS');
+  const productName = usePageConfig('branding.product_name', PRODUCT_NAME);
   const confirmations = useUIStore(s => s.pendingConfirm[currentId]);
   const designPick = useUIStore(s => s.pendingDesignPick[currentId]);
   const questions = useUIStore(s => s.pendingUserQuestions[currentId]);

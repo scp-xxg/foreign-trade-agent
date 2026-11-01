@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any
 from core.config.settings import settings
 
-BRAND_NAME = settings.branding.product_name
+BRAND_NAME = "SailAgent"  # Public derivative identity; upstream notices remain unchanged.
 
 
 DOCS_BLOCK_MAP = {
@@ -37,18 +37,18 @@ DEFAULT_PAGE_CONFIG: dict[str, Any] = {
     "branding": {
         "product_name": BRAND_NAME,
         "product_subtitle": "外贸业务，对话即入口",
-        "logo_url": "/home/header.svg",
-        "favicon_url": "/icon.png",
+        "logo_url": "/brand/sailagent-mark.svg",
+        "wordmark_url": "/brand/sailagent-wordmark.svg",
+        "favicon_url": "/brand/sailagent-favicon.png",
         "page_title": BRAND_NAME,
-        "hero_title": "从询盘到上品，再到岗位协同",
-        "hero_subtitle": "核验买家、处理报价与跟进；整理产品资料，让业务、采购、美工、运营与合规围绕同一记录协作。",
+        "hero_title": "让外贸更简单",
+        "hero_subtitle": "核验买家、快速报价、生成商品资料，让团队高效协作。",
         "disclaimer": "真实公开资料保留来源；报价目录为模拟数据。回复、商品内容和内部交接均为待审草稿，不自动发送或发布。",
     },
     "homepage": {
-        # The homepage uses the transparent standalone brand mark rather than
-        # the square sidebar logo, mirroring the lighter Qwen Office hero.
+        # The homepage and sidebar share the public SailAgent mark.
         "show_logo": True,
-        "logo_url": "/icon.png",
+        "logo_url": "/brand/sailagent-mark.svg",
         "show_suggestions": True,
         "suggested_questions": [
             "核验 LYRECO 法国公司的官网 https://www.lyreco.com/group/ 和公开登记资料，说明已知事实与未核实事项。",
@@ -75,6 +75,7 @@ DEFAULT_PAGE_CONFIG: dict[str, Any] = {
             "settings": "系统设置",
             "my_space": "我的空间",
             "trade_inquiries": "询盘工作台",
+            "trade_buyers": "潜在买家搜索",
             "trade_content": "产品内容工作台",
             "trade_collaboration": "协同工作台",
         },
@@ -110,7 +111,7 @@ DEFAULT_PAGE_CONFIG: dict[str, Any] = {
         # 与前端 utils/pageConfigDefaults.ts 的 DEFAULT_SIDEBAR_ITEMS / DEFAULT_MENU_ITEMS 保持一致。
         # 这只是新装环境的出厂值——已存在的部署以 DB 现有取值为准，由 backfill_navigation_entries
         # 补齐新增条目，管理员随后可在 /config「页面配置」里自由编排。
-        "sidebar_items": ["ability_center", "trade_inquiries", "trade_content", "trade_collaboration", "automation", "sites", "my_space"],
+        "sidebar_items": ["ability_center", "trade_buyers", "trade_inquiries", "trade_content", "trade_collaboration", "automation", "sites", "my_space"],
         "menu_items": ["settings", "app_center", "projects", "lab"],
     },
     "texts": {
@@ -155,6 +156,7 @@ DEFAULT_PROMPT_VERSIONS: dict[str, Any] = {
 
 
 NAV_BACKFILL_ENTRIES: list[dict[str, Any]] = [
+    {"key": "trade_buyers", "bucket": "sidebar", "insert_after": "ability_center"},
     {"key": "trade_inquiries", "bucket": "sidebar", "insert_after": "ability_center"},
     {"key": "trade_content", "bucket": "sidebar", "insert_after": "trade_inquiries"},
     {"key": "trade_collaboration", "bucket": "sidebar", "insert_after": "trade_content"},

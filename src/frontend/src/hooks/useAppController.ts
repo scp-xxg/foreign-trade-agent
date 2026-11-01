@@ -1,3 +1,4 @@
+import { PRODUCT_NAME } from '../brand';
 // Modified by foreign-trade-agent contributors, 2026-10-28; see CHANGES_FOREIGN_TRADE.md.
 import { useTaskReminderScope } from './useTaskReminderScope';
 import { usePersonalAgentNotifications } from '../personalAgentEdition';
@@ -42,7 +43,7 @@ export function useAppController() {
   usePageConfigPolling();
   const pageConfig = usePageConfigAll();
   const panelTitles = pageConfig.navigation.panel_titles;
-  const brandName = usePageConfig('branding.product_name', 'HugAgentOS');
+  const brandName = usePageConfig('branding.product_name', PRODUCT_NAME);
   const recommendBannerText = usePageConfig('texts.recommend_banner_text', '');
   const { authUser } = useAuthStore();
   const {

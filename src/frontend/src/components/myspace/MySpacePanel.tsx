@@ -25,6 +25,8 @@ function LocalPrivateKnowledgePanel() {
   const location = useLocation();
   const syncTab = useMySpaceStore(state => state.syncTab);
   useEffect(() => { syncTab('kb'); }, [syncTab]);
+  const inMySpace = location.pathname === '/my-space' || location.pathname.startsWith('/my-space/');
+  if (!inMySpace) return null;
   if (location.pathname !== '/my-space/kb/private') return <Navigate to="/my-space/kb/private" replace />;
   return <div className="jx-mySpace"><div className="jx-mySpace-shell"><div className="jx-mySpace-body"><CatalogPanel /></div></div></div>;
 }

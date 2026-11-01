@@ -1,3 +1,4 @@
+import { PRODUCT_NAME, BRAND_MARK_URL, BRAND_WORDMARK_URL, BRAND_FAVICON_URL } from '../brand';
 // Modified by foreign-trade-agent contributors, 2026-10-21; see CHANGES_FOREIGN_TRADE.md.
 // Frontend defaults: serve as the fallback while the store has not yet loaded, aligned with the backend DEFAULT_PAGE_CONFIG
 // After the backend seeds, frontend polling overrides these values. When changing values, keep content_blocks.py in sync.
@@ -8,6 +9,7 @@ export interface PageConfig {
     product_subtitle: string;
     logo_url: string;
     favicon_url: string;
+    wordmark_url?: string;
     page_title: string;
     hero_title: string;
     hero_subtitle: string;
@@ -67,23 +69,24 @@ export interface PageConfig {
 // 当前默认的取舍：能力中心从底部菜单提到一级导航（其四类能力做成二级导航）；定时任务从应用中心、
 // 站点从实验室各自拆出来成一级导航；知识库并入我的空间的 Tab、智能体并入能力中心的二级导航，
 // 因此都不再单列；应用中心与项目反向下沉到用户下拉菜单，主导航只留高频入口。
-export const DEFAULT_SIDEBAR_ITEMS = ['ability_center', 'trade_inquiries', 'trade_content', 'trade_collaboration', 'automation', 'sites', 'my_space'];
+export const DEFAULT_SIDEBAR_ITEMS = ['ability_center', 'trade_buyers', 'trade_inquiries', 'trade_content', 'trade_collaboration', 'automation', 'sites', 'my_space'];
 export const DEFAULT_MENU_ITEMS = ['settings', 'app_center', 'projects', 'lab'];
 
 export const DEFAULT_PAGE_CONFIG: PageConfig = {
   branding: {
-    product_name: 'HugAgentOS',
+    product_name: PRODUCT_NAME,
     product_subtitle: '外贸业务，对话即入口',
-    logo_url: '/home/header.svg',
-    favicon_url: '/icon.png',
-    page_title: 'HugAgentOS',
-    hero_title: '用对话完成询盘、上品与跨岗位协同',
-    hero_subtitle: '核验买家、处理报价与产品资料，按岗位分工并人工验收交接。',
+    logo_url: BRAND_MARK_URL,
+    wordmark_url: BRAND_WORDMARK_URL,
+    favicon_url: BRAND_FAVICON_URL,
+    page_title: PRODUCT_NAME,
+    hero_title: '让外贸更简单',
+    hero_subtitle: '核验买家、快速报价、生成商品资料，让团队高效协作。',
     disclaimer: '真实公开资料保留来源；报价目录为模拟数据。所有回复与上品结果均是待审核草稿，不自动发送或发布。',
   },
   homepage: {
     show_logo: true,
-    logo_url: '/icon.png',
+    logo_url: BRAND_MARK_URL,
     show_suggestions: true,
     suggested_questions: [
       "核验 LYRECO 法国公司的官网 https://www.lyreco.com/group/ 和公开登记资料，说明已知事实与未核实事项。",
@@ -100,6 +103,7 @@ export const DEFAULT_PAGE_CONFIG: PageConfig = {
       trade_inquiries: '询盘工作台',
       trade_content: '产品内容工作台',
       trade_collaboration: '跨岗位协同',
+      trade_buyers: '潜在买家搜索',
       skills: '技能',
       agents: '智能体',
       mcp: '连接器',
@@ -118,6 +122,7 @@ export const DEFAULT_PAGE_CONFIG: PageConfig = {
       trade_inquiries: '核验买家公开资料、处理询盘报价并管理跟进待办。',
       trade_content: '上传产品资料与原图，核对事实，生成英文上品资料、商品素材和客服 FAQ。',
       trade_collaboration: '当前账号下按角色协调任务，核对依赖、来源版本与人工验收。',
+      trade_buyers: '搜索候选网站，查看证据并人工审核线索。',
       skills: '启用/停用技能，并查看详细介绍、输入输出与示例。',
       agents: '选择与启用智能体，并查看其职责边界与路由提示。',
       mcp: '管理 MCP连接器服务，并查看其作用范围与可靠性影响。',
@@ -132,11 +137,11 @@ export const DEFAULT_PAGE_CONFIG: PageConfig = {
       sites: '在对话里描述需求，AI 生成完整网站并一键发布，由平台托管、凭链接即可访问',
     },
     admin_header: {
-      title: 'HugAgentOS — 后台管理',
+      title: `${PRODUCT_NAME} — 后台管理`,
       subtitle: '后台管理',
     },
     admin_platform: {
-      product_name: 'HugAgentOS',
+      product_name: PRODUCT_NAME,
       content_label: '内容管理',
       config_label: '系统配置',
       apidoc_label: '接口文档',

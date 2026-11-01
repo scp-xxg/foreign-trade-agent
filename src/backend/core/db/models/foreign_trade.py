@@ -12,3 +12,10 @@ class ForeignTradeInquiry(Base):
     created_at = Column(String(40), nullable=False)
     updated_at = Column(String(40), nullable=False)
     __table_args__ = (Index("idx_foreign_trade_inquiry_owner_updated", "owner_user_id", "updated_at"),)
+
+class AcquisitionProgress(Base):
+    __tablename__ = 'foreign_trade_acquisition_progress'
+    owner_user_id = Column(String(64), primary_key=True)
+    revision = Column(Integer, nullable=False)
+    payload = Column(JSON, nullable=False)
+    updated_at = Column(String(40), nullable=False)

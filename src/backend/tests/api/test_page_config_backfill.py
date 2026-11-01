@@ -53,7 +53,7 @@ _ALL_SUBTITLES = {k: f"{k} sub" for k in _ALL_TITLES}
 def test_homepage_defaults_focus_on_suggestions():
     homepage = DEFAULT_PAGE_CONFIG["homepage"]
     assert homepage["show_logo"] is True
-    assert homepage["logo_url"] == "/icon.png"
+    assert homepage["logo_url"] == "/brand/sailagent-mark.svg"
     assert homepage["show_suggestions"] is True
     assert len(homepage["suggested_questions"]) >= 6
 

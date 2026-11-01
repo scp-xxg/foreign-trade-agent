@@ -72,6 +72,32 @@ def list_available_resources(self, owner_user_id: Optional[str] = None) -> Dict[
         {k: v for k, v in item.items() if k != "_owned"} for item in _plugin_by_slug.values()
     ]
 
+    # Imported local plugins live in the device registry, not InstalledPlugin.
+    # Reuse the same owner/profile/readiness checks as runtime selection.
+    if owner_user_id:
+        try:
+            from core.harness.registry import device_catalog
+            from core.capabilities.identity_rules import LOCAL_PROFILE, BUILTIN_PROFILE
+            entries = {p.get('install_id'): p for p in device_catalog.plugin_entries(owner_user_id)}
+            for row in device_catalog.installations('plugin', user_id=owner_user_id):
+                if (row.profile_id not in {LOCAL_PROFILE, BUILTIN_PROFILE} or not row.ready or not row.enabled
+                    or row.payload.get('owner_user_id') not in (None, '', owner_user_id)):
+                    continue
+                entry = entries.get(row.install_id)
+                if not entry or not entry.get('enabled') or not entry.get('callable'):
+                    continue
+                components = row.payload.get('components') or {}
+                skills = list(components.get('skills') or [])
+                mcps = list(components.get('mcp') or [])
+                plugin_skill_ids.update(skills)
+                plugin_skill_ids.update('skill:'+row.profile_id+':'+sid for sid in skills if not sid.startswith('skill:'))
+                plugin_mcp_ids.update(mcps)
+                if not any(p['id']==row.install_id for p in plugin_list):
+                    plugin_list.append({'id':row.install_id,'name':entry.get('name') or row.key,
+                        'description':entry.get('description') or '', 'skill_count':len(skills),'mcp_count':len(mcps)})
+        except Exception as exc:
+            logger.debug('Device plugin choices unavailable: %s', type(exc).__name__)
+
     # Built-in plugin MCPs can also be present in the static catalog without
     # a source_plugin DB row.  They still belong under the plugin selector,
     # not the loose MCP selector.

@@ -1,3 +1,4 @@
+import { PRODUCT_NAME } from '../brand';
 import type { ChatMessage } from '../types';
 import { formatDateKey, formatTime } from './date';
 import { mdToHtml } from './markdown';
@@ -124,7 +125,7 @@ export async function triggerPdfDownload(filename: string, chatTitle: string, me
     .then((pdf: any) => {
       const pageCount = pdf.internal.getNumberOfPages();
       const pageWidth = pdf.internal.pageSize.getWidth();
-      const headerText = `${t('HugAgentOS')}(${formatChatTimestamp(chatTimestamp)})`;
+      const headerText = `${PRODUCT_NAME}(${formatChatTimestamp(chatTimestamp)})`;
       const headerImage = createPdfHeaderImage(headerText);
       const headerWidth = 98;
       const headerHeight = 6.86;

@@ -24,7 +24,7 @@ export const ONBOARDING_DICT: Record<string, string> = {
   '选择需要的智能增强': 'Choose intelligence enhancements',
   '你可以控制是否跨对话记忆、是否让系统从你的用法中自我进化，以及是否执行领域本体核验。': 'Control cross-conversation memory, whether the system evolves from how you work, and domain ontology validation.',
   '一切就绪': 'Everything is ready',
-  '完成初始化后，你将进入 HugAgentOS 工作台。': 'Complete setup to enter the HugAgentOS workspace.',
+  '完成初始化后，你将进入 SailAgent 工作台。': 'Complete setup to enter the SailAgent workspace.',
   '主对话模型': 'Primary chat model',
   '索引模型': 'Index model',
   '重排模型': 'Reranker model',

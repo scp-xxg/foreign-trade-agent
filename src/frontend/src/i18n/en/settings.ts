@@ -1,5 +1,22 @@
 /** 英文字典（settings 域）：key 为中文原文，value 为英文译文。 */
 export const SETTINGS_DICT: Record<string, string> = {
+  '用户管理': 'User Management',
+  '加载用户失败': 'Failed to load users',
+  '没有用户管理权限': 'No user management permission',
+  '请使用管理员账号登录。': 'Please sign in with an administrator account.',
+  '账号已创建': 'Account created',
+  '创建账号失败': 'Failed to create account',
+  '创建团队账号并设置管理员或普通成员角色。': 'Create team accounts and assign administrator or member roles.',
+  '新建账号': 'New account',
+  '账号': 'Account',
+  '昵称': 'Nickname',
+  '角色已更新': 'Role updated',
+  '更新角色失败': 'Failed to update role',
+  '普通成员': 'Member',
+  '登录账号': 'Login username',
+  '请输入登录账号': 'Enter a login username',
+  '初始密码': 'Initial password',
+  '密码至少 8 位': 'Password must be at least 8 characters',
   '上下文窗口（token，必填）': 'Context window (tokens, required)',
   '请填写当前服务支持的上下文窗口，或先自动探测；未探测到时需手工确认。': 'Enter the context window supported by this service, or detect it first. Confirm it manually if detection is unavailable.',
   '上下文窗口必须为正整数 token。': 'The context window must be a positive integer number of tokens.',
@@ -233,8 +250,8 @@ export const SETTINGS_DICT: Record<string, string> = {
   '头像上传失败': 'Failed to upload avatar',
   '修改默认密码': 'Change Default Password',
   '首次登录必须修改默认密码': 'Change the default password to continue',
-  '默认账号使用临时密码 admin。为确保实例安全，请设置新密码后继续使用 HugAgentOS。':
-    'The default account uses the temporary password "admin". Set a new password before continuing to HugAgentOS.',
+  '默认账号使用临时密码 admin。为确保实例安全，请设置新密码后继续使用 SailAgent。':
+    'The default account uses the temporary password "admin". Set a new password before continuing to sailagent.',
   '定期更新登录密码可以保护你的账号与实例配置。': 'Update your sign-in password regularly to protect your account and instance configuration.',
   '当前密码': 'Current Password',
   '请输入当前密码': 'Enter your current password',

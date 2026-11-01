@@ -31,8 +31,11 @@ import { FOREIGN_TRADE_CONTENT_DICT } from './foreignTradeContent';
 import { FOREIGN_TRADE_COLLABORATION_DICT } from './foreignTradeCollaboration';
 import { FOREIGN_TRADE_REVIEW_DICT } from './foreignTradeReview';
 
+import { FOREIGN_TRADE_BUYERS_DICT } from './foreignTradeBuyers';
+
 export const EN_DICT: Record<string, string> = {
   ...FOREIGN_TRADE_DICT,
+  ...FOREIGN_TRADE_BUYERS_DICT,
   ...FOREIGN_TRADE_INQUIRY_DICT,
   ...FOREIGN_TRADE_CONTENT_DICT,
   ...FOREIGN_TRADE_COLLABORATION_DICT,

@@ -1,0 +1,11 @@
+{
+  "merchant_name": null,
+  "products": [{"name": null, "use_cases": [], "specifications": {}, "price": {"amount": null, "currency": null, "unit": null, "incoterm": null}, "source": null}],
+  "supply": {"moq": {"quantity": null, "unit": null, "scope": null}, "capacity": null, "lead_time_days": null, "customization": [], "source": null},
+  "certifications": [{"name": null, "product_scope": null, "valid_until": null, "source": null}],
+  "commercial": {"payment_terms": [], "incoterms": [], "service_markets": [], "restrictions": []},
+  "preferences": {"target_markets": [], "buyer_types": [], "explicit_hard_constraints": [], "excluded_customer_domains": []},
+  "historical_customers": [],
+  "lost_deal_reasons": [],
+  "attachments": []
+}

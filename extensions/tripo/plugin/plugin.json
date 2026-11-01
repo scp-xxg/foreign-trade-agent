@@ -1,0 +1,57 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "foreign-trade-tripo",
+  "version": "0.1.0",
+  "description": "高质量云端3D生成：参考图或文字→Tripo真实网格与PBR贴图→Blender实际渲染→GLB/PNG/Blend下载。正式任务去重，按当前账号核验免费预算；不是固定服装模板。",
+  "author": {
+    "name": "Foreign Trade Agent Team"
+  },
+  "extensions": {
+    "org.hugagent": {
+      "default_enabled": {
+        "skills": [
+          "cloud-3d-generation"
+        ],
+        "mcp": [
+          "tripo"
+        ]
+      },
+      "mcp": {
+        "tripo": {
+          "display_name": "Tripo 高质量3D生成",
+          "description": "官方CLI驱动的真实云端生成，受账号预算约束；成功提交不等于完成。",
+          "tools": [
+            {
+              "name": "tripo_account_status",
+              "description": "检查当前账号登录状态、余额与本次预算。"
+            },
+            {
+              "name": "tripo_prepare_asset",
+              "description": "准备参考图/文字生成计划，官方预检估价，不提交。"
+            },
+            {
+              "name": "tripo_submit_asset",
+              "description": "预算范围内只提交一次，重试复用任务。"
+            },
+            {
+              "name": "tripo_asset_status",
+              "description": "查询并等待同一任务，实际下载、渲染与交付。"
+            }
+          ]
+        }
+      },
+      "ui": {
+        "version": 1,
+        "contributes": {
+          "shortcuts": [
+            {
+              "id": "cloud-3d",
+              "label": "高质量参考图生3D",
+              "prompt": "请使用我上传的服装或产品参考图，通过Tripo准备真实3D生成计划并说明积分估算。在本次已核验免费预算内完成一个任务，等待实际结果，输出GLB、Blender实渲染PNG和可编辑源文件；不要用参考图冒充生成结果，不要自动追加任务或充值。"
+            }
+          ]
+        }
+      }
+    }
+  }
+}

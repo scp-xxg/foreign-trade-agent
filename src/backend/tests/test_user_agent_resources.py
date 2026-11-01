@@ -148,3 +148,20 @@ async def test_agent_factory_loads_disabled_private_mcp_only_for_explicit_subage
         )
 
     assert calls == [("user-a", expected_enabled_only)]
+
+
+def test_local_imported_plugins_are_bindable_only_by_their_owner(db_session,monkeypatch):
+    from types import SimpleNamespace
+    from core.harness.registry import device_catalog
+    rows=[SimpleNamespace(profile_id='local',ready=True,enabled=True,install_id='plugin:local:trade-a',key='trade-a',payload={'owner_user_id':'user-a','components':{'skills':['test-skill'],'mcp':[]}}),
+          SimpleNamespace(profile_id='local',ready=True,enabled=True,install_id='plugin:local:trade-b',key='trade-b',payload={'owner_user_id':'user-b','components':{}})]
+    monkeypatch.setattr(device_catalog,'installations',lambda *a,**k:rows)
+    monkeypatch.setattr(device_catalog,'plugin_entries',lambda uid:[{'install_id':r.install_id,'name':r.key,'enabled':True,'callable':True} for r in rows])
+    result=UserAgentService(db_session).list_available_resources(owner_user_id='user-a')
+    ids={p['id'] for p in result['plugins']}
+    assert 'plugin:local:trade-a' in ids
+    assert 'plugin:local:trade-b' not in ids
+    from features.marketplace.agent_installation import resolve_bindings
+    final,report=resolve_bindings(db_session,{'plugin_ids':['plugin:local:trade-a']},'user-a','A')
+    assert final['plugin_ids']==['plugin:local:trade-a']
+    assert not report['dropped']

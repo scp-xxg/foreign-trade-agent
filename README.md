@@ -1,7 +1,11 @@
 <!-- Modified by foreign-trade-agent contributors, 2026-10-21: public team distribution. -->
-# foreign-trade-agent
+# SailAgent
 
-面向外贸询盘、商品资料和跨岗位协同的演示 Agent，最初基于公开 HugAgentOS Community Edition desktop-v1.0.2，现同步上游 **2026-10-27 main（d969492f）**。仓库名称暂用 `foreign-trade-agent`，页面名称和 Logo 暂保留 HugAgentOS。
+当前整合版：[现场完整步骤与评分对照](docs/FINAL_DEMO_20261101.md) · [队友部署](docs/TEAM_SETUP.md)。
+
+<img src="src/frontend/public/brand/sailagent-preview.png" alt="SailAgent" width="500" />
+
+面向外贸询盘、商品资料和跨岗位协同的演示 Agent，最初基于公开 HugAgentOS Community Edition desktop-v1.0.2，现同步上游 **2026-10-27 main（d969492f）**。产品品牌为 **SailAgent（启航）**，仓库和技术目录继续使用 `foreign-trade-agent`。保留 **Powered by HugAgentOS**、上游许可证和来源署名。
 
 **报价目录中的产品、价格和参考生产周期均为虚构演示数据，非真实商业报价。** 场景二另附可核验的真实产品资料和有署名的公开授权照片，两者独立，不混用价格。
 
@@ -126,3 +130,7 @@ main 保持可运行；每项功能独立分支、提交 PR，通过 CI 和队�
 ### 中文 3D 产品概念打样（可选插件）
 
 新增通用 Blender MCP 插件：模型动态编写 bpy，不设物体类别白名单；真实创建服装外观、产品或其他3D概念，支持第二轮修改及GLB、PNG、Blend下载。使用隔离的Blender/Xvfb，保留HugAgentOS署名；概念建模不等同于生产CAD或服装仿真。安装与两轮演示见 [Blender MCP 使用说明](docs/BLENDER_MCP.md)。
+
+### 高质量云端3D生成（Tripo，可选）
+
+新增独立Tripo插件：参考图/文字预检估价、按当前账号有限预算单次提交、持久化任务查询、真实GLB下载和隔离Blender实渲染交付。需独立Tripo API账号及实际可用额度；注册不代表已获免费额度，默认不充值或未经授权扣费。见 [Tripo部署与使用](docs/TRIPO_3D.md)。

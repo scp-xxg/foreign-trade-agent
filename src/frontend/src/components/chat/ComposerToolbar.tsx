@@ -10,6 +10,7 @@ import { ComposerAttachmentMenu } from './ComposerAttachmentMenu';
 import { ComposerProjectMenu } from './ComposerProjectMenu';
 import { VoiceInput } from '../voice/VoiceInput';
 import type { VoiceInputState } from '../voice/useVoiceInput';
+import { AcquisitionShortcut } from './AcquisitionShortcut';
 import { t } from '../../i18n';
 import type { InputAreaProps, ComposerOptions } from './composerTypes';
 import type { ComposerState } from './useComposerState';
@@ -45,6 +46,7 @@ export function ComposerToolbar({ state, editor, options, fileInputRef, showStop
             </button>
           )}
 
+          <AcquisitionShortcut draftKey={state.draftKey} />
           <ComposerProjectMenu state={state} />
           <ApprovalPill />
           {/* Active modes always retain a keyboard-accessible exit. */}

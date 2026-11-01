@@ -312,8 +312,16 @@ export function AgentPanel() {
             allowClear
             className="jx-agentPage-search"
           />
-          {canAddAgent && (
-            <>
+          <>
+            {!canAddAgent && (
+              <Button
+                icon={<AppstoreAddOutlined />}
+                onClick={() => setMarketOpen(true)}
+              >
+                {t('智能体市场')}
+              </Button>
+            )}
+            {canAddAgent && (
               <input
                 ref={importInputRef}
                 type="file"
@@ -325,6 +333,8 @@ export function AgentPanel() {
                   e.target.value = '';
                 }}
               />
+            )}
+            {canAddAgent && (
               <Dropdown
                 menu={{
                   items: [
@@ -339,8 +349,8 @@ export function AgentPanel() {
                   {t('添加智能体')} <DownOutlined />
                 </Button>
               </Dropdown>
-            </>
-          )}
+            )}
+          </>
         </div>
       </div>
 

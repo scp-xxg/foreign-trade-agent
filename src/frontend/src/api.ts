@@ -2472,6 +2472,8 @@ export async function resetLarkAppInit(target?: RequestTarget): Promise<LarkAppI
 // ── Auth API (SSO session) ──────────────────────────────────────────────
 
 export interface AuthUser extends EditionAuthUserFields {
+  /** Server-derived super-admin permission for account management. */
+  can_manage_users?: boolean;
   user_id: string;
   username: string;
   email?: string;
@@ -2526,6 +2528,34 @@ export interface MyProfile extends AuthUser {
   user_center_id?: string;
   phone?: string | null;
   auth_source?: 'local' | 'external';
+}
+
+export interface AdminUser {
+  user_id: string;
+  username: string;
+  email?: string | null;
+  nickname?: string | null;
+  status: string;
+  role: 'member' | 'super_admin';
+  can_add_agent: boolean;
+  created_at?: string | null;
+}
+
+export async function listAdminUsers(): Promise<AdminUser[]> {
+  const wrapped = await apiRequest<unknown>('/v1/admin/users');
+  return unwrapData<AdminUser[]>(wrapped);
+}
+
+export async function createAdminUser(payload: {
+  username: string; password: string; nickname?: string; email?: string; role: AdminUser['role'];
+}): Promise<AdminUser> {
+  const wrapped = await apiRequest<unknown>('/v1/admin/users', { method: 'POST', body: JSON.stringify(payload) });
+  return unwrapData<AdminUser>(wrapped);
+}
+
+export async function updateAdminUserRole(userId: string, role: AdminUser['role']): Promise<AdminUser> {
+  const wrapped = await apiRequest<unknown>(`/v1/admin/users/${encodeURIComponent(userId)}/role`, { method: 'PATCH', body: JSON.stringify({ role }) });
+  return unwrapData<AdminUser>(wrapped);
 }
 
 export async function getMyProfile(): Promise<MyProfile> {
@@ -5075,4 +5105,18 @@ export async function getWikiSourceChunks(
     ),
   );
   return { page: data.page as WikiPageDetail, chunks: data.chunks || [] };
+}
+
+export async function updateAdminAgentPermission(userId:string, can_add_agent:boolean):Promise<AdminUser> {
+  return unwrapData(await apiRequest('/v1/admin/users/'+encodeURIComponent(userId)+'/agent-permission',{method:'PATCH',body:JSON.stringify({can_add_agent})}));
+}
+export interface AgentSubmission { submission_id:string; name:string; submitter_name:string; status:string; description:string; summary:string; note:string; review_note:string; system_prompt?:string; bindings?:Record<string,string[]>; }
+export async function listAgentSubmissions():Promise<AgentSubmission[]> {
+  return unwrapData<{items:AgentSubmission[]}>(await apiRequest('/v1/admin/agent-marketplace/submissions')).items;
+}
+export async function getAgentSubmission(id:string):Promise<AgentSubmission> {
+  return unwrapData(await apiRequest('/v1/admin/agent-marketplace/submissions/'+encodeURIComponent(id)));
+}
+export async function reviewAgentSubmission(id:string, approve:boolean, review_note:string):Promise<AgentSubmission> {
+  return unwrapData(await apiRequest('/v1/admin/agent-marketplace/submissions/'+encodeURIComponent(id)+'/review',{method:'POST',body:JSON.stringify({approve,review_note})}));
 }

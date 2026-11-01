@@ -263,11 +263,13 @@ def _render_legacy_mock_page(redirect: str, error: Optional[str]) -> str:
     )
     brand = get_branding_info()
     brand_name = brand["product_name"]
+    brand_logo = brand.get("wordmark_url") or brand["logo_url"]
 
     return f"""<!DOCTYPE html>
 <html lang="zh">
 <head>
   <meta charset="UTF-8"/>
+  <link rel="icon" type="image/png" href="/brand/sailagent-favicon.png"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>统一身份认证登录 · Mock</title>
   <link rel="preload" as="image" href="/home/mock-sso-bg-original.png"/>
@@ -395,7 +397,7 @@ def _render_legacy_mock_page(redirect: str, error: Optional[str]) -> str:
   <div class="page">
     <header class="brand">
       <a class="brand-link" href="/mock-sso/login?redirect={redirect}">
-        <img class="brand-logo" src="/home/hugagentos-logo.png" alt="{brand_name}"/>
+        <img class="brand-logo" src="{brand_logo}" alt="{brand_name}"/>
       </a>
     </header>
     <main class="main">
@@ -442,7 +444,7 @@ def _render_legacy_mock_page(redirect: str, error: Optional[str]) -> str:
         </div>
       </section>
     </main>
-    <footer class="footer">致力于构建面向未来的组织级AI生产力平台</footer>
+    <footer class="footer">{brand_name} · 外贸出海智能助手<br/>Powered by HugAgentOS</footer>
   </div>
   <script>
     (function() {{
@@ -583,11 +585,13 @@ async def mock_login_page(
     mock_hint_html = ""
     brand = get_branding_info()
     brand_name = brand["product_name"]
+    brand_logo = brand.get("wordmark_url") or brand["logo_url"]
 
     html = f"""<!DOCTYPE html>
 <html lang="{default_lang if default_lang == 'en' else 'zh-CN'}">
 <head>
   <meta charset="UTF-8"/>
+  <link rel="icon" type="image/png" href="/brand/sailagent-favicon.png"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>{brand_name}</title>
   <link rel="preload" as="image" href="/home/mock-sso-bg-original.png"/>
@@ -1198,7 +1202,7 @@ async def mock_login_page(
   <div class="page">
     <header class="brand">
       <a class="brand-link" href="/login?redirect={redirect}">
-        <img class="brand-logo" src="/home/hugagentos-logo.png" alt="{brand_name}" />
+        <img class="brand-logo" src="{brand_logo}" alt="{brand_name}" />
       </a>
     </header>
     <main class="main">
@@ -1254,8 +1258,8 @@ async def mock_login_page(
     </main>
     {mock_hint_html}
     <button type="button" class="lang-toggle" id="langToggle" aria-label="切换语言">English</button>
-    <footer class="footer" data-i18n="致力于构建面向未来的组织级AI生产力平台">
-      致力于构建面向未来的组织级AI生产力平台
+    <footer class="footer">
+      {brand_name} · <span data-i18n="外贸出海智能助手">外贸出海智能助手</span><br/>Powered by HugAgentOS
     </footer>
   </div>
   <script>
@@ -1280,7 +1284,7 @@ async def mock_login_page(
         '请再次输入密码': 'Confirm password',
         '真实姓名（可选）': 'Real name (optional)',
         '联系方式（可选）': 'Phone (optional)',
-        '致力于构建面向未来的组织级AI生产力平台': 'Building a future-ready, organization-level AI productivity platform',
+        '外贸出海智能助手': 'AI assistant for global trade',
         '请输入账号和密码': 'Enter your username and password',
         '请填写注册码、账号、用户名、邮箱、密码': 'Fill in the invite code, username, display name, email and password',
         '账号只能包含英文、数字、下划线，长度 2-32 位': 'Username may only contain letters, digits and underscores (2-32 chars)',

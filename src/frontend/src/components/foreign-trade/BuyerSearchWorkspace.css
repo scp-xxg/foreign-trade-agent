@@ -1,0 +1,23 @@
+/* Modified by foreign-trade-agent contributors, 2026-10-31; see CHANGES_FOREIGN_TRADE.md. */
+.buyer-search { height: 100%; overflow: auto; padding: 28px; color: var(--color-text); background: var(--color-bg-layout); }
+.buyer-search header, .buyer-actions { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.buyer-search header { justify-content: space-between; margin-bottom: 20px; }
+.buyer-search h1 { font-size: 25px; margin: 0; } .buyer-search h2 { font-size: 18px; } .buyer-search h3 { font-size: 16px; overflow-wrap: anywhere; }
+.buyer-search p { color: var(--color-text-secondary); line-height: 1.7; }
+.buyer-search-grid { display: grid; grid-template-columns: minmax(280px, 360px) minmax(0, 1fr); gap: 24px; }
+.buyer-search-form, .buyer-search article { border: 1px solid var(--color-border); border-radius: 14px; padding: 20px; background: var(--color-bg-container); }
+.buyer-search-form { align-self: start; display: grid; gap: 14px; } .buyer-search label { display: grid; gap: 7px; font-size: 13px; }
+.buyer-search-results { display: grid; gap: 16px; align-content: start; min-width: 0; }
+.buyer-budget { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.buyer-search pre { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 260px; overflow: auto; }
+.buyer-search details { margin: 16px 0; } .buyer-search summary { cursor: pointer; }
+.acquisition-workspace { height: 100%; min-height: 0; }
+.acquisition-workspace > .ant-tabs-content-holder { min-height: 0; overflow: hidden; }
+.acquisition-workspace > .ant-tabs-content-holder > .ant-tabs-content,
+.acquisition-workspace .ant-tabs-tabpane { height: 100%; }
+@media (max-width: 900px) { .buyer-search { padding: 16px; } .buyer-search-grid { grid-template-columns: 1fr; } }
+
+.lead-outreach { display: grid; gap: 12px; min-width: 0; margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--color-border); }
+.lead-outreach fieldset { min-width: 0; display: grid; gap: 10px; padding: 12px; border: 1px solid var(--color-border); border-radius: 8px; }
+.lead-outreach legend { width: auto; padding: 0 6px; font-size: 13px; color: var(--color-text); }
+.lead-outreach .ant-select { min-width: 0; }

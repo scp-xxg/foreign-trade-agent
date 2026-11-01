@@ -49,7 +49,7 @@ export function PasswordManagementPanel({
           type="warning"
           showIcon
           message={t('首次登录必须修改默认密码')}
-          description={t('默认账号使用临时密码 admin。为确保实例安全，请设置新密码后继续使用 HugAgentOS。')}
+          description={t('默认账号使用临时密码 admin。为确保实例安全，请设置新密码后继续使用 SailAgent。')}
           style={{ marginBottom: 16 }}
         />
       ) : (

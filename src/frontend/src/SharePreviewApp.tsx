@@ -1,3 +1,4 @@
+import { PRODUCT_NAME } from './brand';
 import { UserMarkdownBlock } from './components/chat/UserMarkdownBlock';
 import { useEffect, useMemo, useState } from 'react';
 import CitationMarkdownBlock from './components/citation/CitationMarkdownBlock';
@@ -35,7 +36,7 @@ function formatShareExpiry(value?: string | null) {
 
 export default function SharePreviewApp() {
   usePageConfigPolling();
-  const brandName = usePageConfig('branding.product_name', 'HugAgentOS');
+  const brandName = usePageConfig('branding.product_name', PRODUCT_NAME);
 
   const shareId = useMemo(() => new URLSearchParams(window.location.search).get('share') || '', []);
   const [loading, setLoading] = useState(true);

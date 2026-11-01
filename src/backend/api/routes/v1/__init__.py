@@ -8,6 +8,7 @@ from .mock_sso import router as mock_sso_router
 
 CE_ROUTERS: tuple[tuple[str, str], ...] = (
     ("foreign_trade", "router"),
+    ("foreign_trade_buyers", "router"),
     ("foreign_trade_content", "router"),
     ("foreign_trade_collaboration", "router"),
     ("foreign_trade_review", "router"),
@@ -15,6 +16,7 @@ CE_ROUTERS: tuple[tuple[str, str], ...] = (
     ("chat_forks", "router"),
     ("auth", "router"),
     ("users", "router"),
+    ("admin_users", "router"),
     ("user_preferences", "router"),
     ("catalog", "router"),
     ("features.knowledge.api.kb", "router"),
@@ -64,6 +66,7 @@ CE_ROUTERS: tuple[tuple[str, str], ...] = (
     ("features.marketplace.api.marketplace", "router"),
     ("features.marketplace.api.mcp_marketplace", "router"),
     ("features.marketplace.api.agent_marketplace", "router"),
+    ("features.marketplace.api.agent_marketplace_admin", "router"),
     ("features.workbench.api.plugin_ui", "router"),
     ("plugin_resources", "router"),
     ("plugins", "router"),

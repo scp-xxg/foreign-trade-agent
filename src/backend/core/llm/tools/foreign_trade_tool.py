@@ -544,7 +544,60 @@ def register_foreign_trade_tools(toolkit, *, user_id: str, chat_id: str | None, 
         except Exception as exc:
             return _response(_failure(exc))
 
-    tools = [trade_inquiry, trade_calculate_quote, trade_product_content,
+    async def trade_buyer_search(action: Literal["plan", "run"], data: dict) -> ToolResponse:
+        """按客户画像搜索真实公开候选网站。data: product_terms/buyer_terms/markets/queries/excluded_domains 字符串数组、profile画像对象、target_count(1–50)、max_queries(1–12)、max_pages(0–30)、max_seconds(5–120)。先plan再run；未知条件保持待核实，不发送消息。"""
+        try:
+            _assert_available(actor, installation)
+            if require_skill is not None:
+                require_skill("trade-buyer-search")
+            from core.foreign_trade.buyer_search import SearchInput, make_plan, run_search
+            req = SearchInput.model_validate(_data(data))
+            if action not in {"plan", "run"}:
+                raise InquiryError(422, "不支持的搜索操作")
+            result = make_plan(req) if action == "plan" else await run_search(req)
+            return _response(_success(result))
+        except ValueError as exc:
+            if isinstance(exc, ValidationError):
+                return _response(_failure(exc))
+            from core.llm.foreign_trade_plugin import TradeSkillRequired
+            if isinstance(exc, TradeSkillRequired):
+                return _response(_failure(exc))
+            return _response(_failure(InquiryError(422, str(exc))))
+        except RuntimeError:
+            return _response(_failure(InquiryError(429, "搜索繁忙，请稍后重试")))
+        except Exception as exc:
+            return _response(_failure(exc))
+
+    async def trade_buyer_research(action: Literal["profile", "due-diligence", "contacts", "prioritize", "outreach", "cadence", "reply-triage"], data: dict) -> ToolResponse:
+        """获客阶段工具。profile: product/markets/buyer_types/constraints；due-diligence或contacts: company_name/website/country/profile/excluded_channels/max_pages。联系人阶段须先人工审核背调，本工具不保存或核验前序审核。prioritize: buyer_id/dossier_version/review_version/review_decision/review_reason/hard_excluded/do_not_contact/has_channel/assessments（dimension=product|buyer_type|market|supply,result=match|partial|mismatch|unknown,excerpt,source_url,retrieved_at）。outreach: lead=上述评分输入,channel/channel_type/channel_source_url/channel_retrieved_at/company_name/sender_company/product_en/supplier_claim_en/supplier_claim_reference/buyer_fact_en/buyer_fact_dimension/goal=find_contact|share_catalog|confirm_interest/facts_confirmed。cadence: lead=评分完整输入,contact={channel,channel_type=email|contact_page,source_url,retrieved_at(带时区ISO),purpose_confirmed},timezone=IANA时区,as_of=带时区评估时间,initial_sent_at=实际首封时间或null,followup_sent_at=实际已发送跟进时间数组,max_followups=0..3,bounced=false,reply=可选回复输入。reply-triage: buyer_id/reply_text/source_reference/received_at(带时区ISO)/confirmed_intent(可选opt_out|not_interested|wrong_contact|out_of_office|request_quote|request_sample|interested|unknown)/evidence_excerpt(人工确认时须原文子串)。有回复须先分流，再传完整reply给cadence；任何回复暂停旧节奏。只生成建议，不发送或定时执行。"""
+        try:
+            _assert_available(actor, installation)
+            skill = {"profile": "trade-customer-profile", "due-diligence": "trade-buyer-due-diligence", "contacts": "trade-buyer-contact-discovery", "prioritize": "trade-lead-prioritization", "outreach": "trade-personalized-outreach", "cadence": "trade-followup-cadence", "reply-triage": "trade-reply-triage"}.get(action)
+            if not skill:
+                raise InquiryError(422, "不支持的获客阶段")
+            if require_skill is not None:
+                require_skill(skill)
+            from core.foreign_trade.acquisition import ProfileInput, ResearchInput, draft_profile, due_diligence, discover_contacts
+            from core.foreign_trade.lead_outreach import LeadInput, OutreachInput, prioritize, draft_outreach
+            from core.foreign_trade.followup import CadenceInput, ReplyInput, plan_cadence, triage_reply
+            if action == "cadence":
+                result = plan_cadence(CadenceInput.model_validate(_data(data)))
+            elif action == "reply-triage":
+                result = triage_reply(ReplyInput.model_validate(_data(data)))
+            elif action == "prioritize":
+                result = prioritize(LeadInput.model_validate(_data(data)))
+            elif action == "outreach":
+                result = draft_outreach(OutreachInput.model_validate(_data(data)))
+            elif action == "profile":
+                result = draft_profile(ProfileInput.model_validate(_data(data)))
+            else:
+                req = ResearchInput.model_validate(_data(data))
+                result = await (due_diligence(req) if action == "due-diligence" else discover_contacts(req))
+            return _response(_success(result))
+        except Exception as exc:
+            return _response(_failure(exc))
+
+    tools = [trade_buyer_research, trade_buyer_search, trade_inquiry, trade_calculate_quote, trade_product_content,
              trade_save_inquiry, trade_import_product, trade_confirm_product_facts]
     from core.llm.factory.tools.definitions import function_tool
     from core.sandbox.permissions.tool_specs import allow_tool
