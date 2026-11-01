@@ -22,7 +22,8 @@ def prepare_desktop_plugin_skill_defaults(user_id, skill_ids):
     from features.desktop.capabilities.plugins import enabled_cloud_skill_intents
     from features.desktop.capabilities.preparation import ensure_cloud_ready
 
-    selected = set(skill_ids) | enabled_cloud_skill_intents(user_id)
+    from core.harness.registry.device_catalog import enabled_local_plugin_skill_ids
+    selected = set(skill_ids) | enabled_cloud_skill_intents(user_id) | set(enabled_local_plugin_skill_ids(user_id))
     ensure_cloud_ready(user_id, skill_keys=sorted(selected))
     return skills.filter_available_names(sorted(selected), user_id=user_id)
 

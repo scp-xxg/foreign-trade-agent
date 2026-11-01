@@ -21,7 +21,7 @@
     "language": "en",
     "locale": "en_US"
   },
-  "rule_version": "2026-10-31.1",
+  "rule_version": "2026-10-31.1+markets:2026-11-01.1",
   "rule_evidence": [
     {
       "rule_id": "alibaba.rfq_alignment",
@@ -38,6 +38,233 @@
       "verified_at": "2026-10-31",
       "effective_from": "",
       "scope_note": "官方实践指引，不作为强制平台禁令或法律结论。本项目自动核对SKU、数量、包装及可识别时间；其他自由文本规格与实际供货承诺由业务人员确认。"
+    },
+    {
+      "rule_id": "market.ca.environment",
+      "market": "CA",
+      "title": "加拿大：产品环保利益的测试依据",
+      "summary": "Competition Bureau说明，产品环保利益宣称在适用条款下需要事先充分、适当测试；一般虚假或误导性规定也可能适用。",
+      "source_url": "https://competition-bureau.canada.ca/en/how-we-foster-competition/education-and-outreach/publications/environmental-claims-and-competition-act",
+      "source_publisher": "Competition Bureau Canada",
+      "scope_note": "本案例限产品环保/性能表达，不把企业活动的方法学要求混同产品检测，也不自动评定测试是否充分。",
+      "check": "environmental_claim",
+      "scenario": "加拿大收纳用品宣传；没有该产品的降解测试报告。",
+      "bad_draft": "Biodegradable organizer with zero environmental impact.",
+      "revised_draft": "Desk organizer. No environmental performance claim is made pending test review.",
+      "unknowns": [
+        "宣称对象与条件",
+        "发布前检测依据",
+        "产品及版本是否与检测相同"
+      ],
+      "expected": "标出降解/零影响声明，要求实际证据；无环保宣称的事实描述不触发此案例。",
+      "rule_version": "2026-11-01.1",
+      "status": "active",
+      "category": "market_compliance",
+      "channels": [
+        "alibaba_rfq",
+        "amazon_listing"
+      ],
+      "verified_at": "2026-11-01",
+      "effective_from": ""
+    },
+    {
+      "rule_id": "market.ca.packaging",
+      "market": "CA",
+      "title": "加拿大：预包装非食品的标签语言",
+      "summary": "适用的预包装非食品标签中，产品名称/功能及净含量等强制信息通常涉及英语和法语；有效公制符号及法定例外要具体判断，Quebec另有要求。",
+      "source_url": "https://competition-bureau.canada.ca/en/labelling/prepackaged-non-food-consumer-products/what-must-be-label",
+      "source_publisher": "Competition Bureau Canada",
+      "scope_note": "检查的是包装标签准备，不是要求英文Listing整篇变法语，也不根据英语草稿直接判违法。商品是否预包装、信息类型、豁免及销售省份均需确认。",
+      "check": "ca_packaging_information",
+      "scenario": "加拿大预包装收纳盒；已有英文商品文案，包装上的产品识别信息未提供。",
+      "bad_draft": "Packaging is ready for all Canadian retailers.",
+      "revised_draft": "English product copy is a draft. Please review the English/French mandatory package information and any province-specific requirements.",
+      "unknowns": [
+        "是否属于适用预包装非食品",
+        "英语和法语产品名称/功能",
+        "净含量及适用单位",
+        "经销商信息及省级要求"
+      ],
+      "expected": "提示核对包装信息；不会因英文Listing本身判定违法。",
+      "rule_version": "2026-11-01.1",
+      "status": "active",
+      "category": "market_compliance",
+      "channels": [
+        "alibaba_rfq",
+        "amazon_listing"
+      ],
+      "verified_at": "2026-11-01",
+      "effective_from": ""
+    },
+    {
+      "rule_id": "market.eu.ce_scope",
+      "market": "EU",
+      "title": "欧盟/西班牙：CE适用范围",
+      "summary": "CE仅用于明确要求该标志的适用产品规则范围；不在适用范围的产品不应加贴。普通收纳用品不能因出口欧盟就自动声称CE认证。",
+      "source_url": "https://europa.eu/youreurope/business/product-rules-compliance/general-product-compliance/ce-marking/index_en.htm",
+      "source_publisher": "European Union — Your Europe",
+      "scope_note": "欧盟协调产品法规的适用性检查。带电、玩具等不同用途可能改变分类；本工具不根据SKU直接判断法规适用或核发认证。",
+      "check": "ce_claim",
+      "scenario": "西班牙询盘；非带电桌面收纳盒，法规分类待核验。",
+      "bad_draft": "CE certified desk organizer, approved for every EU use.",
+      "revised_draft": "Desk organizer. Applicable product rules and supporting documents will be confirmed before supply.",
+      "unknowns": [
+        "产品用途及类别",
+        "适用法规",
+        "如适用时的技术文件和符合性声明"
+      ],
+      "expected": "标出CE宣称，要求先判定适用范围；不要求所有收纳盒补CE证书。",
+      "rule_version": "2026-11-01.1",
+      "status": "active",
+      "category": "market_compliance",
+      "channels": [
+        "alibaba_rfq",
+        "amazon_listing"
+      ],
+      "verified_at": "2026-11-01",
+      "effective_from": ""
+    },
+    {
+      "rule_id": "market.eu.gpsr",
+      "market": "EU",
+      "title": "欧盟/西班牙：GPSR远程销售信息准备",
+      "summary": "GPSR第19条涉及面向欧盟消费者远程销售的商品要约信息，包括制造商联系、适用时的欧盟责任人、产品识别及警示/安全信息。",
+      "source_url": "https://eur-lex.europa.eu/eli/reg/2023/988",
+      "source_publisher": "European Union — EUR-Lex",
+      "scope_note": "以2026-05-29合并文本为核验版本；需确认GPSR及例外/行业特别法适用。B2B RFQ只作为后续消费品上架准备清单，不认定该RFQ已违反第19条；警示语言需适配目标成员国。",
+      "check": "gpsr_information",
+      "scenario": "同款收纳盒由西班牙买家采购后向消费者销售；制造商和责任人资料尚未提供。",
+      "bad_draft": "Ready for consumer sale across the EU.",
+      "revised_draft": "Draft for buyer review. Consumer-sale identification, contact details and applicable safety information remain to be confirmed.",
+      "unknowns": [
+        "GPSR适用范围",
+        "制造商邮政及电子联系方式",
+        "非欧盟制造商适用时的欧盟责任人",
+        "产品型号/图片/识别",
+        "适用的西班牙语安全说明"
+      ],
+      "expected": "列出缺少的核验材料并标待确认；不得虚构欧盟联系人，也不把缺失当成已认定违法。",
+      "rule_version": "2026-11-01.1",
+      "status": "active",
+      "category": "market_compliance",
+      "channels": [
+        "alibaba_rfq",
+        "amazon_listing"
+      ],
+      "verified_at": "2026-11-01",
+      "effective_from": ""
+    },
+    {
+      "rule_id": "market.uk.environment",
+      "market": "UK",
+      "title": "英国：Green Claims Code环保表达",
+      "summary": "CMA要求环保表达清楚准确、有可信依据，不能以局部改善制造整体更环保的印象；宽泛表达要考虑完整生命周期。",
+      "source_url": "https://www.gov.uk/government/publications/green-claims-code-making-environmental-claims/green-claims-and-your-business",
+      "source_publisher": "UK Competition and Markets Authority",
+      "scope_note": "英国消费者营销中的环保表达。整产品与包装应区分；真实条件需显著披露，不把缺少证据直接等同违法。",
+      "check": "environmental_claim",
+      "scenario": "英国客户询问礼盒环保性；仅确认纸盒包装，未确认再生来源。",
+      "bad_draft": "100% sustainable, carbon neutral gift box.",
+      "revised_draft": "Paperboard packaging. Environmental claims are not included pending evidence review.",
+      "unknowns": [
+        "宣称涉及产品还是包装",
+        "生命周期范围",
+        "支持可持续/碳声明的可核验材料"
+      ],
+      "expected": "提示宽泛宣称及条件缺失；改成已确认的包装材质后该命中消除。",
+      "rule_version": "2026-11-01.1",
+      "status": "active",
+      "category": "market_compliance",
+      "channels": [
+        "alibaba_rfq",
+        "amazon_listing"
+      ],
+      "verified_at": "2026-11-01",
+      "effective_from": ""
+    },
+    {
+      "rule_id": "market.uk.marking",
+      "market": "UK",
+      "title": "英国：UKCA/CE标志先判定市场和产品",
+      "summary": "GOV.UK指出Great Britain与Northern Ireland的路径不同，产品规则与标志选择按行业适用；Great Britain的部分制度继续接受CE，不是所有产品都必须UKCA。",
+      "source_url": "https://www.gov.uk/guidance/placing-ukca-or-ce-marked-products-on-the-market-in-great-britain",
+      "source_publisher": "UK Department for Business and Trade",
+      "scope_note": "来源核验更新2026-08-21。标志指导范围为England/Scotland/Wales；若只写UK仍需确认GB或NI，不能将规则外推全部英国市场或普通用品。",
+      "check": "uk_marking_claim",
+      "scenario": "英国询盘的电子配件或普通收纳用品；目的地写UK，分类未确认。",
+      "bad_draft": "UKCA certified and ready for every UK market.",
+      "revised_draft": "Please confirm the destination within the UK and product classification so we can review the applicable conformity route.",
+      "unknowns": [
+        "Great Britain或Northern Ireland",
+        "具体产品法规",
+        "符合性程序和证据"
+      ],
+      "expected": "标出UKCA/CE宣称并提示适用范围；不把UKCA作为所有商品必需证书。",
+      "rule_version": "2026-11-01.1",
+      "status": "active",
+      "category": "market_compliance",
+      "channels": [
+        "alibaba_rfq",
+        "amazon_listing"
+      ],
+      "verified_at": "2026-11-01",
+      "effective_from": ""
+    },
+    {
+      "rule_id": "market.us.environment",
+      "market": "US",
+      "title": "美国：笼统环保宣称",
+      "summary": "FTC Green Guides提醒避免无法充分支持的宽泛环保印象，应明确具体利益、条件与依据。",
+      "source_url": "https://www.ftc.gov/business-guidance/resources/environmental-claims-summary-green-guides",
+      "source_publisher": "US Federal Trade Commission",
+      "scope_note": "美国商品环保营销；可回收还涉及回收设施覆盖等条件。没有证据时只删去笼统宣称，不编造比例或测试。",
+      "check": "environmental_claim",
+      "scenario": "美国收纳盒文案；仅确认PP材质，未提供环保测试。",
+      "bad_draft": "Eco-friendly organizer, 100% recyclable everywhere.",
+      "revised_draft": "PP desk organizer for sorting stationery.",
+      "unknowns": [
+        "环保宣称范围",
+        "实际检测及回收条件",
+        "产品和包装分别的证据"
+      ],
+      "expected": "标出环保宣称并请求复核；已确认材质描述不触发本案例。",
+      "rule_version": "2026-11-01.1",
+      "status": "active",
+      "category": "market_compliance",
+      "channels": [
+        "alibaba_rfq",
+        "amazon_listing"
+      ],
+      "verified_at": "2026-11-01",
+      "effective_from": ""
+    },
+    {
+      "rule_id": "market.us.origin",
+      "market": "US",
+      "title": "美国：原产地宣称",
+      "summary": "无保留的美国制造宣称需要符合FTC的高标准并有可靠依据；美国品牌或美国办公地址本身不能证明商品美国制造。",
+      "source_url": "https://www.ftc.gov/business-guidance/resources/complying-made-usa-standard",
+      "source_publisher": "US Federal Trade Commission",
+      "scope_note": "适用于美国市场原产地营销宣称。本工具仅发现文字宣称并请求核验证据，不自行认定原产地。",
+      "check": "origin_claim",
+      "scenario": "美国办公用品Listing；已知材料为PP，产地未知。",
+      "bad_draft": "Made in USA desk organizer.",
+      "revised_draft": "Desk organizer. Country of origin has not been verified; no US-origin claim is made.",
+      "unknowns": [
+        "最终组装及重要加工地点",
+        "主要部件来源",
+        "支持原产地宣称的材料"
+      ],
+      "expected": "标出Made in USA并要求核验证据；删除无依据宣称后该文字命中消除，不自动填成Made in China。",
+      "rule_version": "2026-11-01.1",
+      "status": "active",
+      "category": "market_compliance",
+      "channels": [
+        "alibaba_rfq",
+        "amazon_listing"
+      ],
+      "verified_at": "2026-11-01",
+      "effective_from": ""
     },
     {
       "rule_id": "quote.amount_consistency",
@@ -127,7 +354,18 @@
   ],
   "text_annotations": [
     {
-      "annotation_id": "annotation_ecca6b129c56a601b1e103c2",
+      "annotation_id": "annotation_3c314145447111c89ef4c851",
+      "rule_id": "market.eu.gpsr",
+      "category": "market_compliance",
+      "field": "draft",
+      "quote": "",
+      "severity": "low",
+      "status": "needs_confirmation",
+      "message": "这是后续消费品远程销售的准备提醒，不判定B2B RFQ违反GPSR。待确认：GPSR适用范围、制造商联系方式、欧盟责任人、产品识别、安全信息",
+      "suggestion": "补充对应已确认事实及可核验文件；不适用时记录具体产品/地域/例外依据。人工复核证据，不能仅凭字段非空批准上架。"
+    },
+    {
+      "annotation_id": "annotation_72ce16189d35a57e419fe819",
       "rule_id": "quote.commercial_terms",
       "category": "quotation_terms",
       "field": "body",
@@ -138,7 +376,7 @@
       "suggestion": "保留付款条件待确认；涉及具体承诺时由业务人员补充依据后复核。"
     },
     {
-      "annotation_id": "annotation_54bb9072eb408b484b03fb6a",
+      "annotation_id": "annotation_d19602a7e4bb45620dc9a1fb",
       "rule_id": "quote.commercial_terms",
       "category": "quotation_terms",
       "field": "body",
@@ -149,7 +387,7 @@
       "suggestion": "保留报价有效期待确认；涉及具体承诺时由业务人员补充依据后复核。"
     },
     {
-      "annotation_id": "annotation_de0d3079c7fd3e2277373525",
+      "annotation_id": "annotation_8ec5e8a357ed54677d58354c",
       "rule_id": "quote.commercial_terms",
       "category": "quotation_terms",
       "field": "body",
@@ -160,7 +398,7 @@
       "suggestion": "保留Incoterm待确认；涉及具体承诺时由业务人员补充依据后复核。"
     },
     {
-      "annotation_id": "annotation_de63671ae972cc15dd546fa3",
+      "annotation_id": "annotation_1b826dd9abb99e83216e78a1",
       "rule_id": "quote.unknown_freight_tax",
       "category": "quotation_terms",
       "field": "body",
@@ -171,7 +409,7 @@
       "suggestion": "将费用范围写为不含运费/税费且待确认，除非先补充可靠商务依据。"
     },
     {
-      "annotation_id": "annotation_1b826dd9abb99e83216e78a1",
+      "annotation_id": "annotation_45518f8c2f9bed7e29d8ba86",
       "rule_id": "quote.unknown_freight_tax",
       "category": "quotation_terms",
       "field": "body",
@@ -186,6 +424,46 @@
     {
       "rule_id": "alibaba.rfq_alignment",
       "status": "passed",
+      "annotation_count": 0
+    },
+    {
+      "rule_id": "market.ca.environment",
+      "status": "not_applicable",
+      "annotation_count": 0
+    },
+    {
+      "rule_id": "market.ca.packaging",
+      "status": "not_applicable",
+      "annotation_count": 0
+    },
+    {
+      "rule_id": "market.eu.ce_scope",
+      "status": "passed",
+      "annotation_count": 0
+    },
+    {
+      "rule_id": "market.eu.gpsr",
+      "status": "needs_confirmation",
+      "annotation_count": 1
+    },
+    {
+      "rule_id": "market.uk.environment",
+      "status": "not_applicable",
+      "annotation_count": 0
+    },
+    {
+      "rule_id": "market.uk.marking",
+      "status": "not_applicable",
+      "annotation_count": 0
+    },
+    {
+      "rule_id": "market.us.environment",
+      "status": "not_applicable",
+      "annotation_count": 0
+    },
+    {
+      "rule_id": "market.us.origin",
+      "status": "not_applicable",
       "annotation_count": 0
     },
     {
@@ -216,6 +494,12 @@
   ],
   "risk_labels": [
     {
+      "code": "market.eu.gpsr",
+      "label": "欧盟/西班牙：GPSR远程销售信息准备",
+      "severity": "low",
+      "count": 1
+    },
+    {
       "code": "quote.commercial_terms",
       "label": "付款、有效期与贸易术语待确认",
       "severity": "low",
@@ -230,19 +514,25 @@
   ],
   "summary": {
     "issue_count": 2,
-    "needs_confirmation_count": 3,
+    "needs_confirmation_count": 4,
     "review_status": "needs_revision"
   },
   "comparison": null,
-  "scope_note": "确定性规则与来源一致性检查；结果是待审草稿反馈，不是平台全合规、法律结论或对外发布批准。",
+  "market_context": {
+    "market": "EU",
+    "input": "Spain",
+    "basis": "询盘目的国",
+    "scope_note": "国别检查按询盘目的国“Spain”选择EU案例；只覆盖已列规则，证据真实性仍待人工核验。"
+  },
+  "scope_note": "确定性规则与来源一致性检查；结果是待审草稿反馈，不是平台全合规、法律结论或对外发布批准。 国别检查按询盘目的国“Spain”选择EU案例；只覆盖已列规则，证据真实性仍待人工核验。",
   "not_sent": true,
   "not_published": true,
-  "review_id": "review_ffffffffffffffffffffffffffffffff",
-  "created_at": "2026-10-31T00:00:00+00:00",
   "sensitive_terms": {
     "status": "not_configured",
     "matches": [],
     "match_count": 0
   },
-  "warnings": []
+  "warnings": [],
+  "review_id": "review_ffffffffffffffffffffffffffffffff",
+  "created_at": "2026-10-31T00:00:00+00:00"
 }

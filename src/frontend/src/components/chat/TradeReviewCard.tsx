@@ -63,7 +63,7 @@ export function TradeReviewDetails({ record }: { record: TradeReviewRecord }) {
           <header><strong>{t('批注 {index}', { index: index + 1 })} · {fieldLabel(annotation.field)}</strong>
             <Tag color={severityColor(annotation.severity)}>{severityLabel(annotation.severity)}</Tag>
             <Tag>{annotation.status === 'issue' ? t('需要修改') : t('仍需确认')}</Tag></header>
-          <small>{rule?.title || annotation.rule_id} · {annotation.category === 'sensitive_terms' ? t('敏感词提示') : annotation.category === 'platform_rules' ? t('平台规则') : t('报价与商务条件')}</small>
+          <small>{rule?.title || annotation.rule_id} · {annotation.category === 'market_compliance' ? t('目标市场合规') : annotation.category === 'sensitive_terms' ? t('敏感词提示') : annotation.category === 'platform_rules' ? t('平台规则') : t('报价与商务条件')}</small>
           {annotation.level && <p><Tag>{annotation.level}</Tag>{annotation.source_section}{annotation.source_line ? ' · '+t('原文第 {line} 行', {line:annotation.source_line}) : ''}</p>}
           <dl><div><dt>{t('原片段')}</dt><dd><blockquote>{annotation.quote || t('缺失项或整稿范围，暂无可标记片段。')}</blockquote></dd></div>
             <div><dt>{t('原因')}</dt><dd>{annotation.message}</dd></div><div><dt>{t('修改建议')}</dt><dd>{annotation.suggestion}</dd></div></dl>

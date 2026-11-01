@@ -1,5 +1,7 @@
 > PR #7已合并main。现场具体步骤与可复制问答见 [LIVE_DEMO_PLAYBOOK.md](LIVE_DEMO_PLAYBOOK.md)，评分对照与实测见 [FINAL_DEMO_20261101.md](FINAL_DEMO_20261101.md)。模型密钥、知识资料和账号不随Git复制。
 
+> 日常部署优先使用 [一键部署](ONE_COMMAND_DEPLOY.md)，现场演示使用 [销售与运营接力](DEMO_TWO_WORKFLOWS.md)。本文保留原生 Python/WSL 高级安装和旧数据升级步骤。
+
 # 队友部署、模型配置与代码同步
 
 本指南针对团队公开仓库的 Linux / WSL2 本机部署。最终整合版本已进入 `main`，队友统一从main部署和更新。品牌为SailAgent，保留HugAgentOS开源署名；仓库名为foreign-trade-agent。上游原始说明见 [README_UPSTREAM.md](../README_UPSTREAM.md)，安装外贸功能请使用本指南的团队脚本。
@@ -59,7 +61,7 @@ setup 会创建或更新本仓库 `.venv`、安装 requirements.txt 和 editable
 2. 创建本机账号，应用外贸首页、推荐问题和外贸助手提示词。
 3. 将“外贸业务助手（演示）”0.9.0 安装到该账号，包含十四个技能、十个会话绑定业务工具，另保留三个目录/报价 MCP 工具。
 
-基础五个技能为 `inquiry-quote`、`buyer-inquiry-followup`、`product-content`、`cross-role-collaboration`、`localization-review`。另有Max-channel八个获客/跟进技能和sales-to-listing总流程技能。十个业务工具为 `trade_save_inquiry`、`trade_import_product`、`trade_confirm_product_facts`、`trade_inquiry`、`trade_calculate_quote`、`trade_product_content`、`trade_collaboration`、`trade_review`、`trade_buyer_search`、`trade_buyer_research`。三个 MCP 工具为 `search_products`、`get_product`、`calculate_quote`。原生业务工具需要本公开宿主的注册和当前用户身份，单独导入 ZIP 不会给未适配的上游安装这些能力。
+基础五个技能为 `inquiry-quote`、`buyer-inquiry-followup`、`product-content`、`cross-role-collaboration`、`localization-review`。另有 Max-channel 业务技能、sales-to-listing 总流程及 trade-compliance-check 合规清单。十二个业务工具为 `trade_save_inquiry`、`trade_import_product`、`trade_confirm_product_facts`、`trade_inquiry`、`trade_calculate_quote`、`trade_product_content`、`trade_collaboration`、`trade_review`、`trade_buyer_search`、`trade_buyer_research`、`trade_listing_prepare`、`trade_procurement_prepare`。三个 MCP 工具为 `search_products`、`get_product`、`calculate_quote`。原生业务工具需要本公开宿主的注册和当前用户身份，单独导入 ZIP 不会给未适配的上游安装这些能力。
 
 有自建智能体权限的账号还会安装三个核心岗位：外贸业务员、采购跟单员、商品运营专员。重复install保留原角色及人工修改；无权限时提示permission_required，不自动提权。详见[三岗协作](CORE_ROLE_AGENTS.md)。
 
@@ -103,7 +105,7 @@ test -f "$TRADE_APP_HOME/data.db" && \
 
 队友新装可沿用默认 3001；需要自选端口时，建议选一个空闲的非特权端口（1024—65535，避开本实例固定使用的 8900/9120）。CLI 接受 `--port`，实际能否监听由系统权限和占用状态决定。`setup` 仍只装依赖，`init/install` 仍负责配置，端口不是新建数据目录的理由。3002 是本机避开冲突的演示选择，不是全队强制端口。
 
-暂不配置模型，也可登录并使用工作台进行手工事实核对、确定性报价、资料下载、岗位任务和人工验收。产品内容工作台须明确选择 **“本地原文模板（不调用模型）”**：它按已确认原文排版，不翻译；需要英文文案和图片时，先核对产品事实已为英文。现场步骤见 [三个场景逐步演示](DEMO_WALKTHROUGH.md)。模板结果不代表 AI 翻译或聊天编排成功。
+暂不配置模型，也可登录并使用工作台进行手工事实核对、确定性报价、资料下载、岗位任务和人工验收。产品内容工作台须明确选择 **“本地原文模板（不调用模型）”**：它按已确认原文排版，不翻译；需要英文文案和图片时，先核对产品事实已为英文。现场步骤见 [销售与运营逐轮演示](DEMO_TWO_WORKFLOWS.md)。模板结果不代表 AI 翻译或聊天编排成功。
 
 **通过聊天驱动技能、AI 翻译与生成需要另行配置并验证可用模型。** 进入 **系统设置 → 模型服务**：
 

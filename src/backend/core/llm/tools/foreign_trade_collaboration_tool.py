@@ -75,7 +75,7 @@ def register_collaboration_tools(toolkit, *, user_id: str, chat_id: str | None,
             result = await asyncio.to_thread(operate)
             return response({"ok": True, "data": result, "errors": [], "warnings": []})
         except TradeSkillRequired as exc:
-            return response({"ok": False, "status": 409, "errors": [{"code": "skill_not_loaded", "message": str(exc)}], "warnings": []})
+            return response({"ok": False, "status": 409, "errors": [exc.as_error()], "warnings": []})
         except PermissionError:
             return response({"ok": False, "status": 403, "errors": [{"code": "plugin_unavailable", "message": "当前外贸插件不可用"}], "warnings": []})
         except CollaborationError as exc:

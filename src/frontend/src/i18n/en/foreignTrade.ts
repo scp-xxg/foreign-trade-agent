@@ -1,5 +1,13 @@
 /** English copy for the public foreign-trade quotation export. */
 export const FOREIGN_TRADE_DICT: Record<string, string> = {
+  '询盘报价到商品上品，销售与运营协作。': 'From inquiry and quotation to product listings, with sales and operations working together.',
+  "请使用外贸业务助手核验 LYRECO 官网 https://www.lyreco.com/group/，说明公开事实与未知项；询盘由团队模拟，不是真实订单。": "Use the trade assistant to check the LYRECO website https://www.lyreco.com/group/ and distinguish public facts from unknowns. This is a team demo, not a real customer order.",
+  "销售场景：创建 DESK-001、500 件、标准包装、发往 Spain 的模拟询盘，查询产品并计算报价，生成 Alibaba RFQ 英文回复。买家为 Demo Office Buyer，其余未知。": "Sales: create a demo inquiry for Demo Office Buyer, DESK-001, 500 units, standard packaging, shipping to Spain. Look up the product, calculate a quote and draft an Alibaba RFQ reply. Keep other details unknown.",
+  "将当前询盘改为 1000 件、定制包装，重新报价并修改回复，检索规则后审核，展示中英 PDF 和双语 Excel 下载卡。": "Change the current inquiry to 1,000 units with custom packaging. Recalculate, revise the reply, retrieve review rules and show bilingual PDF and Excel download cards.",
+  "把当前已报价的 DESK-001 询盘接力运营：关联同款商品资料包和运营任务，展示候选事实与图片来源，等待我确认。": "Hand the current DESK-001 inquiry to operations: link the same-product content pack and role tasks, show candidate facts and image sources, and wait for my confirmation.",
+  "运营场景：基于我已确认的同款资料包生成英文文案、FAQ、三种比例图片和 ZIP，再生成 Amazon US Listing 草稿并审核。": "Operations: generate English copy, FAQ, three image layouts and a ZIP from the confirmed content pack, then draft and review an Amazon US listing.",
+  "按目标市场查询合规案例，结合当前报价或 Listing 标记风险和待确认项；修改后复审，显示前后变化及官方来源。": "Look up compliance examples for the target market, mark risks and unknowns in the current quote or listing, revise and re-review with changes and official sources.",
+  '目标市场合规': 'Target market compliance',
   '敏感词提示': 'Sensitive wording notice',
   '原文第 {line} 行': 'Source line {line}',
   '当前记录有未保存修改或操作正在进行，请完成后再切换。': 'This record has unsaved changes or an operation in progress. Finish it before switching records.',

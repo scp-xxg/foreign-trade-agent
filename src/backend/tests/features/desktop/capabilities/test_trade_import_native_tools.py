@@ -333,3 +333,47 @@ def test_team_installer_updates_the_migrated_device_package_and_installed_api(cl
     registry.set_enabled(existing.install_id, False)
     disabled = install_device_plugin(USER, current)
     assert disabled["enabled"] is False
+
+
+def test_main_defaults_include_authorized_local_plugin_skills_but_keep_progressive_deferral(client, tmp_path, index_db):
+    from core.capabilities.catalog.resolver import resolve_all_runtime_enabled
+    from features.desktop.plugin_resolution import resolve_desktop_progressive_plugins
+    installed = _import(tmp_path)
+    expected = set(installed["components"]["skills"])
+    with index_db() as db:
+        selected, _, _ = resolve_all_runtime_enabled(db, USER)
+        foreign, _, _ = resolve_all_runtime_enabled(db, "other-account")
+    assert expected <= set(selected)
+    assert not expected.intersection(foreign or [])
+    resolution = resolve_desktop_progressive_plugins(user_id=USER, enabled_skill_ids=selected, enabled_mcp_ids=[])
+    item = next(x for x in resolution.directory if x.install_id == installed["install_id"])
+    assert set(item.skill_ids) == expected
+    assert item in resolution.deferred and expected <= resolution.deferred_skill_ids
+    # Availability is not full loading: none of these instructions need to be
+    # in the initial prompt; activation and the read gate still apply.
+    assert not trade.register_initial_trade_tools(ToolAssembly(), user_id=USER, chat_id="fresh", progressive=resolution)
+    explicit_empty = resolve_desktop_progressive_plugins(user_id=USER, enabled_skill_ids=[], enabled_mcp_ids=[])
+    assert not explicit_empty.directory
+
+    disabled = next(iter(expected))
+    registry.set_enabled("skill:local:" + disabled, False)
+    with index_db() as db:
+        selected, _, _ = resolve_all_runtime_enabled(db, USER)
+    assert disabled not in selected
+    registry.set_enabled(installed["install_id"], False)
+    with index_db() as db:
+        selected, _, _ = resolve_all_runtime_enabled(db, USER)
+    assert not expected.intersection(selected or [])
+
+
+@pytest.mark.asyncio
+async def test_explicit_empty_main_selection_is_not_reopened_by_defaults(client, tmp_path):
+    from core.llm.factory.request import AgentRequest
+    from core.llm.factory.models import RequiredCapabilities, StickyCapabilities
+    from core.llm.factory.selection.sticky_capabilities import sticky_capabilities
+    _import(tmp_path)
+    request = AgentRequest(current_user_id=USER, enabled_skill_ids=[], enabled_mcp_ids=[], chat_id=None)
+    await sticky_capabilities(request, _elapsed=lambda: "0", _eval_scope=None,
+        _log=SimpleNamespace(info=lambda *a: None), _mode_manual_invoke=False,
+        _note_unavailable=lambda *a: None, required=RequiredCapabilities(), sticky=StickyCapabilities())
+    assert request.enabled_skill_ids == [] and request.enabled_mcp_ids == []

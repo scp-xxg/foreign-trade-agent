@@ -65,7 +65,7 @@ def test_knowledge_is_persisted_versioned_and_old_200_is_history(review_env):
     with sessions() as db:
         svc = KnowledgeService(db)
         result = svc.search("alice", channel="amazon_listing", category="platform_rules")
-        assert result["knowledge_version"] == "2026-10-31.1"
+        assert result["knowledge_version"] == "2026-10-31.1+markets:2026-11-01.1"
         rules = {rule["rule_id"]: rule for rule in result["rules"]}
         assert rules["amazon.title_length"]["max_chars"] == 75
         assert rules["amazon.item_highlights_length"]["max_chars"] == 125
@@ -96,7 +96,7 @@ def test_rfq_two_rounds_are_immutable_and_preserve_confirmation_gaps(review_env)
         second = svc.create("alice", rfq_values(source, previous_review_id=first["review_id"]))
         assert second["review_id"] != first["review_id"] and second["previous_review_id"] == first["review_id"]
         assert first["summary"]["issue_count"] > second["summary"]["issue_count"] == 0
-        assert second["summary"]["needs_confirmation_count"] == 3
+        assert second["summary"]["needs_confirmation_count"] == 4
         assert second["summary"]["review_status"] == "needs_confirmation"
         assert "quote.amount_consistency" in second["comparison"]["resolved_rule_ids"]
         assert not second["comparison"]["source_changed"] and not second["comparison"]["rules_changed"]
@@ -119,11 +119,11 @@ def test_repeated_risk_occurrences_have_stable_unique_ids_and_parser_fixture(rev
         first = service.create('alice', values)
         second = service.create('alice', values)
         annotations = first['text_annotations']
-        assert len(annotations) == len({row['annotation_id'] for row in annotations}) == 5
+        assert len(annotations) == len({row['annotation_id'] for row in annotations}) == 6
         assert annotations == second['text_annotations']
         repeats = findings(first, 'quote.unknown_freight_tax')
         assert len(repeats) == 2 and {row['quote'] for row in repeats} == {'Free shipping'}
-        assert first['summary'] == {'issue_count': 2, 'needs_confirmation_count': 3, 'review_status': 'needs_revision'}
+        assert first['summary'] == {'issue_count': 2, 'needs_confirmation_count': 4, 'review_status': 'needs_revision'}
         assert json.loads(service.download('alice', first['review_id'], 'json')[0])['text_annotations'] == annotations
         # Keep opaque identities/timestamps deterministic, never actor details.
         fixture = deepcopy(first)

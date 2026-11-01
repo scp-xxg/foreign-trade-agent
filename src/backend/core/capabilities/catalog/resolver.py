@@ -260,8 +260,8 @@ def _apply_desktop_cloud_bridge(result, *, user_id=None):
 
     这里是 enabled 能力解析的单一真源——主对话、定时任务、批量子代理、作业
     唤醒等全部装配路径共用，桥合并在此做一次即全链路生效。故意应用在缓存
-    **之外**：manifest 有自己的刷新节奏，不随本缓存冻结。云端部署 / 纯本机
-    模式下桥未激活，原样返回（零行为变化）。
+    **之外**：manifest 有自己的刷新节奏，不随本缓存冻结。本机安装且启用的插件
+    技能也在此按账号补入默认集合；显式运行选择和项目/模式边界仍由后续装配收窄。
     """
     skills, agents, mcps = result
     try:
@@ -274,6 +274,11 @@ def _apply_desktop_cloud_bridge(result, *, user_id=None):
     from core.harness.registry.run_capabilities import has_run_capabilities
     if has_run_capabilities() and bridged_skills is not None:
         from core.harness.registry.run_capabilities import filter_available_names
+        from core.harness.registry.device_catalog import enabled_local_plugin_skill_ids
+        # This function resolves ambient account defaults, not an explicit
+        # request list. Imported plugin skills are hidden from the standalone
+        # catalog, but must remain available behind progressive activation.
+        bridged_skills = list(dict.fromkeys([*bridged_skills, *enabled_local_plugin_skill_ids(user_id)]))
         bridged_skills = filter_available_names(bridged_skills, user_id=user_id)
     return (bridged_skills, agents, bridged_mcps)
 

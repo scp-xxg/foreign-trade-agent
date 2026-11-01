@@ -372,6 +372,8 @@ export const CATALOG_DICT: Record<string, string> = {
   '外部知识库': 'External KB',
   '知识库视图': 'Knowledge base view',
   '知识 Wiki': 'Knowledge Wiki',
+  '根据知识库文档整理并关联，事实与出处以原文为准。':
+    'Organized and linked from the knowledge-base documents. Refer to the source text for facts and provenance.',
 
   // skillIcons PRESETS labels
   '文档': 'Documents',

@@ -13,7 +13,7 @@ from typing import Literal
 
 from agentscope.message import TextBlock
 from agentscope.tool._response import ToolChunk as ToolResponse
-from pydantic import BaseModel, ConfigDict, Field, StrictBool, StrictInt, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, StrictBool, StrictInt, StrictStr, ValidationError, field_validator
 
 from core.db.engine import SessionLocal
 from core.db.models import Artifact, ChatMessage, ChatSession
@@ -38,6 +38,17 @@ class GenerateData(EmptyData):
     generation_mode: Literal["ai", "template"] = "ai"
 
 
+class DraftData(EmptyData):
+    zh: StrictStr = Field(min_length=1, max_length=30000)
+    en: StrictStr = Field(min_length=1, max_length=30000)
+
+    @field_validator("zh", "en")
+    @classmethod
+    def nonempty(cls, value):
+        if not value.strip():
+            raise ValueError("回复草稿不能为空")
+        return value
+
 class FollowupData(UpdateFollowup):
     task_id: str = Field(min_length=1, max_length=64)
 
@@ -54,7 +65,7 @@ def _failure(exc: Exception) -> dict:
     from core.llm import foreign_trade_plugin
     skill_error = getattr(foreign_trade_plugin, "TradeSkillRequired", None)
     if skill_error is not None and isinstance(exc, skill_error):
-        return {"ok": False, "status": 409, "errors": [{"code": "skill_not_loaded", "message": str(exc)}], "warnings": []}
+        return {"ok": False, "status": 409, "errors": [exc.as_error()], "warnings": []}
     if isinstance(exc, PermissionError):
         return {"ok": False, "status": 403, "errors": [{"code": "plugin_unavailable", "message": "外贸插件已停用、卸载或无权使用，请刷新插件状态。"}], "warnings": []}
     if isinstance(exc, (InquiryError, ContentPackError)):
@@ -181,7 +192,7 @@ def register_foreign_trade_tools(toolkit, *, user_id: str, chat_id: str | None, 
     actor, conversation, installation = str(user_id), str(chat_id) if chat_id else None, str(install_id)
 
     async def trade_inquiry(
-        action: Literal["list", "get", "create", "update", "verify_buyer", "interpret", "draft", "add_followup", "update_followup", "mark_replied", "resume_followups"],
+        action: Literal["list", "get", "create", "update", "verify_buyer", "interpret", "draft", "update_drafts", "add_followup", "update_followup", "mark_replied", "resume_followups"],
         inquiry_id: str = "", revision: int | None = None, data: dict | None = None,
     ) -> ToolResponse:
         """处理当前用户的买家背调、询盘、回复草稿和跟进待办；不发送外部消息。
@@ -191,6 +202,8 @@ def register_foreign_trade_tools(toolkit, *, user_id: str, chat_id: str | None, 
         完整示例 data={"title":"办公用品询盘","buyer":{"company_name":"Buyer Ltd","website":"","email":"","country":""},"raw_inquiry":"DESK-001 500 units standard packaging to Spain","items":[{"sku":"DESK-001","quantity":500,"custom_packaging":false}],"destination_country":"Spain"}。
         items 每项必须显式有 sku、quantity、custom_packaging。先 interpret 提取建议、用户确认后 update。
         所有现有记录的写操作必须携带最近回执的 inquiry_id 和 revision。
+        update_drafts data={zh,en}：保存修订后的完整中英回复；必须同时提供两种语言的非空文本，每项最多30000字符。
+        仅修改草稿，保留报价编号和金额；成功后用返回的新revision复审，不把两种语言拼入同一个review.body代替保存。
         add_followup data={title,due_at(带时区ISO),timezone}；update_followup data={task_id,status:completed|cancelled}。
         verify_buyer/get/draft/interpret/mark_replied/resume_followups 无额外 data。
         list data 可含 limit。价格计算使用独立 trade_calculate_quote；普通查询可用现有产品查询工具。
@@ -223,6 +236,9 @@ def register_foreign_trade_tools(toolkit, *, user_id: str, chat_id: str | None, 
                     request = UpdateInquiry.model_validate(_with_revision(payload, revision))
                     result = service.update(actor, inquiry_id, request.revision,
                                             request.model_dump(exclude_unset=True, exclude={"revision"}))
+                elif action == "update_drafts":
+                    request = DraftData.model_validate(payload)
+                    result = service.update_drafts(actor, inquiry_id, _revision(revision), request.model_dump())
                 elif action == "add_followup":
                     request = CreateFollowup.model_validate(_with_revision(payload, revision))
                     result = service.create_followup(actor, inquiry_id, request.revision, request.title, request.due_at, request.timezone)

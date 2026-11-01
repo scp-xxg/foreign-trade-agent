@@ -96,6 +96,11 @@
               "id": "trade-closing",
               "label": "成交",
               "prompt": "读取trade-closing-readiness、trade-order-reconciliation、trade-sales-document-drafting、trade-order-confirmation、trade-payment-verification、trade-order-handoff及输入契约，按企业规则执行成交六技能工作流，交付内部待审阻塞、条款对照、PI合同草稿、手续与付款核对和交接包。缺少材料先确认，水单不算到账，不自动签署、发信、投产或保存。"
+            },
+            {
+              "id": "market-compliance",
+              "label": "目标市场合规",
+              "prompt": "请读取trade-compliance-check技能，确认当前询盘或商品资料的目标市场与用途，检索本机有官方来源的规则知识，对真实保存版本执行合规辅助审核，显示依据、待确认项及修订前后差异。敏感词继续使用当前账号本机词库，不导入其他扫描器。"
             }
           ]
         }

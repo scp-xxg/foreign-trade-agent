@@ -1,142 +1,56 @@
-<!-- Modified by foreign-trade-agent contributors, 2026-10-21: public team distribution. -->
 # SailAgent
 
-PR #7已合并main：[现场具体步骤与示例问答](docs/LIVE_DEMO_PLAYBOOK.md) · [评分对照与实测](docs/FINAL_DEMO_20261101.md) · [队友部署](docs/TEAM_SETUP.md)。
+**从客户询盘到商品上品，让销售与运营围绕同一份事实协作。**
+输入客户询盘、商品资料和企业知识，以中文对话完成生成、审核、修改和文件交付。基于 [HugAgentOS](https://github.com/ZJU-REAL/HugAgentOS) 开源社区版。
 
-<img src="src/frontend/public/brand/sailagent-preview.png" alt="SailAgent" width="500" />
+## 两条业务流程
 
-面向外贸询盘、商品资料和跨岗位协同的演示 Agent，最初基于公开 HugAgentOS Community Edition desktop-v1.0.2，现同步上游 **2026-10-27 main（d969492f）**。产品品牌为 **SailAgent（启航）**，仓库和技术目录继续使用 `foreign-trade-agent`。保留 **Powered by HugAgentOS**、上游许可证和来源署名。
+| 流程 | 操作 | 产出 |
+|---|---|---|
+| **A 销售** | 核对买家公开资料 → 查询商品与计算报价 → Alibaba RFQ 英文回复 → 审核修改 → 跟进 | 中英 PDF、双语 Excel、回复草稿、站内跟进待办 |
+| **同款接力** | 沿用询盘和 SKU → 确认产品事实 → 关联资料包 → 分配运营任务 | 共享询盘编号、资料包编号、版本、来源与待确认项 |
+| **B 运营** | 英文文案与 FAQ → 原图/示意图排版 → Amazon US Listing 草稿 → 审核修改 | 英文资料、三种比例图片、ZIP 素材包、审核报告 |
 
-**报价目录中的产品、价格和参考生产周期均为虚构演示数据，非真实商业报价。** 场景二另附可核验的真实产品资料和有署名的公开授权照片，两者独立，不混用价格。
+主入口是聊天，工作台用于查看和编辑记录。内置外贸业务员、采购跟单员、商品运营专员三个角色；采购为销售提供产品与报价核对。数量、包装或事实变化后重新计算/生成，复审展示前后变化，旧版本下载会校验来源。
 
-本地私有知识库的上传、Wiki 索引、原文引用及配置说明见 [私有知识库指南](docs/PRIVATE_KNOWLEDGE.md)。
+## 一键启动
 
-参赛演示与六项要求的对应关系见 [赛题完整演示手册](docs/HACKATHON_DEMO.md)；包含两平台/角色、规则知识、两种反馈及两轮修改脚本。
+需要 Git、Docker 和 Docker Compose；首次构建需要网络和足够磁盘空间。在 Linux、macOS 或 Windows WSL 终端执行：
 
-## 已实现
-
-- 私有敏感词库：生成后自动提示、审核卡风险高亮与原文出处；按账号配置，不随代码分享词库。[使用说明](docs/SENSITIVE_TERMS.md)
-
-
-- 三个核心岗位子智能体：外贸业务员、采购跟单员、商品运营专员；随init/install按账号安装，支持真实委派与同记录交接。[职责与模拟协作对话](docs/CORE_ROLE_AGENTS.md)
-
-
-- 8 个办公收纳 SKU：中英文检索、产品规格、MOQ 和数量阶梯价。
-- “外贸业务助手（演示）”插件 0.9.0：十四个技能覆盖询盘到上品、买家核验、获客与跟进、产品内容、跨岗位协同及本地化审核；包含十个会话绑定业务工具，另保留三个目录/报价 MCP 工具。以对话为主入口，复用工作台。[对话使用与升级](docs/CHAT_PLUGIN.md)
-- 定制包装门槛与费用、交期冲突说明；改量或改包装后重新计算。
-- 中英对照 PDF、中文/英文双工作表 Excel 下载；直接使用工具回执，保留来源和稳定报价编号。
-- 外贸首页、6 条推荐问题、默认助手提示词、团队部署脚本和自动检查。
-- 场景一询盘工作台：买家官网/GLEIF 事实卡、AI 需求建议人工确认、中英回复草稿和跟进待办；内置真实 LYRECO 公开资料配明确标注的演示询盘。[使用与数据边界](docs/SCENARIO_ONE.md)
-- 场景二产品内容工作台：上传资料与原图、人工确认事实、生成英文上品资料和客服 FAQ、三种原图排版素材及 ZIP 下载；使用 Raspberry Pi 5 官方规格及 CC BY 4.0 照片演示。[完整流程](docs/SCENARIO_TWO.md) · [公开来源与图片许可](docs/SCENARIO_TWO_SOURCES.md)
-
-- 场景三：同一模拟订单下的业务、采购、美工、运营和合规协同任务；来源版本变化会使相关验收失效，人工审核后下载内部交接稿。[流程与边界](docs/SCENARIO_THREE.md)
-
-- 本地化与规则审核：基于真实保存的询盘或确认产品资料，生成阿里RFQ销售回复/Amazon US Listing草稿，检索带官方来源与版本的知识规则，检查平台要求及报价条款，保存文字批注、风险标记、两轮差异和MD/JSON审阅报告。未发现问题不代表全量合规或平台批准。
-
-[2026-10-31 实际验收记录](docs/ACCEPTANCE_20261031.md) 区分真实模型、浏览器下载、API与单元测试；[2026-10-28 验收记录](docs/ACCEPTANCE_20261028.md) 保留为历史证据。[完整问答脚本](docs/HACKATHON_DEMO.md) 是预期行为，不是已通过记录。模型服务不可用时，产品工作台可明确选择“本地原文模板（不调用模型）”，整理已经确认的英文事实；对话编排仍需可用模型。
-
-## 队友快速部署（Linux / WSL2）
-
-团队统一从 `main` 获取公开版本，无需切换历史功能分支。首次部署见 [队友部署指南](docs/TEAM_SETUP.md)，现场操作见 [具体步骤与示例问答](docs/LIVE_DEMO_PLAYBOOK.md)。
-
-先准备 **Python 3.11+（内置 SQLite ≥ 3.38）、Node.js 22（至少 22.12）、Git**；推荐 Python 3.11。Node 20.19+ 也满足当前前端要求。Windows 队员请进入 WSL2 Linux 终端执行。
-
-```bash
-git clone --branch main https://github.com/scp-xxg/foreign-trade-agent.git
+~~~bash
+git clone https://github.com/scp-xxg/foreign-trade-agent.git
 cd foreign-trade-agent
-python3.11 extensions/foreign_trade/team.py setup
-.venv/bin/python extensions/foreign_trade/team.py init
-.venv/bin/python extensions/foreign_trade/team.py start
-```
+./start.sh
+~~~
 
-如果本机 `python3` 已是 3.11+，可替换上面的 `python3.11`。Ubuntu 22.04 默认 Python 3.10 不满足要求，准备方法见 [队友部署指南](docs/TEAM_SETUP.md)。
+首次按终端提示创建自己的管理员，完成后打开 **http://127.0.0.1:3002**。再次启动沿用持久数据；端口占用时用 SAILAGENT_PORT=3012 ./start.sh。账号、模型密钥、上传资料和聊天记录不随 Git 同步。
 
-- `setup`：检查依赖、创建虚拟环境、安装后端、锁定前端依赖并构建中文 CE 页面。
-- `init`：设置自己的登录账号和密码，安装外贸插件并应用首页和提示词。
-- `start`：启动本机外贸 MCP 和网页服务，保持终端打开。
+进入 **系统设置 → 模型服务**，配置自己的工具调用模型，测试后指派 main_agent。聊天编排需要可用模型；无模型时可在工作台使用明确标注的本地模板，完成计算、资料排版和审核。公开买家核验需要网络。
 
-默认地址 **http://127.0.0.1:3001**；个人数据位于 `~/.foreign-trade-agent`。
+更新、停止、备份、离线边界和原生 Python 部署见 [部署说明](docs/ONE_COMMAND_DEPLOY.md)。已有本机实例不要切换数据目录；升级前备份。
 
-本机演示若用 **3002** 避开其他服务，新的默认目录实例在启动时加 `--port 3002`；已有实例必须保留原数据目录：
+## 直接演示
 
-```bash
-TRADE_APP_HOME="/absolute/path/to/your/existing-app-home"
-test -f "$TRADE_APP_HOME/data.db" && \
-  .venv/bin/python extensions/foreign_trade/team.py start --app-home "$TRADE_APP_HOME" --port 3002
-```
+从“DESK-001、500 件、标准包装、Spain”的团队模拟询盘开始；第二轮改为“1000 件、定制包装”，计算小计应为 **USD 5100.00，不含运费及税费**。再将同款商品接力给运营，确认事实后生成资料，完成 Amazon US 草稿修改与复审。
 
-打开 <http://127.0.0.1:3002>，在另一个终端设置同一 `TRADE_APP_HOME` 后执行 `.venv/bin/python extensions/foreign_trade/team.py check --app-home "$TRADE_APP_HOME" --port 3002 --running`。也可选择其他空闲网页端口；沙箱 8900 和报价 MCP 9120 保持不变。不要停止占用 3001 的其他容器，不要用重新 init 解决端口冲突。
+[逐轮可复制问答与下载步骤](docs/DEMO_TWO_WORKFLOWS.md) · [一页方案说明](docs/submission/SailAgent-one-page.pdf)
 
-暂不配置模型也可登录并按 [演示手册](docs/DEMO_WALKTHROUGH.md) 完成三条工作台流程。产品资料生成须明确选择“本地原文模板（不调用模型）”，使用已确认的英文事实。
+## 知识与审核
 
-需要聊天编排或 AI 翻译时，再进入 **系统设置 → 模型服务 → 添加模型**，填写自己的模型服务地址、API Key、模型名及上下文长度，保存并测试。兼容模型在未显式指定传输协议时会于保存阶段尝试自动探测协议及工具结果回传；探测不明确不等于成功。将对话模型指派给 **主智能体推理 main_agent**，其他使用的对话角色也按页面提示指派。模型须支持工具调用；仓库不附带开发者的模型密钥。
+- 商品目录、价格和演示询盘明确标记为模拟；公开买家资料保留来源、抓取时间和未知项，不据此推断信用或采购意向。
+- 企业私有知识按账号授权读取原文；引用企业政策前，在当前会话选择相应知识库，未提供的政策保留未知。敏感词库采用“原文检索＋生成后自动匹配”，详见 [敏感词说明](docs/SENSITIVE_TERMS.md)。
+- [多国案例与官方来源](extensions/foreign_trade/market_compliance.md)根据目标市场选择规则，保留官方来源、适用条件、核验日期和待确认事项；结合平台规则与商务条款进行审核。
+- 同时展示**文字批注和颜色风险标记**，支持两轮以上修改复审。结果是辅助检查，不代表认证、平台批准或完整法律审查。
+- 图片为授权原图或明确标记的示意图排版；三种比例素材不自动等同于 Amazon 主图。草稿、待办和下载均不会自动发送客户消息或发布商品。
 
-维护者这条网关的连通性配置示例是 `gpt-6.1-sol`、`Responses`、`context_length=128000`。128000 是本次采用的保守工作窗口，**不是第三方网关的最大容量承诺**，不按模型名字推断其他服务的上限。队友须验证自己服务的协议、窗口及真实工具往返；操作说明和排错见 [部署指南](docs/TEAM_SETUP.md#4-启动与配置模型)。
+## 开发与提交
 
-本地模板生成本身不调用模型，但通过聊天发起它仍需要聊天模型；完全无模型时从工作台操作。公开买家核验需要联网，图片只是授权原图排版，不是 AI 生图。
+Max-channel 的业务分析与工作流已整合；最新版的合规清单适配到本机工具，敏感词继续使用本机版本，详见[整合边界](docs/MAX_CHANNEL_INTEGRATION.md)。额外能力保留为可选工具，主演示集中于上述两条流程。自动测试覆盖账号隔离、版本冲突、金额、事实确认、规则审核、接力及导出；运行记录与限制见演示文档。
 
-团队入口使用本机 SQLite，报价场景无需 Docker、PostgreSQL、Redis 或外部向量库。首次安装需要网络；老版本 Linux 可能需要 Rust/Cargo 编译依赖，setup 会提前检查。
+提交作品使用可运行代码与一页方案说明。队友从 main 拉取；私有词库、真实客户资料、数据库、日志和密钥不要提交。
 
-## 部署后与当前演示一致吗？
+## 开源与数据许可
 
-| 项目 | 新部署结果 |
-|---|---|
-| 首页、外贸文案、6 条推荐问题、当前 Logo | 同一版本及初始化配置，保持一致 |
-| 模拟目录、报价规则、PDF / Excel 下载卡 | 同一版本保持一致 |
-| 询盘、产品内容、跨岗位协同工作台及公开演示素材 | 同一版本保持一致；每人自行上传和创建演示记录 |
-| 外贸业务助手（演示）插件 | init 安装五个技能、八个会话绑定业务工具；另有三个目录/报价 MCP 工具 |
-| 账号密码、模型 Key、聊天历史、上传文件 | 每台机器独立，不通过 Git 同步 |
-| 模型措辞、速度与推理质量 | 取决于所配模型，金额以计算工具为准 |
+保留 HugAgentOS 开源署名、Git 历史和版权信息。完整许可见 [LICENSE](LICENSE)、[NOTICE](NOTICE)，包括 Apache License 2.0 及补充条款。公开参考图片和资料的来源、署名与使用边界随素材保留；示例不代表实际订单或品牌经销授权。
 
-**只执行 git clone 不会复制数据库中的安装状态，首次部署必须完成 init。**
-
-## 日常更新
-
-**首次从旧版公共实例升级时，先走 [部署指南](docs/TEAM_SETUP.md) 的旧库升级路径，不能先运行下面的通用 install。** 旧库所需的协议兼容参数必须在第一次迁移前确认；以下简版适用于已完成该迁移的实例。
-
-下面简版仅适用于团队默认数据目录 `~/.foreign-trade-agent`；已有实例使用其他目录时，先按 [部署指南](docs/TEAM_SETUP.md) 核对并给所有数据命令传入同一个 `--app-home`。
-
-停止自己运行的网页及 MCP，提交或另存本地改动后执行。旧数据升级会在自己的 app-home 下建立 SQLite 回滚快照，不复制其他队员的账号与模型配置。升级说明见 [2026-10-28 上游同步](docs/UPSTREAM_SYNC_20261028.md)。
-
-```bash
-git fetch origin
-git switch main
-git pull --ff-only origin main
-python3.11 extensions/foreign_trade/team.py setup
-.venv/bin/python extensions/foreign_trade/team.py install --username YOUR_USERNAME
-.venv/bin/python extensions/foreign_trade/team.py start
-```
-
-install 更新外贸插件、首页和默认提示词，保留原账号密码与业务库；如果自行改过这些场景配置，更新前先保留自己的版本。完整停止、更新和自检步骤见 [部署指南](docs/TEAM_SETUP.md)。
-
-## 验证
-
-```bash
-.venv/bin/python extensions/foreign_trade/team.py check
-```
-
-无可用模型时按 [演示手册](docs/DEMO_WALKTHROUGH.md) 从工作台操作；聊天验收需另外配置并验证模型。
-
-报价验收：先查询 DESK-001，再报价“1000 件、定制包装、目的国西班牙”。预期货值 **USD 4800.00**、包装费 **USD 300.00**、不含运费及税费小计 **USD 5100.00**，并能下载两种报价单。
-
-## 四人协作
-
-main 保持可运行；每项功能独立分支、提交 PR，通过 CI 和队友复核后合并。公开仓库任何人都可拉取；直接推送需所有者添加协作者，也可 Fork 后提交 PR。建议按产品/报价规则、插件与工作流、前端与导出、测试与演示分工。
-
-不要提交模型密钥、数据库、上传文件、日志、.runtime、.venv 或 node_modules。模拟产品可以提交，真实客户询盘和业务资料不进入公开仓库。
-
-## 来源与许可
-
-上游：[ZJU-REAL/HugAgentOS](https://github.com/ZJU-REAL/HugAgentOS)，原基线 desktop-v1.0.2（d16a09be），当前上游同步点 d969492ffb77819a48b34d948b1993a4fc99809b。保留上游 Git 历史、版权和第三方归属。
-
-许可证为 **Apache License 2.0 加补充条款**，完整条件见 [LICENSE](LICENSE) 和 [NOTICE](NOTICE)。界面保留 Powered by HugAgentOS 署名；白标及受限多租户 SaaS 场景遵循原许可。所有实现基于公开社区版，未使用私有商业版代码。
-
-团队改动见 [CHANGES_FOREIGN_TRADE.md](CHANGES_FOREIGN_TRADE.md)，业务细节见 [外贸插件说明](extensions/foreign_trade/README.md)。上游原始说明保存在 [README_UPSTREAM.md](README_UPSTREAM.md) 和 [README_CN_UPSTREAM.md](README_CN_UPSTREAM.md)；其中的上游安装地址不会安装本项目，请以本页步骤为准。
-
-### 中文 3D 产品概念打样（可选插件）
-
-新增通用 Blender MCP 插件：模型动态编写 bpy，不设物体类别白名单；真实创建服装外观、产品或其他3D概念，支持第二轮修改及GLB、PNG、Blend下载。使用隔离的Blender/Xvfb，保留HugAgentOS署名；概念建模不等同于生产CAD或服装仿真。安装与两轮演示见 [Blender MCP 使用说明](docs/BLENDER_MCP.md)。
-
-### 高质量云端3D生成（Tripo，可选）
-
-新增独立Tripo插件：参考图/文字预检估价、按当前账号有限预算单次提交、持久化任务查询、真实GLB下载和隔离Blender实渲染交付。需独立Tripo API账号及实际可用额度；注册不代表已获免费额度，默认不充值或未经授权扣费。见 [Tripo部署与使用](docs/TRIPO_3D.md)。
+[团队部署详解](docs/TEAM_SETUP.md) · [变更记录](CHANGES_FOREIGN_TRADE.md) · [上游说明](README_UPSTREAM.md)

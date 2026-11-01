@@ -170,14 +170,15 @@ def test_full_read_instruction_uses_actual_local_revision_path(installed, monkey
     monkeypatch.setattr(loader_factory, "get_skill_loader",
         lambda: SimpleNamespace(get_skill_dir=lambda name: str(directory) if name == sid else None))
     monkeypatch.setattr(config, "model_facing_skill_dir", lambda name, path: str(path))
-    bridge.register_trade_plugin_target(ToolCollector(), plugin, user_id="alice", chat_id="chat", loaded_skill_ids=set())
+    bound_loader = SimpleNamespace(get_skill_dir=lambda name: str(directory) if name == sid else None)
+    bridge.register_trade_plugin_target(ToolCollector(), plugin, user_id="alice", chat_id="chat",
+        loaded_skill_ids=set(), skill_loader=bound_loader)
     with pytest.raises(bridge.TradeSkillRequired) as error:
         captured[0]("buyer-inquiry-followup")
     assert str(directory / "SKILL.md") in str(error.value)
     assert "/workspace/skills/" not in str(error.value)
 
-    monkeypatch.setattr(loader_factory, "get_skill_loader",
-        lambda: SimpleNamespace(get_skill_dir=lambda name: None))
+    bound_loader.get_skill_dir = lambda name: None
     with pytest.raises(bridge.TradeSkillRequired) as error:
         captured[0]("buyer-inquiry-followup")
     assert "load_plugin" in str(error.value) and "view_text_file" in str(error.value)
@@ -210,3 +211,86 @@ def test_product_full_read_fallback_names_its_own_component_not_review(installed
     assert product_id in message
     assert review_id not in message and "localization-review" not in message
     assert "load_plugin" in message and "view_text_file" in message
+
+
+def test_recovery_is_structured_and_uses_only_current_enabled_run_loader(installed, monkeypatch, tmp_path):
+    from core.llm.tools import foreign_trade_tool
+    from core.capabilities.skills import loader_factory, config
+    captured, looked_up = [], []
+    monkeypatch.setattr(foreign_trade_tool, "register_foreign_trade_tools",
+        lambda collector, **kw: captured.append(kw["require_skill"]) or list(NAMES))
+    monkeypatch.setattr(loader_factory, "get_skill_loader", lambda: pytest.fail("Global loader must not be used"))
+    monkeypatch.setattr(config, "model_facing_skill_dir", lambda name, path: str(path))
+    old, current = "buyer-inquiry-followup-old", "buyer-inquiry-followup-current"
+    plugin = target(); plugin.skill_ids = [old, current]
+    directory = tmp_path / "alice" / current / "revision"
+    def resolve(name):
+        looked_up.append(name)
+        assert name == current
+        return str(directory)
+    loaded, enabled = {old}, {current}
+    monkeypatch.setattr(bridge, "_enabled_skill_ids", lambda user: enabled)
+    loader = SimpleNamespace(get_skill_dir=resolve)
+    bridge.register_trade_plugin_target(ToolCollector(), plugin, user_id="alice", chat_id="chat",
+        loaded_skill_ids=loaded, skill_loader=loader)
+    with pytest.raises(bridge.TradeSkillRequired) as caught:
+        captured[0]("buyer-inquiry-followup")
+    error = caught.value.as_error()
+    assert error["code"] == "skill_not_loaded" and error["reason"] == "read_required"
+    assert error["read_required"] is True
+    assert error["required_skill"] == {"name":"buyer-inquiry-followup","id":current,"file_path":str(directory / "SKILL.md")}
+    assert error["recovery"] == {"tool":"view_text_file","arguments":{"file_path":str(directory / "SKILL.md"),"ranges":[]}}
+    assert looked_up == [current]  # A loaded but disabled old ID cannot satisfy the gate.
+    loaded.add(current)
+    captured[0]("buyer-inquiry-followup")
+    enabled.clear()
+    with pytest.raises(bridge.TradeSkillRequired) as disabled:
+        captured[0]("buyer-inquiry-followup")
+    disabled_error = disabled.value.as_error()
+    assert disabled_error["reason"] == "disabled" and not disabled_error["read_required"]
+    assert "recovery" not in disabled_error and "file_path" not in disabled_error["required_skill"]
+    assert looked_up == [current]
+    with pytest.raises(bridge.TradeSkillRequired) as absent:
+        captured[0]("product-content")
+    assert absent.value.as_error()["reason"] == "not_selected"
+    assert "recovery" not in absent.value.as_error()
+
+
+def test_missing_run_loader_does_not_disclose_global_paths(installed, monkeypatch):
+    from core.llm.tools import foreign_trade_tool
+    from core.capabilities.skills import loader_factory
+    captured = []
+    monkeypatch.setattr(foreign_trade_tool, "register_foreign_trade_tools",
+        lambda collector, **kw: captured.append(kw["require_skill"]) or list(NAMES))
+    monkeypatch.setattr(loader_factory, "get_skill_loader", lambda: pytest.fail("Do not enumerate global/private paths"))
+    sid = "buyer-inquiry-followup-current"
+    plugin = target(); plugin.skill_ids = [sid]
+    monkeypatch.setattr(bridge, "_enabled_skill_ids", lambda user: {sid})
+    bridge.register_trade_plugin_target(ToolCollector(), plugin, user_id="alice", chat_id="chat", loaded_skill_ids=set())
+    with pytest.raises(bridge.TradeSkillRequired) as caught:
+        captured[0]("buyer-inquiry-followup")
+    error = caught.value.as_error()
+    assert "file_path" not in error["required_skill"]
+    assert error["recovery"] == {"tool":"load_plugin","arguments":{"plugin":plugin.slug}}
+
+
+@pytest.mark.asyncio
+async def test_all_trade_tool_adapters_keep_machine_readable_recovery(monkeypatch):
+    import json
+    from core.llm.tools.foreign_trade_tool import _failure
+    from core.llm.tools.foreign_trade_collaboration_tool import register_collaboration_tools
+    from core.llm.tools.foreign_trade_review_tool import register_review_tools
+    monkeypatch.setattr(bridge, "assert_trade_plugin_available", lambda *args: None)
+    exc = bridge.TradeSkillRequired("Read the current authorized skill", skill_name="localization-review",
+        skill_id="authorized-review", file_path="/current/authorized/revision/SKILL.md",
+        recovery={"tool":"view_text_file","arguments":{"file_path":"/current/authorized/revision/SKILL.md","ranges":[]}})
+    def require(name):raise exc
+    collector = ToolCollector()
+    register_collaboration_tools(collector, user_id="alice",chat_id="chat",install_id="plugin",require_skill=require)
+    register_review_tools(collector, user_id="alice",chat_id="chat",install_id="plugin",require_skill=require)
+    outcomes = [_failure(exc)]
+    for name, action in (("trade_collaboration","create"),("trade_review","review")):
+        response = await next(t for t in collector if t.name==name)._func(action=action)
+        outcomes.append(json.loads("".join(b.get("text", "") if isinstance(b,dict) else b.text for b in response.content)))
+    for outcome in outcomes:
+        assert outcome["status"] == 409 and outcome["errors"] == [exc.as_error()]

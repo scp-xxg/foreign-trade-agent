@@ -14,7 +14,7 @@ from core.foreign_trade.review import KnowledgeService, ReviewError, ReviewServi
 router = APIRouter(prefix="/v1/foreign-trade", tags=["Foreign trade knowledge and draft review"])
 Channel = Literal["alibaba_rfq", "amazon_listing"]
 SourceType = Literal["inquiry", "content_pack"]
-Category = Literal["platform_rules", "quotation_terms"]
+Category = Literal["platform_rules", "quotation_terms", "market_compliance"]
 
 
 class StrictRequest(BaseModel):

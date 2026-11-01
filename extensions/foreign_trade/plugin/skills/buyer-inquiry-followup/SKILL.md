@@ -1,7 +1,7 @@
 ---
 name: buyer-inquiry-followup
 description: 用户要求买家背调、核验公司官网或 GLEIF、处理并保存客户询盘、准备回复草稿、修改已有询盘或管理跟进待办时使用。通过当前会话用户绑定的 trade_save_inquiry、trade_inquiry 与 trade_calculate_quote 复用询盘工作台和模拟报价。触发词包括买家核验、背调、询盘处理、RFQ、回复客户、跟进、待办。不会发邮件或声称已联系客户。
-version: 0.2.0
+version: 0.3.0
 tags: 外贸, 买家核验, 询盘, 报价, 跟进
 ---
 
@@ -16,7 +16,7 @@ tags: 外贸, 买家核验, 询盘, 报价, 跟进
 常见单 SKU 新建/改单优先使用扁平字段工具，避免重新拼接长 data 对象：
 
 - trade_save_inquiry(inquiry_id="", revision=null, title=null, company_name=null, website=null, email=null, country=null, raw_inquiry=null, sku=null, quantity=null, custom_packaging=null, destination_country=null, requested_lead_days=null)：常见单 SKU 保存入口，直接传明确字段；已有记录的其他买家字段保留，缺失条件不臆造。
-- trade_inquiry(action, inquiry_id="", revision=null, data={})：action 为 list、get、create、update、verify_buyer、interpret、draft、add_followup、update_followup、mark_replied 或 resume_followups。
+- trade_inquiry(action, inquiry_id="", revision=null, data={})：action 为 list、get、create、update、verify_buyer、interpret、draft、update_drafts、add_followup、update_followup、mark_replied 或 resume_followups。
 - trade_calculate_quote(inquiry_id, revision)：对已保存的询盘计算报价，返回原有报价单下载卡所需的结构化结果。
 
 这些工具由本公开项目按当前登录会话绑定用户，只在外贸插件可见且已激活时提供。没有 owner_user_id 参数，也不允许自行添加。不得猜测他人的记录 ID、拼接数据库路径、读取账号或密钥。工具未提供时说明插件或宿主尚未就绪，可提示打开现有询盘工作台，不用 bash、HTTP 请求或绕过认证的方式代替。
@@ -27,6 +27,7 @@ tags: 外贸, 买家核验, 询盘, 报价, 跟进
 - 多 SKU、明确设置演示标记或扁平工具未覆盖的复杂修改才使用 trade_inquiry 的 create/update。其 data 可包含 title、buyer、raw_inquiry、items、destination_country、requested_lead_days、is_demo_inquiry；buyer 为对象。不要用单 SKU helper 覆盖一个已有多 SKU 询盘。
 - 已有记录先用 trade_inquiry list 或 get；inquiry_id 取记录的 id，revision 取最新回执。新建无旧修订号；后续写入和操作必须传最新 revision。不要硬编码、心算递增或沿用更早工具结果中的修订号。
 - update 只传实际需要修改的字段；items 每项为 sku、正整数 quantity、布尔 custom_packaging。buyer 更新时保留 get 回执中的其他已确认字段；不能因遗漏字段清空已有资料。is_demo_inquiry 在创建时确定，不作为更新字段。
+- 修订中英回复使用trade_inquiry(action="update_drafts", inquiry_id=真实编号, revision=当前版本, data={"zh":"完整中文稿","en":"完整英文稿"})。仅允许zh/en两字段，必须同时提供非空字符串，每项最多30000字符；不要传not_sent、stale、quote或user_id。成功后草稿已保存且仍未发送，报价编号/金额不变。需要复审时使用返回的新revision；不得把中英拼入审核body冒充询盘草稿已更新，也不要再draft覆盖刚保存的修订稿。
 - 遇到版本冲突先 get，解释冲突并核对用户要改的条件，禁止直接覆盖其他页面的新修改。
 - 修改业务条件后，旧报价退出当前结果，旧草稿会标记过期。必须重算并重新生成草稿，不能沿用旧金额或下载链接。
 

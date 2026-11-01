@@ -207,7 +207,7 @@ class IsolatedUpgradeTests(unittest.TestCase):
                 payload = json.loads(db.execute("SELECT payload FROM content_blocks WHERE id='page_config'").fetchone()[0])
                 self.assertEqual(payload['branding']['product_name'], 'SailAgent')
                 self.assertEqual('让外贸更简单', payload['branding']['hero_title'])
-                self.assertIn('团队高效协作', payload['branding']['hero_subtitle'])
+                self.assertIn('销售与运营协作', payload['branding']['hero_subtitle'])
                 self.assertFalse(payload['auth']['allow_register'])
                 self.assertIn('trade_collaboration', payload['navigation']['sidebar_items'])
 

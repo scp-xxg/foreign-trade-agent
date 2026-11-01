@@ -335,7 +335,7 @@ def register_load_plugin(
                 register_trade_plugin_target(
                     native, target, user_id=str(runtime.get("user_id") or ""),
                     chat_id=runtime.get("chat_id"),
-                    loaded_skill_ids=runtime.get("loaded_skill_ids"),
+                    loaded_skill_ids=runtime.get("loaded_skill_ids"), skill_loader=runtime.get("loader"),
                 )
                 existing = {tool.name for tool in [*tk.tool_groups[0].tools, *stage.group.tools]}
                 additions = [tool for tool in native if tool.name not in existing]

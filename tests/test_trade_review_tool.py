@@ -121,7 +121,7 @@ async def test_knowledge_invalid_category_has_safe_field_path_and_public_options
         result = unpack(await tool('knowledge', data={'channel': 'amazon_listing', 'category': invalid}))
         assert not result['ok'] and result['status'] == 422
         assert result['errors'][0]['field'] == 'data.category'
-        assert result['errors'][0]['allowed_values'] == ['platform_rules', 'quotation_terms']
+        assert result['errors'][0]['allowed_values'] == ['platform_rules', 'quotation_terms', 'market_compliance']
         assert 'data.category' in result['errors'][0]['message']
         if invalid:
             assert invalid not in json.dumps(result)

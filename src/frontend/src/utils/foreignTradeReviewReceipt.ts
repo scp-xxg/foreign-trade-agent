@@ -8,7 +8,7 @@ const nonempty = (value: unknown, max = 300): value is string => text(value, max
 const integer = (value: unknown, max = 1000): value is number => typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 && value <= max;
 const revision = (value: unknown): value is number => integer(value, Number.MAX_SAFE_INTEGER) && value > 0;
 const strings = (value: unknown, max = 100, maxText = 10000): value is string[] => Array.isArray(value) && value.length <= max && value.every(v => text(v, maxText));
-const categories = ['platform_rules', 'quotation_terms', 'sensitive_terms'];
+const categories = ['platform_rules', 'quotation_terms', 'sensitive_terms', 'market_compliance'];
 const severities = ['high','medium','low','info'];
 export const validTradeReviewId = (value: unknown): value is string => typeof value === 'string' && /^review_[a-f0-9]{32}$/.test(value);
 export function safeReviewSourceUrl(value: unknown): string | undefined {

@@ -18,7 +18,7 @@ from core.foreign_trade.inquiry import now_iso
 from core.foreign_trade.ai import _quantity_for_sku, _pack_for_sku
 
 CHANNELS = {"alibaba_rfq": ("sales", "inquiry"), "amazon_listing": ("operations", "content_pack")}
-CATEGORIES = {"platform_rules", "quotation_terms"}
+CATEGORIES = {"platform_rules", "quotation_terms", "market_compliance"}
 SEVERITY = {"info": 0, "low": 1, "medium": 2, "high": 3}
 REVIEW_SCOPE = "确定性规则与来源一致性检查；结果是待审草稿反馈，不是平台全合规、法律结论或对外发布批准。"
 
@@ -48,7 +48,10 @@ def _bundle():
     data = json.loads(files("foreign_trade").joinpath("knowledge_rules.json").read_text(encoding="utf-8"))
     if data.get("schema_version") != 1 or not data.get("knowledge_version"):
         raise ReviewError(500, "知识规则版本无效")
-    return data
+    from core.foreign_trade.market_compliance import bundle as market_bundle
+    markets = market_bundle()
+    return {**data, "knowledge_version": data["knowledge_version"] + "+markets:" + markets["knowledge_version"],
+            "rules": [*data["rules"], *markets["rules"]]}
 
 
 class KnowledgeService:
@@ -89,10 +92,11 @@ class KnowledgeService:
         rules = [deepcopy(row.payload) for row in rows if (include_superseded or row.status == "active")
                  and (category is None or row.category == category)
                  and (channel is None or channel in row.payload["channels"])]
+        from core.foreign_trade.market_compliance import search_terms
         terms = query.casefold().split()
         if terms:
-            rules = [rule for rule in rules if all(term in " ".join(str(rule.get(k, "")) for k in
-                     ("rule_id", "title", "summary", "scope_note", "source_publisher")).casefold() for term in terms)]
+            rules = [rule for rule in rules if all(term in (" ".join(str(rule.get(k, "")) for k in
+                     ("rule_id", "title", "summary", "scope_note", "source_publisher", "scenario")) + " " + search_terms(rule)).casefold() for term in terms)]
         self.db.commit()
         return {"knowledge_version": version, "language": language, "rules": rules[:limit],
                 "total_matches": len(rules), "scope_note": REVIEW_SCOPE}
@@ -174,6 +178,7 @@ def _money_context(text, match):
 
 def _evaluate(draft, channel, source, rules):
     annotations, checks = [], []
+    omitted = Counter()
     fields = _fields(draft)
     combined = "\n".join(value for _, value in fields)
     def locate(fragment):
@@ -183,6 +188,8 @@ def _evaluate(draft, channel, source, rules):
                 return field, match.group()
         return "body", ""
     quote = (source.get("quote") or {}).get("data") or {}
+    from core.foreign_trade.market_compliance import market_context, evaluate as evaluate_market
+    target_market = market_context(channel, source, draft)
     us_scope = draft["locale"].lower().replace("-", "_") in {"us", "en_us", "es_us", "amazon.com"}
     for rule in rules:
         rid, before, applicable = rule["rule_id"], len(annotations), True
@@ -190,10 +197,15 @@ def _evaluate(draft, channel, source, rules):
             # Repeated claims in one field need distinct identities. Preserve
             # each occurrence and its count; a deterministic ordinal also keeps
             # repeated evaluation stable without requiring UTF-16 offsets.
+            if len(annotations) >= 500:
+                omitted[rid] += 1
+                return
             annotations.append({"annotation_id": "annotation_" + _hash([rid, field, fragment, message, len(annotations)])[:24],
                 "rule_id": rid, "category": rule["category"], "field": field, "quote": str(fragment)[:240],
                 "severity": severity, "status": status, "message": message, "suggestion": suggestion})
-        if rid.startswith("amazon.") and rid != "amazon.scope_confirmation" and not us_scope:
+        if rule["category"] == "market_compliance":
+            applicable = evaluate_market(rule, target_market, fields, source, add, _positive_claim)
+        elif rid.startswith("amazon.") and rid != "amazon.scope_confirmation" and not us_scope:
             applicable = False
         elif rid in {"amazon.title_length", "amazon.item_highlights_length", "amazon.combined_length"}:
             field = {"amazon.title_length": "title", "amazon.item_highlights_length": "item_highlights", "amazon.combined_length": "draft"}[rid]
@@ -323,17 +335,19 @@ def _evaluate(draft, channel, source, rules):
         else:
             applicable = False
         added = annotations[before:]
-        status = "issue" if any(item["status"] == "issue" for item in added) else "needs_confirmation" if added else "passed" if applicable else "not_applicable"
+        status = "issue" if any(item["status"] == "issue" for item in added) else "needs_confirmation" if added or omitted[rid] else "passed" if applicable else "not_applicable"
         checks.append({"rule_id": rid, "status": status, "annotation_count": len(added)})
     issue_count = sum(item["status"] == "issue" for item in annotations)
     confirmation_count = len(annotations) - issue_count
     labels = []
     for rule in rules:
         found = [item for item in annotations if item["rule_id"] == rule["rule_id"]]
-        if found:
-            labels.append({"code": rule["rule_id"], "label": rule["title"],
-                "severity": max((item["severity"] for item in found), key=SEVERITY.get), "count": len(found)})
+        if found or omitted[rule["rule_id"]]:
+            extra = omitted[rule["rule_id"]]
+            labels.append({"code": rule["rule_id"], "label": rule["title"] + (f"（另有{extra}条批注未展开）" if extra else ""),
+                "severity": max((item["severity"] for item in found), key=SEVERITY.get) if found else "medium", "count": len(found)})
     return {"text_annotations": annotations, "checks": checks, "risk_labels": labels,
+        **({"annotation_overflow_count": sum(omitted.values())} if omitted else {}),
         "summary": {"issue_count": issue_count, "needs_confirmation_count": confirmation_count,
                     "review_status": "needs_revision" if issue_count else "needs_confirmation" if confirmation_count else "no_issues_detected"}}
 
@@ -419,6 +433,8 @@ class ReviewService:
         rows = self.db.query(ForeignTradeKnowledgeRule).filter_by(knowledge_version=version, status="active").order_by(ForeignTradeKnowledgeRule.rule_id).all()
         rules = [deepcopy(row.payload) for row in rows if values["channel"] in row.payload["channels"]]
         feedback = _evaluate(values["draft"], values["channel"], source, rules)
+        from core.foreign_trade.market_compliance import market_context
+        target_market = market_context(values["channel"], source, values["draft"])
         from core.foreign_trade.lexicon_hooks import scan_output, append_review_feedback
         lexicon_report, lexicon_notice = scan_output(self.db, user_id, dict(_fields(values["draft"])))
         append_review_feedback(feedback, rules, lexicon_report, values["channel"])
@@ -442,7 +458,9 @@ class ReviewService:
         payload = {"document_type": "foreign_trade_review", "document_version": 1,
             "previous_review_id": values["previous_review_id"], "channel": values["channel"], "role": role,
             "source": snapshot, "draft": deepcopy(values["draft"]), "rule_version": review_version,
-            "rule_evidence": rules, **feedback, "comparison": comparison, "scope_note": REVIEW_SCOPE + (
+            "rule_evidence": rules, **feedback, "comparison": comparison, "market_context": target_market, "scope_note": REVIEW_SCOPE + " " + target_market["scope_note"] + (
+                f" 审核批注达到500条展示上限，另有{feedback['annotation_overflow_count']}条未展开；请将草稿分段复核，不能把截断当作通过。"
+                if feedback.get("annotation_overflow_count") else "") + (
                 " " + str(lexicon_report.get("review_notice") or "敏感词检查存在未展示项，请查看审核JSON中的sensitive_terms。")
                 if lexicon_report.get("review_truncated") else ""),
             "not_sent": True, "not_published": True, "sensitive_terms": lexicon_report,

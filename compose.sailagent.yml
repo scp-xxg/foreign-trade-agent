@@ -1,0 +1,26 @@
+name: sailagent
+services:
+  sailagent:
+    platform: linux/amd64
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.sailagent
+    image: sailagent:local
+    init: true
+    stdin_open: true
+    tty: true
+    stop_grace_period: 30s
+    volumes:
+      - sailagent_data:/data
+    ports:
+      - "127.0.0.1:${SAILAGENT_PORT:-3002}:3002"
+    environment:
+      HUGAGENT_BIND_HOST: 0.0.0.0
+    healthcheck:
+      test: ["CMD", "python", "-c", "import json,urllib.request; assert json.load(urllib.request.urlopen('http://127.0.0.1:3002/ready',timeout=4))['ready']"]
+      interval: 20s
+      timeout: 5s
+      start_period: 120s
+      retries: 5
+volumes:
+  sailagent_data:

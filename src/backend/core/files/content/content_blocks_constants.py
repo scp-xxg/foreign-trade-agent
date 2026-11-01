@@ -42,7 +42,7 @@ DEFAULT_PAGE_CONFIG: dict[str, Any] = {
         "favicon_url": "/brand/sailagent-favicon.png",
         "page_title": BRAND_NAME,
         "hero_title": "让外贸更简单",
-        "hero_subtitle": "核验买家、快速报价、生成商品资料，让团队高效协作。",
+        "hero_subtitle": "询盘报价到商品上品，销售与运营协作。",
         "disclaimer": "真实公开资料保留来源；报价目录为模拟数据。回复、商品内容和内部交接均为待审草稿，不自动发送或发布。",
     },
     "homepage": {
@@ -51,12 +51,12 @@ DEFAULT_PAGE_CONFIG: dict[str, Any] = {
         "logo_url": "/brand/sailagent-mark.svg",
         "show_suggestions": True,
         "suggested_questions": [
-            "核验 LYRECO 法国公司的官网 https://www.lyreco.com/group/ 和公开登记资料，说明已知事实与未核实事项。",
-            "查询 DESK-001 的规格、起订量和阶梯价。",
-            "创建演示询盘：DESK-001，500 件，标准包装，发往西班牙，计算报价并生成中英文回复草稿。",
-            "基于我已保存的询盘生成阿里RFQ英文回复，先检索当前规则并校验报价条款，展示批注、风险标记及待确认项。",
-            "载入 Raspberry Pi 5 的真实公开资料和授权照片，先核对事实；确认后制作英文资料包和Amazon美国站Listing，检索规则并校验。",
-            "基于我已有的 DESK 演示询盘建立跨岗位协同单，列出业务、采购、美工、运营和合规任务、依据与待确认项。",
+            "请使用外贸业务助手核验 LYRECO 官网 https://www.lyreco.com/group/，说明公开事实与未知项；询盘由团队模拟，不是真实订单。",
+            "销售场景：创建 DESK-001、500 件、标准包装、发往 Spain 的模拟询盘，查询产品并计算报价，生成 Alibaba RFQ 英文回复。买家为 Demo Office Buyer，其余未知。",
+            "将当前询盘改为 1000 件、定制包装，重新报价并修改回复，检索规则后审核，展示中英 PDF 和双语 Excel 下载卡。",
+            "把当前已报价的 DESK-001 询盘接力运营：关联同款商品资料包和运营任务，展示候选事实与图片来源，等待我确认。",
+            "运营场景：基于我已确认的同款资料包生成英文文案、FAQ、三种比例图片和 ZIP，再生成 Amazon US Listing 草稿并审核。",
+            "按目标市场查询合规案例，结合当前报价或 Listing 标记风险和待确认项；修改后复审，显示前后变化及官方来源。",
         ],
     },
     "navigation": {

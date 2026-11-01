@@ -77,3 +77,22 @@ def account_plugin_installations(user_id):
 def owned_identities(user_id):
     provider = catalog_registration().provider
     return provider.owned_identities(user_id) if provider else set()
+
+
+def enabled_local_plugin_skill_ids(user_id) -> list[str]:
+    """Ambient defaults from this account's enabled, usable local plugins only.
+
+    This does not modify an explicit run selection. The caller still applies
+    availability, project/profile narrowing and progressive deferral afterward.
+    """
+    if not user_id:
+        return []
+    declared = {str(sid) for entry in plugin_entries(user_id)
+                if str(entry.get("install_id") or "").startswith("plugin:local:")
+                and entry.get("enabled") and entry.get("callable")
+                for sid in entry.get("skills") or []}
+    enabled = {str(row.key) for row in installations("skill", user_id=user_id)
+               if row.kind == "skill" and row.profile_id == "local" and row.ready and row.enabled
+               and row.payload.get("owner_user_id") in (None, "", user_id)
+               and (row.payload.get("user_enabled") or {}).get(user_id, True)}
+    return sorted(declared & enabled)

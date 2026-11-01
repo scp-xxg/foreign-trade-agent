@@ -18,7 +18,28 @@ def trade_tools_allowed(request) -> bool:
 
 
 class TradeSkillRequired(ValueError):
-    """Recoverable tool response: load the authorized skill before business writes."""
+    """Recoverable response with an exact, authorized next tool call when available."""
+
+    def __init__(self, message, *, reason="read_required", skill_name="", skill_id="", file_path=None, recovery=None):
+        super().__init__(message)
+        self.reason = reason
+        self.skill_name = skill_name
+        self.skill_id = skill_id
+        self.file_path = file_path
+        self.recovery = recovery
+
+    def as_error(self):
+        error = {"code": "skill_not_loaded", "message": str(self),
+                 "reason": self.reason, "read_required": self.reason == "read_required"}
+        if self.skill_name:
+            error["required_skill"] = {"name": self.skill_name}
+            if self.skill_id:
+                error["required_skill"]["id"] = self.skill_id
+            if self.file_path:
+                error["required_skill"]["file_path"] = self.file_path
+        if self.recovery:
+            error["recovery"] = self.recovery
+        return error
 
 
 def _upgraded(version: str) -> bool:
@@ -156,7 +177,7 @@ def assert_trade_plugin_available(user_id: str, install_id: str) -> None:
 
 
 def register_trade_plugin_target(collector, target, *, user_id: str, chat_id: str | None,
-                                loaded_skill_ids: set[str] | None = None) -> list[str]:
+                                loaded_skill_ids: set[str] | None = None, skill_loader=None) -> list[str]:
     """Only the resolved trade installation can contribute these native tools."""
     try:
         assert_trade_plugin_available(user_id, target.install_id)
@@ -170,34 +191,48 @@ def register_trade_plugin_target(collector, target, *, user_id: str, chat_id: st
         matches = [sid for sid in visible_skills
                    if re.search(r"(^|[:_-])" + re.escape(name) + r"($|[:_-])", sid)]
         if not matches:
-            raise TradeSkillRequired("该业务所需技能未启用，请启用外贸插件中的 " + name + " 技能后重试；本次未执行。")
-        if not set(matches).intersection(_enabled_skill_ids(user_id)):
-            raise TradeSkillRequired("当前用户已关闭 " + name + " 技能，请重新启用后再执行；本次未执行。")
-        if loaded_skill_ids is None or not set(matches).intersection(loaded_skill_ids):
-            from core.capabilities.skills.loader_factory import get_skill_loader
+            raise TradeSkillRequired("该业务所需技能未启用，请启用外贸插件中的 " + name + " 技能后重试；本次未执行。",
+                                     reason="not_selected", skill_name=name)
+        enabled = _enabled_skill_ids(user_id)
+        authorized = [sid for sid in matches if sid in enabled]
+        if not authorized:
+            raise TradeSkillRequired("当前用户已关闭 " + name + " 技能，请重新启用后再执行；本次未执行。",
+                                     reason="disabled", skill_name=name)
+        if loaded_skill_ids is None or not set(authorized).intersection(loaded_skill_ids):
             from core.capabilities.skills.config import model_facing_skill_dir
             import json
-            try:
-                directory = get_skill_loader().get_skill_dir(matches[0])
-                path = model_facing_skill_dir(matches[0], directory) + "/SKILL.md" if directory else None
-            except Exception:
-                path = None
-            required = "业务技能 " + name + "（当前技能 ID：" + matches[0] + "）"
+            # The run-bound loader knows the current authorized local revision.
+            # Never resolve through the process-wide catalog or another user's
+            # paths, and never substitute a similarly named built-in skill.
+            resolver = skill_loader
+            selected, path = authorized[0], None
+            for sid in authorized if resolver is not None else ():
+                try:
+                    directory = resolver.get_skill_dir(sid)
+                    if directory:
+                        path = model_facing_skill_dir(sid, directory) + "/SKILL.md"
+                        selected = sid
+                        break
+                except Exception:
+                    continue
+            required = "业务技能 " + name + "（当前技能 ID：" + selected + "）"
             if path:
-                hint = "用 view_text_file(file_path=" + json.dumps(path, ensure_ascii=False) + ") 完整读取" + required
+                recovery = {"tool": "view_text_file", "arguments": {"file_path": path, "ranges": []}}
+                hint = "用 view_text_file(file_path=" + json.dumps(path, ensure_ascii=False) + ", ranges=[]) 完整读取" + required
             else:
-                hint = (
-                    "为" + required + "取得当前 SKILL.md 路径（可调用 load_plugin 加载插件 "
-                    + str(target.slug) + "），再用 view_text_file 完整读取该指定技能"
-                )
-            raise TradeSkillRequired("必须先" + hint + "，不能以读取其他技能代替；再重试业务操作，本次未执行。")
+                recovery = {"tool": "load_plugin", "arguments": {"plugin": str(target.slug)}}
+                hint = ("为" + required + "取得当前 SKILL.md 路径（可调用 load_plugin 加载插件 "
+                        + str(target.slug) + "），再用 view_text_file 完整读取该指定技能")
+            raise TradeSkillRequired("必须先" + hint + "，不能以读取其他技能代替；再重试业务操作，本次未执行。",
+                                     reason="read_required", skill_name=name, skill_id=selected,
+                                     file_path=path, recovery=recovery)
     from core.llm.tools.foreign_trade_tool import register_foreign_trade_tools
     return register_foreign_trade_tools(collector, user_id=user_id, chat_id=chat_id,
                                        install_id=target.install_id, require_skill=require_skill)
 
 
 def register_initial_trade_tools(collector, *, user_id: str, chat_id: str | None,
-                                 progressive=None, enabled_skill_ids=(), loaded_skill_ids=None) -> list[str]:
+                                 progressive=None, enabled_skill_ids=(), loaded_skill_ids=None, skill_loader=None) -> list[str]:
     """Restore already-activated tools each turn; leave deferred plugins unloaded."""
     if not user_id:
         return []
@@ -242,7 +277,7 @@ def register_initial_trade_tools(collector, *, user_id: str, chat_id: str | None
     for target in targets:
         try:
             names.extend(register_trade_plugin_target(collector, target, user_id=user_id, chat_id=chat_id,
-                                                     loaded_skill_ids=loaded_skill_ids))
+                                                     loaded_skill_ids=loaded_skill_ids, skill_loader=skill_loader))
         except PermissionError:
             # An old/disabled installation must not gain write tools during assembly.
             continue

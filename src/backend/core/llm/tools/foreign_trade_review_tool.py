@@ -13,7 +13,7 @@ class KnowledgeQuery(BaseModel):
     model_config = ConfigDict(extra="forbid")
     query: str = Field(default="", max_length=300, description="可省略；建议先仅按 channel 获取规则，再使用关键词过滤")
     channel: Literal["alibaba_rfq", "amazon_listing"] | None = Field(default=None, description="可省略，或 alibaba_rfq / amazon_listing")
-    category: Literal["platform_rules", "quotation_terms"] | None = Field(default=None, description="可省略，或 platform_rules / quotation_terms；不能使用空字符串或商品类目")
+    category: Literal["platform_rules", "quotation_terms", "market_compliance"] | None = Field(default=None, description="可省略，或 platform_rules / quotation_terms / market_compliance；不能使用空字符串或商品类目")
     language: Literal["en", "es"] = "en"
     limit: StrictInt = Field(default=30, ge=1, le=50)
     include_superseded: bool = False
@@ -30,7 +30,7 @@ def _validation_feedback(exc: ValidationError) -> list[dict]:
     """Expose declared field paths and public enums, never submitted values."""
     declared = set(KnowledgeQuery.model_fields) | set(ReviewListQuery.model_fields)
     enums = {"channel": ["alibaba_rfq", "amazon_listing"],
-             "category": ["platform_rules", "quotation_terms"],
+             "category": ["platform_rules", "quotation_terms", "market_compliance"],
              "language": ["en", "es"], "source_type": ["inquiry", "content_pack"]}
     result = []
     for error in exc.errors(include_input=False, include_context=False, include_url=False):
@@ -57,7 +57,7 @@ def register_review_tools(toolkit, *, user_id: str, chat_id: str | None,
         """检索有版本与公开来源的规则，并对本账号真实来源生成本地化草稿校验记录。
 
         knowledge 的 data 字段均可省略：channel=alibaba_rfq|amazon_listing，
-        category 省略或仅用 platform_rules|quotation_terms；不要传空字符串、non_media 或商品类目。
+        category 省略或仅用 platform_rules|quotation_terms|market_compliance；不要传空字符串、non_media 或商品类目。
         query 是可省略的关键词过滤，默认空字符串；建议先只传 channel 取当前全部适用规则，
         例如 data={"channel":"amazon_listing"}。零匹配时清空 query 再重试，不自动放宽筛选。
         language=en|es 默认en，limit=1..50 默认30，include_superseded 默认false。
@@ -105,14 +105,14 @@ def register_review_tools(toolkit, *, user_id: str, chat_id: str | None,
             result = await asyncio.to_thread(operate)
             warnings = []
             if action == "knowledge" and result["total_matches"] == 0:
-                warnings.append("当前筛选没有匹配规则；未自动放宽筛选。请清空 query，并先仅保留 channel 重试（category 可省略，或仅用 platform_rules / quotation_terms）。")
+                warnings.append("当前筛选没有匹配规则；未自动放宽筛选。请清空 query，并先仅保留 channel 重试（category 可省略，或仅用 platform_rules / quotation_terms / market_compliance）。")
             receipt = {"ok": True, "data": result, "errors": [], "warnings": warnings}
             if action in {"review", "get"} and isinstance(result, dict) and result.get("document_type") == "foreign_trade_review":
                 receipt["presentation"] = {"card": "trade_review", "download_formats": ["md", "json"],
                     "instruction": "前端自动显示平台文案审核反馈卡及认证下载按钮。请使用该真实回执渲染的审核卡下载按钮；不要用文件工具重建报告或拼接下载地址。"}
             return response(receipt)
         except TradeSkillRequired as exc:
-            return response({"ok": False, "status": 409, "errors": [{"code": "skill_not_loaded", "message": str(exc)}], "warnings": []})
+            return response({"ok": False, "status": 409, "errors": [exc.as_error()], "warnings": []})
         except PermissionError:
             return response({"ok": False, "status": 403, "errors": [{"code": "plugin_unavailable", "message": "当前外贸插件不可用"}], "warnings": []})
         except ReviewError as exc:

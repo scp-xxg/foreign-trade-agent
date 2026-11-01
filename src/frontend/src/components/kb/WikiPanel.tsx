@@ -596,8 +596,7 @@ export function WikiPanel({ kbId, kbName }: WikiPanelProps) {
           )}
         </div>
         <p className="jx-wikiHeaderHint">
-          由大模型从《{kbName}》的文档中抽取概念并互相链接而成，是这个知识库的结构地图；
-          事实与出处请以每页底部回溯的原文为准。
+          根据知识库文档整理并关联，事实与出处以原文为准。
         </p>
       </header>
 

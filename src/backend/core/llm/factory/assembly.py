@@ -251,7 +251,7 @@ async def assemble_agent(request: AgentRequest):
             toolkit, user_id=str(request.current_user_id), chat_id=request.chat_id,
             progressive=(_subagent_progressive if request.user_agent is not None else _progressive),
             enabled_skill_ids=skill_ids_to_register or (),
-            loaded_skill_ids=fully_loaded_skill_ids,
+            loaded_skill_ids=fully_loaded_skill_ids, skill_loader=loader,
         )
 
     (

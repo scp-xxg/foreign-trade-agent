@@ -117,3 +117,11 @@ are local deployment state and are not distributed.
 ## 客户背调四技能
 
 新增企业身份、业务采购匹配、联系人决策链核验、交易风险四技能与受认证接口，接入聊天逐技能权限检查。对话框以客户背调替代客户跟进，保留原跟进技能。报告区分真实公开读取、输入证据关联与未查询来源。详见 docs/DILIGENCE_WORKFLOW.md。
+
+## Sales and operations submission release (2026-11-01)
+
+- Integrate Max-channel 9ab9962f workflows; adapt eaa6153d compliance checklist intent to the local review engine without importing its sensitive-word source, scanner, or mixed material-check pipeline.
+- Add eight official-source country cases, account-owned searchable Wiki seeds, market-scoped review feedback and snapshot provenance. Retain the private lexicon and original account data.
+- Restore enabled local plugin skills to main-agent defaults while preserving progressive loading, ownership, explicit selections and disablement; provide actionable authorized full-read recovery.
+- Expose version-checked bilingual draft edits through the existing inquiry tool, preserving quote identity and sensitive-term warnings.
+- Provide a concise two-workflow README, reproducible role handoff walkthrough, one-page submission PDF, Docker one-command deployment, pinned runtime dependencies and persistence/failure-mode checks.
