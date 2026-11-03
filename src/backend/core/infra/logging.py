@@ -91,7 +91,7 @@ def add_user_context(logger: Any, method_name: str, event_dict: EventDict) -> Ev
 
 def add_service_info(logger: Any, method_name: str, event_dict: EventDict) -> EventDict:
     """Add service name to log event."""
-    event_dict["service"] = "hugagent"
+    event_dict["service"] = "sailagent"
     return event_dict
 
 
