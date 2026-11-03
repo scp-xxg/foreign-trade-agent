@@ -1,4 +1,4 @@
-// Modified by foreign-trade-agent contributors, 2026-10-21; see CHANGES_FOREIGN_TRADE.md.
+// Modified by SailAgent contributors.
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Button, Checkbox, Empty, Input, InputNumber, Select, Tag } from 'antd';
 import { CopyOutlined, DownloadOutlined, FileImageOutlined, PlusOutlined, ReloadOutlined, SearchOutlined, UploadOutlined } from '@ant-design/icons';

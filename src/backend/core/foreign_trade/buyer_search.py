@@ -1,4 +1,4 @@
-# Modified by foreign-trade-agent contributors, 2026-10-31.
+# Modified by SailAgent contributors.
 """Bounded discovery of public website candidates; no inferred purchase intent."""
 from __future__ import annotations
 import ipaddress

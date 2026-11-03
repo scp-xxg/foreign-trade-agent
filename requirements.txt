@@ -1,4 +1,4 @@
-# Modified by foreign-trade-agent contributors, 2026-10-21; see CHANGES_FOREIGN_TRADE.md.
+# Modified by SailAgent contributors.
 # Core Web Framework
 fastapi==0.115.12
 uvicorn>=0.27.0

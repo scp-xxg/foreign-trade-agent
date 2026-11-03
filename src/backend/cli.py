@@ -125,7 +125,7 @@ def apply_local_env(port: int) -> dict:
     defaults = {
         "DEPLOY_PROFILE": "local",
         "JX_EDITION": "ce",
-        "BRAND_PRODUCT_NAME": "HugAgentOS",
+        "BRAND_PRODUCT_NAME": "SailAgent",
         "DATABASE_URL": f"sqlite:///{dd / 'data.db'}",
         # No Redis on a single-machine install. Every capability that used one
         # reaches an in-process backend through core.infra.ephemeral /

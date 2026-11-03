@@ -1,5 +1,5 @@
 import { PRODUCT_NAME, BRAND_MARK_URL, BRAND_WORDMARK_URL, BRAND_FAVICON_URL } from '../brand';
-// Modified by foreign-trade-agent contributors, 2026-10-21; see CHANGES_FOREIGN_TRADE.md.
+// Modified by SailAgent contributors.
 // Frontend defaults: serve as the fallback while the store has not yet loaded, aligned with the backend DEFAULT_PAGE_CONFIG
 // After the backend seeds, frontend polling overrides these values. When changing values, keep content_blocks.py in sync.
 

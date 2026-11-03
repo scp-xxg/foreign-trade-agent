@@ -19,7 +19,7 @@
 新建本机管理员已带私有建库权限。升级前管理员可能没有开启；核对实例和账号后，由本机维护者显式执行：
 
 ```bash
-cd /path/to/foreign-trade-agent
+cd /path/to/sailagent
 .venv/bin/python extensions/foreign_trade/enable_private_kb.py \
   --app-home /absolute/path/to/existing-app-home \
   --username YOUR_EXISTING_ADMIN --enable-create

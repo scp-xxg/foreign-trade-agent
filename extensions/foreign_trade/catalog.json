@@ -5,7 +5,7 @@
   "source": {
     "type": "synthetic_demo_catalog",
     "record_ref": "demo:office-storage-demo-v1",
-    "description": "Entirely fictional office-storage catalog for local hackathon demonstrations. No real supplier, inventory, offer, or freight rate."
+    "description": "Entirely fictional office-storage catalog for local demonstrations. No real supplier, inventory, offer, or freight rate."
   },
   "products": [
     {

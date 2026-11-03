@@ -1,4 +1,4 @@
-// Modified by foreign-trade-agent contributors, 2026-10-31; see CHANGES_FOREIGN_TRADE.md.
+// Modified by SailAgent contributors.
 import { useEffect, useRef, useState } from 'react';
 import { Alert, Button, Empty, Input, InputNumber, Select, Tag } from 'antd';
 import { t } from '../../i18n';

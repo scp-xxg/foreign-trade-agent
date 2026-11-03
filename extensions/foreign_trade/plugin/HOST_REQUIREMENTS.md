@@ -1,6 +1,6 @@
 # Host requirements for foreign-trade-demo 0.6.0
 
-This package targets the public scp-xxg/foreign-trade-agent fork of HugAgentOS.
+This package targets SailAgent, the public scp-xxg/sailagent fork of HugAgentOS.
 Keep the installed plugin slug foreign-trade-demo when upgrading.
 
 The existing loopback MCP at http://127.0.0.1:9120/mcp still provides exactly

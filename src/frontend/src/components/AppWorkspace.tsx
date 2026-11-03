@@ -1,4 +1,4 @@
-// Modified by foreign-trade-agent contributors, 2026-10-28; see CHANGES_FOREIGN_TRADE.md.
+// Modified by SailAgent contributors.
 import { PanelToggleGlyph } from './canvas/CanvasControlIcons';
 import { ChatSlot } from '../customization/ChatCustomization';
 import {WorkspaceRuntime} from '../workbench/WorkspaceRuntime';

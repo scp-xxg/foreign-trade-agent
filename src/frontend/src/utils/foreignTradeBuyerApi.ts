@@ -1,4 +1,4 @@
-// Modified by foreign-trade-agent contributors, 2026-10-31; see CHANGES_FOREIGN_TRADE.md.
+// Modified by SailAgent contributors.
 import { apiRequest } from '../api';
 export interface BuyerInput {
   product_terms: string[]; buyer_terms: string[]; markets: string[]; queries: string[]; excluded_domains: string[];

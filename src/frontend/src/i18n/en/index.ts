@@ -1,4 +1,4 @@
-// Modified by foreign-trade-agent contributors, 2026-10-28; see CHANGES_FOREIGN_TRADE.md.
+// Modified by SailAgent contributors.
 import { PERSONAL_AGENT_DICT } from './personalAgent';
 import { WORKBENCH_DICT } from './workbench';
 import { WORKBENCH_AUTH_DICT } from './workbenchAuth';

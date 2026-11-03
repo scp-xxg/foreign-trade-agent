@@ -1,10 +1,8 @@
-> PR #7已合并main。现场具体步骤与可复制问答见 [LIVE_DEMO_PLAYBOOK.md](LIVE_DEMO_PLAYBOOK.md)，评分对照与实测见 [FINAL_DEMO_20261101.md](FINAL_DEMO_20261101.md)。模型密钥、知识资料和账号不随Git复制。
+> 日常部署优先使用 [一键部署](ONE_COMMAND_DEPLOY.md)。本文保留原生 Python / WSL 高级安装和旧数据升级步骤。模型密钥、知识资料和账号不随 Git 复制。
 
-> 日常部署优先使用 [一键部署](ONE_COMMAND_DEPLOY.md)，现场演示使用 [销售与运营接力](DEMO_TWO_WORKFLOWS.md)。本文保留原生 Python/WSL 高级安装和旧数据升级步骤。
+# 原生安装、模型配置与代码同步
 
-# 队友部署、模型配置与代码同步
-
-本指南针对团队公开仓库的 Linux / WSL2 本机部署。最终整合版本已进入 `main`，队友统一从main部署和更新。品牌为SailAgent，保留HugAgentOS开源署名；仓库名为foreign-trade-agent。上游原始说明见 [README_UPSTREAM.md](../README_UPSTREAM.md)，安装外贸功能请使用本指南的团队脚本。
+本指南针对本机（Linux / WSL2）的原生 Python 部署。团队统一从 `main` 部署和更新；品牌为 SailAgent，保留 HugAgentOS 开源署名。上游项目见 [HugAgentOS](https://github.com/ZJU-REAL/HugAgentOS)，外贸功能的安装与升级请使用本指南的团队脚本。
 
 首次部署按第 2—5 节执行 `clone main → setup → init → start → check`；已有账号和数据按第 6—7 节更新，不能靠换目录或重新 `init` 来代替升级。
 
@@ -39,8 +37,8 @@ nvm use 22
 ## 2. 拉取和安装
 
 ```bash
-git clone --branch main https://github.com/scp-xxg/foreign-trade-agent.git
-cd foreign-trade-agent
+git clone --branch main https://github.com/scp-xxg/sailagent.git
+cd sailagent
 python3.11 extensions/foreign_trade/team.py setup
 .venv/bin/python -c 'import sys, sqlite3; print("Python", sys.version.split()[0], "SQLite", sqlite3.sqlite_version); assert sys.version_info >= (3, 11); assert sqlite3.sqlite_version_info >= (3, 38, 0)'
 ```
@@ -55,9 +53,9 @@ setup 会创建或更新本仓库 `.venv`、安装 requirements.txt 和 editable
 .venv/bin/python extensions/foreign_trade/team.py init
 ```
 
-首次部署默认使用 **`~/.foreign-trade-agent`**。若你已在维护一个实例，请跳到第 6 节，不要用新目录代替已有目录。在终端输入自己的用户名和密码；密码仅在终端隐藏输入，不作为命令参数、环境变量或文件保存，也不提交 Git。初始化会：
+首次部署默认使用 **`~/.sailagent`**。若你已在维护一个实例，请跳到第 6 节，不要用新目录代替已有目录。在终端输入自己的用户名和密码；密码仅在终端隐藏输入，不作为命令参数、环境变量或文件保存，也不提交 Git。初始化会：
 
-1. 在 `~/.foreign-trade-agent` 创建独立 SQLite 和本机文件目录。
+1. 在 `~/.sailagent` 创建独立 SQLite 和本机文件目录。
 2. 创建本机账号，应用外贸首页、推荐问题和外贸助手提示词。
 3. 将“外贸业务助手（演示）”0.9.0 安装到该账号，包含十四个技能、十个会话绑定业务工具，另保留三个目录/报价 MCP 工具。
 
@@ -77,7 +75,7 @@ test -f "$TRADE_APP_HOME/data.db"
 .venv/bin/python extensions/foreign_trade/team.py start --app-home "$TRADE_APP_HOME"
 ```
 
-路径检查失败就停止核对；不要用 `init` 或 `upgrade.py --allow-create` 补一个空库。不要把开发者的数据库或模型配置文件复制给队友。
+路径检查失败就停止核对；不要用 `init` 或 `upgrade.py --allow-create` 补一个空库。不要把开发者的数据库或模型配置文件复制给别人。
 
 ## 4. 启动与配置模型
 
@@ -103,9 +101,9 @@ test -f "$TRADE_APP_HOME/data.db" && \
 
 后续 start/check 都带同一 `--port`，另选环境时也继续带原 `--venv`。网页、同源 API、内部回调和检查地址会一起切换；仅换网页端口不需要重建前端，不修改外贸 MCP 的 9120 地址。不要同时在多个端口启动同一 app-home。新端口可能需要重新登录，账号和业务数据仍在原目录，不执行 init。
 
-队友新装可沿用默认 3001；需要自选端口时，建议选一个空闲的非特权端口（1024—65535，避开本实例固定使用的 8900/9120）。CLI 接受 `--port`，实际能否监听由系统权限和占用状态决定。`setup` 仍只装依赖，`init/install` 仍负责配置，端口不是新建数据目录的理由。3002 是本机避开冲突的演示选择，不是全队强制端口。
+新机器安装可沿用默认 3001；需要自选端口时，建议选一个空闲的非特权端口（1024—65535，避开本实例固定使用的 8900/9120）。CLI 接受 `--port`，实际能否监听由系统权限和占用状态决定。`setup` 仍只装依赖，`init/install` 仍负责配置，端口不是新建数据目录的理由。3002 只是避开冲突时的示例端口，不是强制端口。
 
-暂不配置模型，也可登录并使用工作台进行手工事实核对、确定性报价、资料下载、岗位任务和人工验收。产品内容工作台须明确选择 **“本地原文模板（不调用模型）”**：它按已确认原文排版，不翻译；需要英文文案和图片时，先核对产品事实已为英文。现场步骤见 [销售与运营逐轮演示](DEMO_TWO_WORKFLOWS.md)。模板结果不代表 AI 翻译或聊天编排成功。
+暂不配置模型，也可登录并使用工作台进行手工事实核对、确定性报价、资料下载、岗位任务和人工验收。产品内容工作台须明确选择 **“本地原文模板（不调用模型）”**：它按已确认原文排版，不翻译；需要英文文案和图片时，先核对产品事实已为英文。现场步骤见 [使用指南](USAGE.md)。模板结果不代表 AI 翻译或聊天编排成功。
 
 **通过聊天驱动技能、AI 翻译与生成需要另行配置并验证可用模型。** 进入 **系统设置 → 模型服务**：
 
@@ -125,7 +123,7 @@ test -f "$TRADE_APP_HOME/data.db" && \
 | `context_length` | `128000`；本次采用的保守请求/压缩工作窗口，不是网关最大容量证明，也不是所有同名模型通用值 |
 | 角色指派 | `main_agent` 使用这个已配置的对话模型；新建聊天再验证 |
 
-有些网关的模型列表不提供上下文长度，模型可连通却仍缺请求预算配置。不能留空，也不能把官网模型最大窗口直接当第三方线路上限。保存后先发普通问题，再查询 `DESK-001`，确认工具执行后模型能够读回真实结果；两者成功仍不代表两条完整参赛工作流已经通过。旧实例协议迁移按第 7 节处理，不为新示例改写旧供应商的显式协议。
+有些网关的模型列表不提供上下文长度，模型可连通却仍缺请求预算配置。不能留空，也不能把官网模型最大窗口直接当第三方线路上限。保存后先发普通问题，再查询 `DESK-001`，确认工具执行后模型能够读回真实结果；两者成功仍不代表两条完整业务流程已经通过。旧实例协议迁移按第 7 节处理，不为新示例改写旧供应商的显式协议。
 
 | 操作 | 是否依赖模型 | 是否需要外部网络 |
 |---|---|---|
@@ -135,7 +133,7 @@ test -f "$TRADE_APP_HOME/data.db" && \
 | 模拟报价、版本化规则检查、人工任务验收 | 确定性业务逻辑；通过聊天发起仍需模型 | 本地目录/已保存知识无需现场抓取 |
 | 买家官网/GLEIF 核验 | 不依赖生成模型 | 需要访问公开来源；失败保留未核实 |
 
-三种图片都用授权原图或明确标注的模拟示意图进行排版，不是 AI 生图。模型失败时可用工作台模板继续独立演示，但只能记录“本地流程完成”，不能记为模型翻译或聊天端到端通过。完整三场景多轮问答与预期输出见 [HACKATHON_DEMO.md](HACKATHON_DEMO.md)。
+三种图片都用授权原图或明确标注的模拟示意图进行排版，不是 AI 生图。模型失败时可用工作台模板继续本地操作，但只能记录“本地流程完成”，不能记为模型翻译或聊天端到端通过。完整三场景多轮问答与预期输出见 [使用指南](USAGE.md)。
 
 本地私有知识库操作与旧账号权限处理见 [PRIVATE_KNOWLEDGE.md](PRIVATE_KNOWLEDGE.md)。没有 embedding 时默认采用 Wiki 原文追溯，不代表已配置向量检索。
 
@@ -174,7 +172,7 @@ test -f "$TRADE_APP_HOME/data.db" && \
 
 该命令只停止本 checkout 管理的 MCP；如果本实例的沙箱仍占用 8900，先核对并停止它，不随意结束其他进程。更新、迁移和恢复期间不能有进程继续写同一数据库。
 
-先把源码改动保存在自己的功能分支或另行保存，检查 `git status --short`；不要强制覆盖工作区。根据原启动命令或部署记录填写实际数据目录和已有用户名，只有原实例确实使用默认目录时才填 `$HOME/.foreign-trade-agent`：
+先把源码改动保存在自己的功能分支或另行保存，检查 `git status --short`；不要强制覆盖工作区。根据原启动命令或部署记录填写实际数据目录和已有用户名，只有原实例确实使用默认目录时才填 `$HOME/.sailagent`：
 
 ```bash
 TRADE_APP_HOME="/absolute/path/to/your/existing-app-home"
@@ -209,7 +207,7 @@ python3.11 extensions/foreign_trade/team.py setup --app-home "$TRADE_APP_HOME"
 
 ## 7. 从旧公共版本升级数据库
 
-本次同步点及兼容变化见 [上游同步记录](UPSTREAM_SYNC_20261028.md)。Python 服务命令已改为 `hugagent-server`；`hugagent` 是终端客户端，推荐继续使用 team.py。Python 所链接 SQLite 必须至少 3.38，初始化和迁移入口会拒绝旧 SQLite。
+Python 服务命令已改为 `hugagent-server`；`hugagent` 是终端客户端，推荐继续使用 team.py。Python 所链接 SQLite 必须至少 3.38，初始化和迁移入口会拒绝旧 SQLite。
 
 停止服务、完成 setup，并核对上节的 `TRADE_APP_HOME` 后执行升级。旧库有 CE 版本标记时，脚本按旧版本处理已有模型；**无版本标记且明确来自旧版 Chat Completions 公共运行时**时，才添加以下 legacy 参数，未知来源不猜：
 
@@ -237,7 +235,7 @@ python3.11 extensions/foreign_trade/team.py setup --venv "$TRADE_VENV" --app-hom
 
 需要的 legacy/重名修复参数同上；后续 install、check、start 都继续传同一个 `--venv` 和 `--app-home`。直接调用独立的 install.py / upgrade.py 时使用该环境的 Python，它们没有 `--venv` 参数。
 
-回滚快照不提交仓库、不发送给队友、不加入插件 ZIP。使用同一 app-home 内实际生成的快照路径恢复：
+回滚快照不提交仓库、不发给其他人、不加入插件 ZIP。使用同一 app-home 内实际生成的快照路径恢复：
 
 ```bash
 .venv/bin/python extensions/foreign_trade/team.py upgrade --app-home "$TRADE_APP_HOME" --restore "$TRADE_APP_HOME/upgrade-backups/YOUR_SNAPSHOT.db"
@@ -245,7 +243,7 @@ python3.11 extensions/foreign_trade/team.py setup --venv "$TRADE_VENV" --app-hom
 
 恢复前同样必须停止服务；恢复会先另存当前数据库快照。数据库回滚后还需使用对应版本的源码和依赖。SQLite 快照不是上传文件和能力目录的完整备份，须保留原 app-home 中的文件。迁移程序不会改密码、角色授权、模型地址或密钥。
 
-## 8. 团队提交代码
+## 8. 协作与代码提交
 
 ```bash
 git fetch origin
@@ -258,9 +256,9 @@ git commit -m "Describe the feature"
 git push -u origin codex/your-feature
 ```
 
-在 GitHub 提交 PR 至 main，等待 Foreign Trade CI 通过并由队友复核。新增外贸功能建议放在 extensions/foreign_trade；界面导出在前端对应模块中。不要多人同时直接推送 main。
+在 GitHub 提交 PR 至 main，等待 CI 通过并完成代码复核。新增外贸功能建议放在 extensions/foreign_trade；界面导出在前端对应模块中。不要多人同时直接推送 main。
 
-仓库公开不等于所有人都能推送。仓库所有者可以在 Settings → Collaborators 邀请队友；未加入协作者的队友可以 Fork 后提 PR。本次建仓不会自动邀请未知账号。
+仓库公开不等于所有人都能推送。仓库所有者可以在 Settings → Collaborators 添加协作者；未加入协作者的贡献者可以 Fork 后提 PR。
 
 ## 常见问题
 

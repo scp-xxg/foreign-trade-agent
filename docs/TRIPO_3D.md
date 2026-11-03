@@ -8,7 +8,7 @@ Tripo网页Studio积分和API积分不共享。必须验证API账号余额及实
 
 密钥只交由官方CLI保存在本机公开应用的数据目录，按Hug账号隔离：app-home/tripo/accounts/<账号哈希>。不写源码、插件包、模型参数或Git；环境中已有全局TRIPO_API_KEY等值不会被本插件误用。默认关闭CLI遥测。模型只看到余额/授权预算，不会得到密钥。
 
-## 队友部署
+## 部署
 
 先按 [团队部署](TEAM_SETUP.md) 建好公开应用和账号，按 [Blender部署](BLENDER_MCP.md) 准备本地隔离渲染依赖。Node.js需20+，推荐项目使用的22LTS。
 

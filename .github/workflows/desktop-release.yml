@@ -1,4 +1,4 @@
-# Modified by foreign-trade-agent contributors, 2026-10-21; see CHANGES_FOREIGN_TRADE.md.
+# Modified by SailAgent contributors.
 # Build and publish the HugAgentOS Tauri desktop client from the public CE tree.
 #
 # This workflow belongs to the CE overlay because the main repository excludes

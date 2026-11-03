@@ -68,7 +68,7 @@ services:
     environment:
       TZ: ${TZ:-Asia/Shanghai}
       JX_EDITION: ${JX_EDITION:-ce}
-      BRAND_PRODUCT_NAME: ${BRAND_PRODUCT_NAME:-HugAgentOS}
+      BRAND_PRODUCT_NAME: ${BRAND_PRODUCT_NAME:-SailAgent}
       BRAND_ORG_NAME: ${BRAND_ORG_NAME:-}
       BRAND_POWERED_BY: ${BRAND_POWERED_BY:-true}
       DATABASE_URL: postgresql://hugagent_user:${DB_PASSWORD:-hugagent_dev_password}@postgres:5432/hugagent

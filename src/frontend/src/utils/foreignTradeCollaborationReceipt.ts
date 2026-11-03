@@ -1,4 +1,4 @@
-// Modified by foreign-trade-agent contributors, 2026-10-28; see CHANGES_FOREIGN_TRADE.md.
+// Modified by SailAgent contributors.
 import type { ToolCall } from '../types';
 import type { CollaborationRecord } from './foreignTradeCollaborationApi';
 const record = (value: unknown): value is Record<string, unknown> => !!value && typeof value === 'object' && !Array.isArray(value);

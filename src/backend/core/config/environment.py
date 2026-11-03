@@ -23,7 +23,7 @@ def _load_env_files() -> None:
     2. Env-specific file such as .env.dev
     3. Base .env
     """
-    # Modified by foreign-trade-agent: keep isolated installs out of repository environment files.
+    # Modified by SailAgent: keep isolated installs out of repository environment files.
     if os.getenv("HUGAGENT_SKIP_ENV_FILES", "").strip().lower() in {"1", "true", "yes"}:
         return
     base_env_path = _REPO_ROOT / ".env"

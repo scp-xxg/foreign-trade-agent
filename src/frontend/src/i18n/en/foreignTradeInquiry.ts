@@ -1,4 +1,4 @@
-// Modified by foreign-trade-agent contributors, 2026-10-21; see CHANGES_FOREIGN_TRADE.md.
+// Modified by SailAgent contributors.
 export const FOREIGN_TRADE_INQUIRY_DICT: Record<string, string> = {
   '完整询盘回执不可用，请让助手重新读取当前询盘。': 'Full inquiry receipt unavailable. Ask the assistant to read the current inquiry.',
   '历史询盘记录': 'Historical inquiry record',

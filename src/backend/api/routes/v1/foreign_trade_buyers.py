@@ -1,4 +1,4 @@
-# Modified by foreign-trade-agent contributors, 2026-10-31.
+# Modified by SailAgent contributors.
 """Authenticated, stateless buyer discovery; results are never shared across users."""
 from fastapi import APIRouter, Depends, HTTPException
 from core.auth.backend import UserContext, get_current_user

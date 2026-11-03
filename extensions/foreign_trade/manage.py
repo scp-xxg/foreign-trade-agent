@@ -141,12 +141,9 @@ def build() -> dict:
         HERE.parents[1] / "docs/CLOSING_WORKFLOW.md",
         HERE.parents[1] / "docs/LISTING_PREPARATION.md",
         HERE.parents[1] / "docs/PROCUREMENT_WORKFLOW.md",
-        HERE.parents[1] / "docs/CHAT_PLUGIN_ACCEPTANCE.md",
         HERE.parents[1] / "docs/SCENARIO_THREE.md",
-        HERE.parents[1] / "docs/ACCEPTANCE_20261028.md",
-        HERE.parents[1] / "docs/DEMO_WALKTHROUGH.md",
         HERE.parents[1] / "docs/TEAM_SETUP.md",
-        HERE.parents[1] / "docs/HACKATHON_DEMO.md",
+        HERE.parents[1] / "docs/USAGE.md",
         HERE / "engine.py", HERE / "catalog.json", HERE / "knowledge_rules.json", SERVER,
     ]
     missing = [str(path) for path in required if not path.is_file()]
@@ -169,12 +166,9 @@ def build() -> dict:
         archive.write(HERE.parents[1] / "docs/CLOSING_WORKFLOW.md", "CLOSING_WORKFLOW.md")
         archive.write(HERE.parents[1] / "docs/LISTING_PREPARATION.md", "LISTING_PREPARATION.md")
         archive.write(HERE.parents[1] / "docs/PROCUREMENT_WORKFLOW.md", "PROCUREMENT_WORKFLOW.md")
-        archive.write(HERE.parents[1] / "docs/CHAT_PLUGIN_ACCEPTANCE.md", "CHAT_PLUGIN_ACCEPTANCE.md")
         archive.write(HERE.parents[1] / "docs/SCENARIO_THREE.md", "SCENARIO_THREE.md")
-        archive.write(HERE.parents[1] / "docs/ACCEPTANCE_20261028.md", "ACCEPTANCE_20261028.md")
-        archive.write(HERE.parents[1] / "docs/DEMO_WALKTHROUGH.md", "DEMO_WALKTHROUGH.md")
         archive.write(HERE.parents[1] / "docs/TEAM_SETUP.md", "TEAM_SETUP.md")
-        archive.write(HERE.parents[1] / "docs/HACKATHON_DEMO.md", "HACKATHON_DEMO.md")
+        archive.write(HERE.parents[1] / "docs/USAGE.md", "USAGE.md")
         for path in sorted((HERE / "demo_product").iterdir()):
             if path.is_file() and path.suffix in {".csv", ".txt", ".json", ".png", ".jpg"}:
                 archive.write(path, "demo_product/" + path.name)

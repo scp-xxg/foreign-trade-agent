@@ -1,4 +1,4 @@
-// Modified by foreign-trade-agent contributors, 2026-10-21; see CHANGES_FOREIGN_TRADE.md.
+// Modified by SailAgent contributors.
 import type { AbilityTabKey, PanelKey } from '../../types';
 import { ABILITY_TABS } from '../catalog/abilityTabs';
 import { t } from '../../i18n';

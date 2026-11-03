@@ -1,4 +1,4 @@
-// Modified by foreign-trade-agent contributors, 2026-10-21; see CHANGES_FOREIGN_TRADE.md.
+// Modified by SailAgent contributors.
 /** 英文字典（core 域）：key 为中文原文，value 为英文译文。 */
 export const CORE_DICT: Record<string, string> = {
   '选择会话': 'Select Chats',

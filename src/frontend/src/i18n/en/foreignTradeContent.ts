@@ -1,4 +1,4 @@
-// Modified by foreign-trade-agent contributors, 2026-10-21; see CHANGES_FOREIGN_TRADE.md.
+// Modified by SailAgent contributors.
 export const FOREIGN_TRADE_CONTENT_DICT: Record<string, string> = {
   '下载英文事实 CSV': 'Download English facts CSV',
   '生成方式': 'Generation mode',

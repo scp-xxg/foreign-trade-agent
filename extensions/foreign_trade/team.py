@@ -28,7 +28,7 @@ ROOT = HERE.parents[1]
 VENV = ROOT / ".venv"
 PYTHON = VENV / "bin/python"
 FRONTEND = ROOT / "src/frontend"
-DEFAULT_HOME = Path.home() / ".foreign-trade-agent"
+DEFAULT_HOME = Path.home() / ".sailagent"
 
 
 def runtime_env(home: Path, port: int = 3001) -> dict[str, str]:
@@ -268,7 +268,7 @@ def main(argv: list[str] | None = None) -> int:
     global VENV, PYTHON
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("action", choices=("setup", "init", "install", "upgrade", "start", "check"))
-    parser.add_argument("--app-home", type=Path, default=DEFAULT_HOME, help="独立数据目录，默认 ~/.foreign-trade-agent；不继承 HUGAGENT_HOME")
+    parser.add_argument("--app-home", type=Path, default=DEFAULT_HOME, help="独立数据目录，默认 ~/.sailagent；不继承 HUGAGENT_HOME")
     parser.add_argument("--port", type=web_port_number, default=3001, help="网页/API 端口，默认 3001；冲突时可显式使用 3002，不停止占用者")
     parser.add_argument("--venv", type=Path, help="显式选择虚拟环境，默认项目 .venv")
     parser.add_argument("--legacy-chat-completions", action="store_true", help="显式确认既有无版本本地库来自旧Chat Completions运行时")

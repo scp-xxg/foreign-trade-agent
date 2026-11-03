@@ -4,7 +4,7 @@
 
 这不是“输入几个参数调用收纳盒模板”。此前0.1.0的模板限制已移除。可尝试任意类别的概念建模，但生成质量取决于模型、对象复杂度和迭代；不能承诺任何对象一次就准确完成，也不等同于工业生产CAD、服装纸样或布料物理仿真。
 
-## 每名队友部署
+## 单独一台机器部署
 
 先按 [团队部署](TEAM_SETUP.md) 安装此公开项目、创建自己的账号，配置支持工具调用的大模型并指派main_agent。Ubuntu22.04 x86_64，建议8GB可用内存、至少4GB空余磁盘；CPU渲染无需CUDA。
 
@@ -12,11 +12,11 @@
 sudo apt-get update
 sudo apt-get install -y bubblewrap xvfb xauth libxi6 libxrender1 libxfixes3 libxkbcommon0 libgl1 libegl1 libsm6
 .venv/bin/python extensions/blender/manage.py setup
-.venv/bin/python extensions/blender/manage.py install --app-home "$HOME/.foreign-trade-agent" --username YOUR_USERNAME
+.venv/bin/python extensions/blender/manage.py install --app-home "$HOME/.sailagent" --username YOUR_USERNAME
 .venv/bin/python extensions/blender/manage.py status
 ```
 
-app-home必须与网页后端一致，本机公开测试目录是 ~/.hugagent-hackathon-public-1.0.2，网页3002；3001属于其他项目，不要操作。每人使用自己的数据库、账号和模型，不会从仓库得到此电脑的密钥或会话。
+`--app-home` 必须与网页后端使用同一个数据目录（原生安装默认 `~/.sailagent`）。每人使用自己的数据库、账号和模型，不会从仓库得到其他机器的密钥或会话。
 
 通用场景按调用自动启动隔离Blender，不依赖长期打开Windows窗口。status 的 general_ready 表示运行依赖齐备；首次调用仍会验证实际启动、MCP与渲染。旧0.1管理用的 start/stop 可控制旧固定工具进程，通用版无需常驻该进程。原网页启动方式不变；安装/升级后重启公开后端、刷新页面并新建对话，清掉旧插件缓存。
 
@@ -68,4 +68,4 @@ MCP for Blender2.2.6 / SDK1.30.0在独立 .runtime/blender-mcp-venv 中，不降
 .venv/bin/python -m pytest tests/test_blender_general.py tests/test_blender_integration.py tests/test_blender_file_access.py -q
 ```
 
-单元/HTTP测试与真实引擎、浏览器验收分别记录，见 [验收记录](BLENDER_ACCEPTANCE_20261031.md)。
+单元测试与 HTTP 测试可离线运行；真实引擎渲染与浏览器下载需要在已安装 Blender 的环境里人工确认。

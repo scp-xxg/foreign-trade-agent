@@ -1,5 +1,5 @@
 import { PRODUCT_NAME } from '../brand';
-// Modified by foreign-trade-agent contributors, 2026-10-28; see CHANGES_FOREIGN_TRADE.md.
+// Modified by SailAgent contributors.
 import { useTaskReminderScope } from './useTaskReminderScope';
 import { usePersonalAgentNotifications } from '../personalAgentEdition';
 import {

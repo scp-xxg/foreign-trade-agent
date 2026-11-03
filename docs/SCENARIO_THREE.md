@@ -1,6 +1,6 @@
 # 场景三：跨岗位协同与内部交接
 
-逐步操作、可复制示例、预期结果和下载核对见 [三个场景演示手册](DEMO_WALKTHROUGH.md)。当前无需模型的工作台演示与模型恢复后的对话路线分别说明。
+逐步操作、可复制示例、预期结果和下载核对见 [使用指南](USAGE.md)。无需模型的工作台操作与配置模型后的对话路线分别说明。
 
 版本 0.3.0 的主入口是聊天中的“外贸业务助手（演示）”。协同工作台用于查看同一账号下的记录、负责人标签、依赖、待确认事项和审核结果。它复用场景一的询盘与报价、场景二的产品资料包，不另建报价计算规则。
 
@@ -173,4 +173,4 @@ trade_collaboration(
 - 认证 API：`src/backend/api/routes/v1/foreign_trade_collaboration.py`。
 - 离线服务与接口用例：`tests/test_foreign_trade_collaboration.py`，包括隔离、并发版本、依赖、人工审核、资料变化、Pi 关联限制与交接下载。
 
-部署、依赖和更新步骤见 [TEAM_SETUP.md](TEAM_SETUP.md)；聊天入口见 [CHAT_PLUGIN.md](CHAT_PLUGIN.md)。实际 CI 和网页验收以相应验收记录为准，本说明描述使用契约，不作为现场验收证明。
+部署、依赖和更新步骤见 [TEAM_SETUP.md](TEAM_SETUP.md)；聊天入口见 [CHAT_PLUGIN.md](CHAT_PLUGIN.md)。本说明描述的是使用契约；实际行为以当前版本代码与自动测试为准。

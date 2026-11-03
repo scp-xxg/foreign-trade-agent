@@ -1,4 +1,4 @@
-/* Modified by foreign-trade-agent contributors, 2026-10-21; see CHANGES_FOREIGN_TRADE.md. */
+/* Modified by SailAgent contributors. */
 .jx-contentDownloadCards { display: grid; gap: 12px; margin: 14px 0; }
 .jx-contentDownloadCard { min-width: 0; padding: 18px; border: 1px solid var(--color-border); border-radius: 14px; background: var(--color-bg-container); color: var(--color-text); }
 .jx-contentDownloadHeading { display: flex; justify-content: space-between; align-items: center; gap: 12px; }

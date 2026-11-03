@@ -1,4 +1,4 @@
-// Modified by foreign-trade-agent contributors, 2026-10-21; see CHANGES_FOREIGN_TRADE.md.
+// Modified by SailAgent contributors.
 import type { ToolCall } from '../types';
 import type { ToolCallResultPayload } from '../api';
 import type { InquiryRecord } from './foreignTradeInquiryApi';

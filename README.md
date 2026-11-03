@@ -1,56 +1,88 @@
 # SailAgent
 
-**从客户询盘到商品上品，让销售与运营围绕同一份事实协作。**
-输入客户询盘、商品资料和企业知识，以中文对话完成生成、审核、修改和文件交付。基于 [HugAgentOS](https://github.com/ZJU-REAL/HugAgentOS) 开源社区版。
+**一条询盘，跑通销售与运营两个业务流程。**
 
-## 两条业务流程
+SailAgent 是面向外贸出海团队的开源协作助手：输入客户询盘、商品资料与企业知识，用中文对话完成核验、报价、英文回复、商品资料与平台草稿的生成、审核、修改和文件交付。销售、采购跟单、商品运营三个岗位围绕同一份事实协作，工作台负责查看和编辑记录。
 
-| 流程 | 操作 | 产出 |
+基于 [HugAgentOS](https://github.com/ZJU-REAL/HugAgentOS) 社区版构建，界面保留 Powered by HugAgentOS 开源署名。
+
+## 能力
+
+| 流程 | 输入与操作 | 产出 |
 |---|---|---|
-| **A 销售** | 核对买家公开资料 → 查询商品与计算报价 → Alibaba RFQ 英文回复 → 审核修改 → 跟进 | 中英 PDF、双语 Excel、回复草稿、站内跟进待办 |
-| **同款接力** | 沿用询盘和 SKU → 确认产品事实 → 关联资料包 → 分配运营任务 | 共享询盘编号、资料包编号、版本、来源与待确认项 |
-| **B 运营** | 英文文案与 FAQ → 原图/示意图排版 → Amazon US Listing 草稿 → 审核修改 | 英文资料、三种比例图片、ZIP 素材包、审核报告 |
+| **销售** | 核对买家公开资料 → 查询商品并计算报价 → Alibaba RFQ 英文回复 → 两轮审核修改 → 站内跟进待办 | 中英 PDF、双语 Excel、回复草稿、跟进待办 |
+| **同款接力** | 沿用同一条询盘与 SKU → 确认产品事实 → 关联资料包 → 分配运营任务 | 共享的询盘编号、报价编号、资料包编号与版本 |
+| **运营** | 英文文案与 FAQ → 原图或示意图排版 → Amazon US Listing 草稿 → 审核修改 | 英文资料、三种比例图片、ZIP 素材包、审核报告 |
 
-主入口是聊天，工作台用于查看和编辑记录。内置外贸业务员、采购跟单员、商品运营专员三个角色；采购为销售提供产品与报价核对。数量、包装或事实变化后重新计算/生成，复审展示前后变化，旧版本下载会校验来源。
+- 数量、包装或事实变更后重新计算与生成，旧版本自动失效；复审展示前后差异，下载前校验来源与当前账号权限。
+- 价格使用 Decimal 确定性计算；运费、税费、付款条件、贸易术语等未知项保持未知，不自动补全。
+- 合规检查同时给出文字批注与颜色风险标记，并保留官方来源、适用范围与核验日期。它是辅助检查，不是认证、平台批准或完整法律审查。
+- 结果不会自动发送客户消息、上传平台或发布商品。
 
-## 一键启动
+## 快速开始
 
-需要 Git、Docker 和 Docker Compose；首次构建需要网络和足够磁盘空间。在 Linux、macOS 或 Windows WSL 终端执行：
+需要 Git、Docker 与 Docker Compose v2，建议 8 GB 内存、15 GB 磁盘，首次构建需要联网。
 
-~~~bash
-git clone https://github.com/scp-xxg/foreign-trade-agent.git
-cd foreign-trade-agent
+```bash
+git clone https://github.com/scp-xxg/sailagent.git
+cd sailagent
 ./start.sh
-~~~
+```
 
-首次按终端提示创建自己的管理员，完成后打开 **http://127.0.0.1:3002**。再次启动沿用持久数据；端口占用时用 SAILAGENT_PORT=3012 ./start.sh。账号、模型密钥、上传资料和聊天记录不随 Git 同步。
+Windows PowerShell 可直接运行同一条 Compose 命令：
 
-进入 **系统设置 → 模型服务**，配置自己的工具调用模型，测试后指派 main_agent。聊天编排需要可用模型；无模型时可在工作台使用明确标注的本地模板，完成计算、资料排版和审核。公开买家核验需要网络。
+```powershell
+docker compose -f compose.sailagent.yml run --build --rm --service-ports sailagent
+```
 
-更新、停止、备份、离线边界和原生 Python 部署见 [部署说明](docs/ONE_COMMAND_DEPLOY.md)。已有本机实例不要切换数据目录；升级前备份。
+首次启动按终端提示创建**自己的用户名和密码**，完成后打开 <http://127.0.0.1:3002>。再次启动沿用持久卷中的数据；端口被占用时用 `SAILAGENT_PORT=3012 ./start.sh`。账号、模型密钥、上传资料与聊天记录都不随 Git 同步。
 
-## 直接演示
+首次登录后进入 **设置 → 模型服务**，添加支持工具调用的模型，测试通过后指派 `main_agent`。没有可用模型时，工作台仍可执行商品查询、确定性报价、本地模板资料与规则审核；自然语言多轮对话与子智能体需要模型服务。
 
-从“DESK-001、500 件、标准包装、Spain”的团队模拟询盘开始；第二轮改为“1000 件、定制包装”，计算小计应为 **USD 5100.00，不含运费及税费**。再将同款商品接力给运营，确认事实后生成资料，完成 Amazon US 草稿修改与复审。
+后台运行、更新、备份、端口与原生 Python 部署见 [部署指南](docs/ONE_COMMAND_DEPLOY.md)。
 
-[逐轮可复制问答与下载步骤](docs/DEMO_TWO_WORKFLOWS.md) · [一页方案说明](docs/submission/SailAgent-one-page.pdf)
+## 使用
 
-## 知识与审核
+销售与运营两条流程的完整操作步骤、可复制的对话指令和下载核对点见 [使用指南](docs/USAGE.md)。建议从模拟询盘 `DESK-001`、500 件、标准包装、Spain 开始，第二轮改为 1000 件定制包装，小计应为 **USD 5100.00（不含运费与税费）**。
 
-- 商品目录、价格和演示询盘明确标记为模拟；公开买家资料保留来源、抓取时间和未知项，不据此推断信用或采购意向。
-- 企业私有知识按账号授权读取原文；引用企业政策前，在当前会话选择相应知识库，未提供的政策保留未知。敏感词库采用“原文检索＋生成后自动匹配”，详见 [敏感词说明](docs/SENSITIVE_TERMS.md)。
-- [多国案例与官方来源](extensions/foreign_trade/market_compliance.md)根据目标市场选择规则，保留官方来源、适用条件、核验日期和待确认事项；结合平台规则与商务条款进行审核。
-- 同时展示**文字批注和颜色风险标记**，支持两轮以上修改复审。结果是辅助检查，不代表认证、平台批准或完整法律审查。
-- 图片为授权原图或明确标记的示意图排版；三种比例素材不自动等同于 Amazon 主图。草稿、待办和下载均不会自动发送客户消息或发布商品。
+`DESK-001` 等商品目录、价格与示例询盘均明确标记为模拟；买家公开资料保留来源、获取时间与未知项，不据此推断信用或采购意向。企业私有知识按账号授权读取，敏感词库使用"原文检索 + 生成后匹配"，见 [敏感词说明](docs/SENSITIVE_TERMS.md) 与 [私有知识库](docs/PRIVATE_KNOWLEDGE.md)。
 
-## 开发与提交
+## 项目结构
 
-Max-channel 的业务分析与工作流已整合；最新版的合规清单适配到本机工具，敏感词继续使用本机版本，详见[整合边界](docs/MAX_CHANNEL_INTEGRATION.md)。额外能力保留为可选工具，主演示集中于上述两条流程。自动测试覆盖账号隔离、版本冲突、金额、事实确认、规则审核、接力及导出；运行记录与限制见演示文档。
+```
+src/backend                后端服务：账号、会话、编排、知识库、插件与原生业务工具
+src/frontend               Web 界面（React + Vite），构建产物由后端托管
+extensions/foreign_trade   SailAgent 业务层：三个岗位、12 个原生工具、技能插件与模拟目录
+extensions/blender         可选：Blender MCP（本地 3D 建模）
+extensions/tripo           可选：Tripo 云端 3D 生成
+packages/                  前端依赖的本地工作区包（chat-sdk、workbench 等）
+docker/                    镜像与本地部署文件
+docs/                      部署、使用、岗位、流程与合规说明
+document/                  双语产品文档（中/英）
+tests/                     业务回归测试
+```
 
-提交作品使用可运行代码与一页方案说明。队友从 main 拉取；私有词库、真实客户资料、数据库、日志和密钥不要提交。
+## 文档
 
-## 开源与数据许可
+- 部署：[一键部署](docs/ONE_COMMAND_DEPLOY.md) · [原生 Python 安装与升级](docs/TEAM_SETUP.md)
+- 使用：[使用指南](docs/USAGE.md) · [场景一](docs/SCENARIO_ONE.md) · [场景二](docs/SCENARIO_TWO.md) · [场景三](docs/SCENARIO_THREE.md)
+- 岗位与技能：[三个核心岗位](docs/CORE_ROLE_AGENTS.md) · [对话插件](docs/CHAT_PLUGIN.md)
+- 流程：[获客](docs/ACQUISITION_WORKFLOW.md) · [背调](docs/DILIGENCE_WORKFLOW.md) · [沟通](docs/COMMUNICATION_WORKFLOW.md) · [跟进](docs/FOLLOWUP_WORKFLOW.md) · [采购](docs/PROCUREMENT_WORKFLOW.md) · [谈单](docs/NEGOTIATION_WORKFLOW.md) · [成交](docs/CLOSING_WORKFLOW.md) · [发品](docs/LISTING_PREPARATION.md) · [复盘](docs/RETROSPECTIVE_WORKFLOW.md)
+- 品牌与扩展：[品牌与素材](docs/SAILAGENT_BRAND.md) · [Blender MCP](docs/BLENDER_MCP.md) · [Tripo 3D](docs/TRIPO_3D.md) · [智能体上架审核](docs/AGENT_MARKET_REVIEW.md)
 
-保留 HugAgentOS 开源署名、Git 历史和版权信息。完整许可见 [LICENSE](LICENSE)、[NOTICE](NOTICE)，包括 Apache License 2.0 及补充条款。公开参考图片和资料的来源、署名与使用边界随素材保留；示例不代表实际订单或品牌经销授权。
+## 开发与测试
 
-[团队部署详解](docs/TEAM_SETUP.md) · [变更记录](CHANGES_FOREIGN_TRADE.md) · [上游说明](README_UPSTREAM.md)
+```bash
+python -m venv .venv && . .venv/bin/activate
+pip install -r requirements.txt && pip install --no-deps -e .
+python -m pytest tests -q                     # 业务回归：离线，不需要模型与网络
+npm --prefix src/frontend ci && npm --prefix src/frontend run build
+```
+
+业务改动放在 `extensions/foreign_trade`，界面导出放在前端对应模块。改动后请确认业务回归与前端构建都通过，详见 [贡献指南](CONTRIBUTING.md)。
+
+## 开源与许可
+
+本项目是 HugAgentOS 社区版的公开衍生项目，保留上游开源署名、Git 历史与版权信息。完整许可见 [LICENSE](LICENSE) 与 [NOTICE](NOTICE)（Apache License 2.0 及补充条款）。SailAgent 是此衍生项目的品牌，不代表 HugAgentOS 官方产品。
+
+随仓库提供的商品目录、价格、图片与示例询盘为模拟或已授权素材，不代表实际订单、供货承诺或品牌经销授权。

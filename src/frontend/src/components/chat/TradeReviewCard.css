@@ -1,4 +1,4 @@
-/* Modified by foreign-trade-agent contributors, 2026-10-31. */
+/* Modified by SailAgent contributors. */
 .jx-tradeReviewCard { margin: 16px 0; padding: 20px; border: 1px solid var(--color-border); border-radius: 14px; background: var(--color-bg-container); color: var(--color-text); }
 .jx-tradeReviewHeading, .jx-tradeReviewMeta, .jx-tradeReviewSource, .jx-tradeReviewActions, .jx-tradeReviewField > header, .jx-tradeReviewAnnotation > header { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 12px; }
 .jx-tradeReviewHeading { justify-content: space-between; }

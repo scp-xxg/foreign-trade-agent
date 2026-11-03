@@ -106,7 +106,7 @@
         }
       },
       "x_foreign_trade": {
-        "host_requirement": "foreign-trade-agent public fork with current-user native trade tools",
+        "host_requirement": "SailAgent with current-user native trade tools",
         "execution": "Native tools are bound to the active authenticated conversation; they are not served by the loopback quotation MCP.",
         "native_tools": [
           {

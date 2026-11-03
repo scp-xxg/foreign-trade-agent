@@ -1,5 +1,5 @@
 import { PRODUCT_NAME, BRAND_MARK_URL } from '../../brand';
-// Modified by foreign-trade-agent contributors, 2026-10-28; see CHANGES_FOREIGN_TRADE.md.
+// Modified by SailAgent contributors.
 import { usePublicChat } from '../../public-chat/PublicChatContext';
 import { useMemo, useState } from 'react';
 import { useEditionStore, usePluginUiStore } from '../../stores';

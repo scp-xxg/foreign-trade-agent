@@ -16,18 +16,14 @@ Commercial-licensed components (e.g. @univerjs/preset-sheets-advanced) and
 enterprise cloud-storage SDKs (oss2, boto3) are NOT part of this distribution;
 they ship only with the commercial edition.
 
-foreign-trade-agent modifications (2026)
----------------------------------------
+SailAgent modifications (2026)
+------------------------------
 This derived project is based on ZJU-REAL/HugAgentOS Community Edition
 desktop-v1.0.2 (d16a09be1e408c1acf3ef6ff89523cda1341ef41).
-Foreign-trade demo catalog, deterministic quotation tools, inquiry-to-quote
-skill, bilingual quotation exports and team deployment integration were
-added by the foreign-trade-agent contributors. Upstream notices and the
-complete Community Edition License, including Additional Terms, are retained.
+The foreign-trade catalog, deterministic quotation tools, inquiry-to-quote
+skills, bilingual quotation exports and team deployment integration were
+added by the SailAgent contributors. SailAgent and its sail-and-route brand
+assets are original additions by the derivative contributors.
 
-SailAgent identity (2026-10-31)
------------------------------
-The foreign-trade derivative is presented as sailagent. Its sail-and-route
-brand assets are original additions by the derivative contributors.
-Powered by HugAgentOS attribution, upstream notices and the full Community
-Edition License including Additional Terms remain in place.
+Powered by HugAgentOS attribution, upstream notices and the complete
+Community Edition License including Additional Terms remain in place.

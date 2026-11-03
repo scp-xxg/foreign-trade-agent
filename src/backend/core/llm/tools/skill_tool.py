@@ -1,4 +1,4 @@
-# Modified by foreign-trade-agent contributors, 2026-10-21; see CHANGES_FOREIGN_TRADE.md.
+# Modified by SailAgent contributors.
 """Skill-loading agent tools.
 
 Tools that let the model discover and load Agent Skills from the sandboxed

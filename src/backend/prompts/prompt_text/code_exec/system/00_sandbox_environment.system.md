@@ -1,4 +1,4 @@
-<!-- Modified by foreign-trade-agent contributors, 2026-10-21; see CHANGES_FOREIGN_TRADE.md. -->
+<!-- Modified by SailAgent contributors. -->
 ## 代码沙箱环境
 
 隔离的云端沙箱（与用户环境隔离），Ubuntu + Bash，起始目录 `/workspace/`。

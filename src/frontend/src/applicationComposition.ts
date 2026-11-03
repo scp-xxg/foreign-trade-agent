@@ -1,4 +1,4 @@
-// Modified by foreign-trade-agent contributors, 2026-10-28; see CHANGES_FOREIGN_TRADE.md.
+// Modified by SailAgent contributors.
 import './applicationWorkspaceActions';
 import { PersonalAgentPanel } from './personalAgentEdition';
 import { ConversationPage, ProjectListPage, type WorkspaceContext } from './applicationPages';

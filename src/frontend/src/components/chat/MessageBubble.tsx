@@ -1,4 +1,4 @@
-// Modified by foreign-trade-agent contributors, 2026-10-28; see CHANGES_FOREIGN_TRADE.md.
+// Modified by SailAgent contributors.
 import { usePublicChat } from '../../public-chat/PublicChatContext';
 import { memo, useEffect, useMemo, useState } from 'react';
 import { motion } from 'motion/react';

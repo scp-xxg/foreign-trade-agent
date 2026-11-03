@@ -1,4 +1,4 @@
-// Modified by foreign-trade-agent contributors, 2026-10-31.
+// Modified by SailAgent contributors.
 export const FOREIGN_TRADE_REVIEW_DICT: Record<string, string> = {
   '需要修改': 'Needs revision',
   '仍需确认': 'Needs confirmation',

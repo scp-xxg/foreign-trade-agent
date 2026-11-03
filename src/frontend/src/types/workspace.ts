@@ -1,4 +1,4 @@
-// Modified by foreign-trade-agent contributors, 2026-10-28; see CHANGES_FOREIGN_TRADE.md.
+// Modified by SailAgent contributors.
 import type { EditionChatShareScope, EditionProjectChatFields, EditionProjectFields, EditionProjectKind } from '../editionModelTypes';
 
 export type PanelKey = 'chat' | 'personal_agent' | 'skills' | 'agents' | 'mcp' | 'kb' | 'docs' | 'app_center' | 'settings' | 'user_management' | 'my_space' | 'ability_center' | 'lab' | 'projects' | 'automation' | 'sites' | 'trade_inquiries' | 'trade_content' | 'trade_collaboration' | 'trade_buyers';

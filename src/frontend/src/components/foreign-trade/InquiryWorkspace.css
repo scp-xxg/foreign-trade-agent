@@ -1,4 +1,4 @@
-/* Modified by foreign-trade-agent contributors, 2026-10-21; see CHANGES_FOREIGN_TRADE.md. */
+/* Modified by SailAgent contributors. */
 .jx-inquiryWorkspace { height: 100%; overflow-y: auto; padding: 28px 32px 40px; background: var(--color-bg-layout); color: var(--color-text); }
 .jx-inquiryHeader { display: flex; justify-content: space-between; align-items: center; gap: 20px; max-width: 1380px; margin: 0 auto 28px; }
 .jx-inquiryEyebrow { color: var(--color-primary); font-size: 11px; letter-spacing: .12em; font-weight: 700; margin-bottom: 9px; }

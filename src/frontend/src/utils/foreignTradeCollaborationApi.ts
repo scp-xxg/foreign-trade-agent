@@ -1,4 +1,4 @@
-// Modified by foreign-trade-agent contributors, 2026-10-28; see CHANGES_FOREIGN_TRADE.md.
+// Modified by SailAgent contributors.
 import { apiRequest, authFetch, getApiUrl } from '../api';
 import { createApiResponseError } from './apiError';
 export type CollaborationRole = 'sales' | 'procurement' | 'design' | 'operations' | 'compliance';

@@ -1,4 +1,4 @@
-/* Modified by foreign-trade-agent contributors, 2026-10-28. */
+/* Modified by SailAgent contributors, 2026-10-28. */
 .jx-collaborationWorkspace { width: min(1300px, 100%); margin: 0 auto; padding: 24px; color: var(--color-text); }
 .jx-collaborationHeader, .jx-collaborationCard > header, .jx-collaborationTaskHeading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .jx-collaborationHeader h2 { margin: 0 0 8px; }

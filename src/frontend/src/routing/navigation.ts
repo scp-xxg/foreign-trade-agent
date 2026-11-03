@@ -1,4 +1,4 @@
-// Modified by foreign-trade-agent contributors, 2026-10-28; see CHANGES_FOREIGN_TRADE.md.
+// Modified by SailAgent contributors.
 import { standaloneFromPath, pathForStandalone } from './standalone';
 import { generatePath, matchPath } from 'react-router';
 import type { PanelKey } from '../types';

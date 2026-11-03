@@ -1,4 +1,4 @@
-// Modified by foreign-trade-agent contributors, 2026-10-28.
+// Modified by SailAgent contributors, 2026-10-28.
 export const FOREIGN_TRADE_COLLABORATION_DICT: Record<string, string> = {
   '完整协同回执不可用，请让助手重新读取当前协同。': 'Full receipt unavailable. Ask the assistant to read the current collaboration.',
   '历史回执已精简，加载完整工具记录后查看协同状态。': 'This history receipt is abbreviated. Load the full tool result to view collaboration status.',

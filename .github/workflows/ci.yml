@@ -1,7 +1,7 @@
-# Modified by foreign-trade-agent contributors, 2026-10-21; see CHANGES_FOREIGN_TRADE.md.
-# The foreign-trade web demo needs no model credentials or running backend for CI.
+# Modified by SailAgent contributors.
+# The web app needs no model credentials and no running backend for CI.
 # Dependency downloads are the only network requirement; quote tests run offline.
-name: Foreign Trade CI
+name: CI
 
 on:
   push:
@@ -23,7 +23,7 @@ on:
       - "tests/test_compaction_failure*.py"
       - "pyproject.toml"
       - "requirements.txt"
-      - ".github/workflows/foreign-trade-ci.yml"
+      - ".github/workflows/ci.yml"
   pull_request:
     branches: [main]
     paths:
@@ -43,14 +43,14 @@ on:
       - "tests/test_compaction_failure*.py"
       - "pyproject.toml"
       - "requirements.txt"
-      - ".github/workflows/foreign-trade-ci.yml"
+      - ".github/workflows/ci.yml"
   workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: foreign-trade-ci-${{ github.event.pull_request.number || github.ref }}
+  group: ci-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:

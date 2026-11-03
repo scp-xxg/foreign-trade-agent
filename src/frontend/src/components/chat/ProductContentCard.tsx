@@ -1,4 +1,4 @@
-// Modified by foreign-trade-agent contributors, 2026-10-21; see CHANGES_FOREIGN_TRADE.md.
+// Modified by SailAgent contributors.
 import { memo, useMemo, useState } from 'react';
 import { Button } from 'antd';
 import { DownloadOutlined, FileImageOutlined, FileTextOutlined, ReloadOutlined } from '@ant-design/icons';

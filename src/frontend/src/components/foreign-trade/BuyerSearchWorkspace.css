@@ -1,4 +1,4 @@
-/* Modified by foreign-trade-agent contributors, 2026-10-31; see CHANGES_FOREIGN_TRADE.md. */
+/* Modified by SailAgent contributors. */
 .buyer-search { height: 100%; overflow: auto; padding: 28px; color: var(--color-text); background: var(--color-bg-layout); }
 .buyer-search header, .buyer-actions { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .buyer-search header { justify-content: space-between; margin-bottom: 20px; }

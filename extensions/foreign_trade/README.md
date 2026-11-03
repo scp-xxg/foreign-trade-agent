@@ -8,7 +8,7 @@ SailAgent 的业务插件，标识 foreign-trade-demo，版本 0.10.0。聊天�
 - **同款接力**：保存的询盘与 SKU → 候选事实 → 用户确认 → 关联资料包及运营任务。
 - **运营**：英文资料、FAQ、三种图片排版 → Amazon US Listing → 两轮审核。交付基础 ZIP 与包含最终平台稿的审核 Markdown/JSON。
 
-[九轮演示](../../docs/DEMO_TWO_WORKFLOWS.md) · [一键部署](../../docs/ONE_COMMAND_DEPLOY.md)
+[九轮使用流程](../../docs/USAGE.md) · [一键部署](../../docs/ONE_COMMAND_DEPLOY.md)
 
 ## 核心技能与工具
 

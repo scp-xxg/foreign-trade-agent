@@ -1,5 +1,5 @@
 """Tool-result projections must join by call ID, never by completion order."""
-# Modified by foreign-trade-agent contributors, 2026-10-21; see CHANGES_FOREIGN_TRADE.md.
+# Modified by SailAgent contributors.
 from itertools import permutations
 from pathlib import Path
 import sys

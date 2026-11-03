@@ -93,9 +93,9 @@ trade_product_content(
 - 工作台是查看、纠错和继续编辑的辅助入口。模型工具暂不可用时可继续使用工作台，不绕过认证去访问数据库。
 - 系统不向买家发消息、不发布电商商品、不下单或付款。
 
-## 队友升级安装
+## 升级安装
 
-首次部署按 [队友部署指南](TEAM_SETUP.md) 完成 setup、init、start。已有实例先停止自己运行的网页后端和 MCP，保存本地代码改动，再执行：
+首次部署按 [原生安装指南](TEAM_SETUP.md) 完成 setup、init、start。已有实例先停止自己运行的网页后端和 MCP，保存本地代码改动，再执行：
 
 ~~~bash
 git pull --ff-only
@@ -104,7 +104,7 @@ python3.11 extensions/foreign_trade/team.py setup
 .venv/bin/python extensions/foreign_trade/team.py start
 ~~~
 
-默认数据目录为 ~/.foreign-trade-agent。自定义目录时，在 install 和 start 中均传入相同的 --app-home /your/data/directory。不用新建账号、复制开发者数据库或删除原来的业务记录。
+默认数据目录为 ~/.sailagent。自定义目录时，在 install 和 start 中均传入相同的 --app-home /your/data/directory。不用新建账号、复制开发者数据库或删除原来的业务记录。
 
 虚拟环境和 SQLite 版本须满足 [部署指南](TEAM_SETUP.md) 的当前要求；旧环境不能仅因 Python 命令可执行就直接用于升级。升级保留私有恢复快照，遇到迁移拒绝应保留现场并按明确诊断处理，不跳过版本或覆盖数据库。
 
@@ -120,15 +120,13 @@ install 会原位更新 foreign-trade-demo，为所选账号安装五个技能�
 
 生成 extensions/foreign_trade/dist/foreign-trade-demo.zip，包含四份技能、插件声明、宿主要求、本文和原有报价 MCP 运行源码。八个原生业务工具需要配套宿主；原有三个目录 MCP 工具单独计数。
 
-**0.4.0 的完整三场景能力依赖本公开分支。** ZIP 自身不会把询盘数据库服务、附件权限校验、原生工具适配器和前端资料卡安装到任意未修改的上游 HugAgentOS。队友应更新整个公开仓库。ZIP 适合在已具备配套代码的实例中导入或更新技能；旧的独立 MCP 仍仅提供三个公开模拟查询/计算工具。
+**完整的三场景能力依赖本仓库后端。** ZIP 自身不会把询盘数据库服务、附件权限校验、原生工具适配器和前端资料卡安装到未修改的上游 HugAgentOS；需要完整能力时应更新整个仓库。ZIP 适合在已具备配套代码的实例中导入或更新技能；旧的独立 MCP 仍仅提供三个公开模拟查询/计算工具。
 
 原生工具的说明放在清单扩展元数据中，不写成 9120 端口上的 MCP 工具。不要为兼容导入而把账号 ID、会话 Cookie、数据库凭据或密钥嵌入插件包。
 
-## 验收清单
+## 自查清单
 
-本轮结果见 [2026-10-28 验收记录](ACCEPTANCE_20261028.md)：三场景的工作台 UI 和本地资料/交接流程已验证，本地与原生工具测试已通过；真实模型聊天因 HTTP 500 未通过。此前记录保留在 [2026-10-21 验收记录](CHAT_PLUGIN_ACCEPTANCE.md)，不作为本轮结果。
-
-以下是模型服务恢复后仍需重新执行的聊天验收目标，不是本轮已通过清单：
+配置模型后，按下面的目标逐项确认插件与业务工具已正确接通；工作台侧的本地流程、确定性报价与导出可先用自动测试覆盖：
 
 - 新聊天可以激活外贸业务助手并查看五个技能；未启用或不可见插件不会注入原生业务工具。
 - 场景一可从对话创建询盘、核验公开来源、报价/下载、生成草稿、安排与结束跟进；工作台能看到同一条记录。
@@ -140,4 +138,4 @@ install 会原位更新 foreign-trade-demo，为所选账号安装五个技能�
 
 ## 本地化与规则审阅（0.4）
 
-新增第五技能 `localization-review` 与第八个原生工具 `trade_review`。先读取已有询盘或确认产品资料的实际版本，再 knowledge 检索规则、review 保存草稿校验；第二轮传真实 previous_review_id，展示风险变化。阿里RFQ为销售场景，Amazon美国站非媒体Listing为运营场景；标题与Item Highlights按当前知识版本分别检查。校验结果提供文字批注和风险标记，不作法律认证或发布批准。完整问答、字段、数据流与失败用例见 [赛题演示手册](HACKATHON_DEMO.md)。
+新增第五技能 `localization-review` 与第八个原生工具 `trade_review`。先读取已有询盘或确认产品资料的实际版本，再 knowledge 检索规则、review 保存草稿校验；第二轮传真实 previous_review_id，展示风险变化。阿里RFQ为销售场景，Amazon美国站非媒体Listing为运营场景；标题与Item Highlights按当前知识版本分别检查。校验结果提供文字批注和风险标记，不作法律认证或发布批准。完整问答、字段与数据流见 [使用指南](USAGE.md)。

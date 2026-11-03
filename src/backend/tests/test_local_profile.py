@@ -1,4 +1,4 @@
-# Modified by foreign-trade-agent contributors, 2026-10-21; see CHANGES_FOREIGN_TRADE.md.
+# Modified by SailAgent contributors.
 """Acceptance tests for the no-Docker local/quick-install profile.
 
 Covers the pieces that are new or SQLite-risky (see
